@@ -1,0 +1,891 @@
+openapi: 3.1.0
+info:
+  title: OnHolid.ai Web and Trip Domain API
+  version: 1.0.0
+  description: >-
+    Browser-facing trip, agent-run, and booking commands plus restricted internal
+    read/proposal endpoints. The web domain is the sole authoritative trip writer.
+servers:
+  - url: /api/v1
+security:
+  - browserSession: []
+tags:
+  - name: Trips
+  - name: Agent Runs
+  - name: Booking
+  - name: Internal Agent Tools
+paths:
+  /trips:
+    post:
+      tags: [Trips]
+      operationId: createTrip
+      summary: Create the initial authoritative draft trip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTripRequest'
+      responses:
+        '201':
+          description: Initial trip version created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripEnvelope'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /trips/{tripId}:
+    get:
+      tags: [Trips]
+      operationId: getTrip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200':
+          description: Current authorized trip snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /trips/{tripId}/commands/edit:
+    post:
+      tags: [Trips]
+      operationId: applyDirectTripEdit
+      summary: Validate a direct UI edit and append a trip version
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripMutationRequest'
+      responses:
+        '200':
+          description: New authoritative snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripEnvelope'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /trips/{tripId}/proposals/{proposalId}/accept:
+    post:
+      tags: [Trips]
+      operationId: acceptTripProposal
+      summary: Accept, validate, and apply a non-transactional proposal
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+        - name: proposalId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedCommand'
+      responses:
+        '200':
+          description: Proposal applied as a new trip version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripEnvelope'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /trips/{tripId}/commands/undo:
+    post:
+      tags: [Trips]
+      operationId: undoTripVersion
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/VersionedCommand'
+                - type: object
+                  required: [restoreVersion]
+                  properties:
+                    restoreVersion:
+                      type: integer
+                      minimum: 1
+      responses:
+        '200':
+          description: Prior snapshot restored as a new version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripEnvelope'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+  /trips/{tripId}/commands/finalize:
+    post:
+      tags: [Trips]
+      operationId: finalizeTrip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedCommand'
+      responses:
+        '200':
+          description: Finalized trip or blocking feasibility issues
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripEnvelope'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /trips/{tripId}/agent-runs:
+    post:
+      tags: [Agent Runs]
+      operationId: startAgentRun
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requestId, baseTripVersion, conversationId, message]
+              properties:
+                requestId:
+                  type: string
+                  format: uuid
+                baseTripVersion:
+                  type: integer
+                  minimum: 1
+                conversationId:
+                  type: string
+                  format: uuid
+                message:
+                  type: string
+                  minLength: 1
+                  maxLength: 12000
+      responses:
+        '202':
+          description: Agent run accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRun'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+  /agent-runs/{runId}:
+    get:
+      tags: [Agent Runs]
+      operationId: getAgentRun
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: Durable run status and final result when available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRun'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /agent-runs/{runId}/events:
+    get:
+      tags: [Agent Runs]
+      operationId: streamAgentRunEvents
+      summary: Replay and follow typed run events
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - name: after
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: >-
+            SSE stream. Each data field is an AgentEvent JSON object; event IDs are
+            monotonic cursors and Last-Event-ID may resume delivery.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              x-sse-event-schema:
+                $ref: '#/components/schemas/AgentEvent'
+  /trips/{tripId}/booking/revalidations:
+    post:
+      tags: [Booking]
+      operationId: startBookingRevalidation
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedCommand'
+      responses:
+        '202':
+          description: Revalidation workflow accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowReference'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+  /trips/{tripId}/booking/authorizations:
+    post:
+      tags: [Booking]
+      operationId: authorizeBookingTerms
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requestId, tripVersion, termsHash, acknowledgedNonReversibleActions]
+              properties:
+                requestId:
+                  type: string
+                  format: uuid
+                tripVersion:
+                  type: integer
+                  minimum: 1
+                termsHash:
+                  type: string
+                  minLength: 32
+                  maxLength: 256
+                acknowledgedNonReversibleActions:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: Exact current terms authorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingAuthorization'
+        '409':
+          description: Terms expired, changed, or trip version no longer current
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /trips/{tripId}/bookings:
+    post:
+      tags: [Booking]
+      operationId: startBooking
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requestId, authorizationId]
+              properties:
+                requestId:
+                  type: string
+                  format: uuid
+                authorizationId:
+                  type: string
+                  format: uuid
+      responses:
+        '202':
+          description: Idempotent booking workflow accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingTransaction'
+        '409':
+          description: Authorization is invalid, expired, consumed, or stale
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /bookings/{bookingId}:
+    get:
+      tags: [Booking]
+      operationId: getBooking
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Durable transaction and per-component outcomes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingTransaction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /bookings/{bookingId}/components/{componentId}/reschedule-revalidations:
+    post:
+      tags: [Booking]
+      operationId: startComponentRescheduleRevalidation
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: componentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requestId, requestedChange]
+              properties:
+                requestId:
+                  type: string
+                  format: uuid
+                requestedChange:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '202':
+          description: Independent rescheduling revalidation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowReference'
+  /internal/trips/{tripId}/agent-view:
+    get:
+      tags: [Internal Agent Tools]
+      operationId: getTripAgentView
+      security:
+        - internalService: []
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+        - name: baseTripVersion
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: detail
+          in: query
+          required: true
+          schema:
+            enum: [compact, itinerary, components, pricing, constraints]
+      responses:
+        '200':
+          description: Authorized bounded trip projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripEnvelope'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+  /internal/trips/{tripId}/proposals:
+    post:
+      tags: [Internal Agent Tools]
+      operationId: recordTripProposal
+      security:
+        - internalService: []
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeProposal'
+      responses:
+        '201':
+          description: Proposal recorded without applying it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeProposal'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /internal/context/search:
+    post:
+      tags: [Internal Agent Tools]
+      operationId: retrieveRelevantContext
+      security:
+        - internalService: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tripId, userId, query, reason, limit]
+              properties:
+                tripId:
+                  type: string
+                  format: uuid
+                userId:
+                  type: string
+                  format: uuid
+                query:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+      responses:
+        '200':
+          description: Redacted, bounded historical context
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 20
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [kind, content, occurredAt]
+                      properties:
+                        kind:
+                          enum: [message, decision, rejected_option, constraint, open_question]
+                        content:
+                          type: string
+                        occurredAt:
+                          type: string
+                          format: date-time
+components:
+  securitySchemes:
+    browserSession:
+      type: apiKey
+      in: cookie
+      name: onholidai.session
+    internalService:
+      type: http
+      scheme: bearer
+      bearerFormat: short-lived service token
+  parameters:
+    TripId:
+      name: tripId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    ValidationError:
+      description: Input or domain validation failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    VersionConflict:
+      description: Expected trip version is stale
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Problem'
+              - type: object
+                required: [currentVersion]
+                properties:
+                  currentVersion:
+                    type: integer
+                    minimum: 1
+    NotFound:
+      description: Resource not found or not visible to the actor
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    CreateTripRequest:
+      type: object
+      additionalProperties: false
+      required: [requestId, title, currency, snapshot]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        snapshot:
+          $ref: '#/components/schemas/TripSnapshot'
+    VersionedCommand:
+      type: object
+      additionalProperties: false
+      required: [requestId, expectedVersion]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        expectedVersion:
+          type: integer
+          minimum: 1
+    TripMutationRequest:
+      allOf:
+        - $ref: '#/components/schemas/VersionedCommand'
+        - type: object
+          required: [operations]
+          properties:
+            operations:
+              type: array
+              minItems: 1
+              maxItems: 32
+              items:
+                $ref: '#/components/schemas/DraftOperation'
+    DraftOperation:
+      type: object
+      additionalProperties: false
+      required: [operation, target, value]
+      properties:
+        operation:
+          enum: [add, replace, remove, reorder]
+        target:
+          type: string
+          pattern: '^/(availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$'
+        value: {}
+    TripEnvelope:
+      type: object
+      additionalProperties: false
+      required: [tripId, version, lifecycleState, snapshot, updatedAt]
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        lifecycleState:
+          enum: [draft, finalized, partially_booked, booked, cancelled]
+        snapshot:
+          $ref: '#/components/schemas/TripSnapshot'
+        updatedAt:
+          type: string
+          format: date-time
+    TripSnapshot:
+      type: object
+      additionalProperties: false
+      required: [availabilityWindows, duration, travellerParty, preferences, constraints, destinations, itineraryDays, components, price, warnings]
+      properties:
+        availabilityWindows:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: true
+        duration:
+          type: object
+          required: [minimumDays, idealDays, maximumDays]
+          properties:
+            minimumDays:
+              type: integer
+              minimum: 1
+            idealDays:
+              type: integer
+              minimum: 1
+            maximumDays:
+              type: integer
+              minimum: 1
+        travellerParty:
+          type: object
+          additionalProperties: true
+        preferences:
+          type: object
+          additionalProperties: true
+        constraints:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        destinations:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: object
+            additionalProperties: true
+        itineraryDays:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        components:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            additionalProperties: true
+        price:
+          $ref: '#/components/schemas/PublicPrice'
+        warnings:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    PublicPrice:
+      type: object
+      description: Customer projection intentionally excludes supplier amount and platform margin.
+      additionalProperties: false
+      required: [currency, finalCustomerMinor, status, checkedAt]
+      properties:
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        finalCustomerMinor:
+          type: integer
+          minimum: 0
+        taxesMinor:
+          type: integer
+          minimum: 0
+        feesMinor:
+          type: integer
+          minimum: 0
+        status:
+          enum: [estimated, quoted, live, expired, confirmed]
+        checkedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+    ChangeProposal:
+      type: object
+      additionalProperties: false
+      required: [id, tripId, agentRunId, baseTripVersion, operations, affectedFacts, rationale, status, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        agentRunId:
+          type: string
+          format: uuid
+        baseTripVersion:
+          type: integer
+          minimum: 1
+        operations:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/DraftOperation'
+        affectedFacts:
+          type: array
+          items:
+            type: string
+        rationale:
+          type: string
+        tradeoffs:
+          type: array
+          items:
+            type: string
+        ambiguities:
+          type: array
+          items:
+            type: string
+        status:
+          enum: [proposed, needs_clarification, accepted, applied, rejected, stale]
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+    AgentRun:
+      type: object
+      additionalProperties: false
+      required: [id, tripId, baseTripVersion, status, nextEventCursor, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        baseTripVersion:
+          type: integer
+          minimum: 1
+        status:
+          enum: [queued, running, awaiting_clarification, proposed, completed, failed, cancelled]
+        proposal:
+          oneOf:
+            - $ref: '#/components/schemas/ChangeProposal'
+            - type: 'null'
+        nextEventCursor:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, 'null']
+          format: date-time
+    AgentEvent:
+      type: object
+      additionalProperties: false
+      required: [version, runId, cursor, type, occurredAt, payload]
+      properties:
+        version:
+          const: '1'
+        runId:
+          type: string
+          format: uuid
+        cursor:
+          type: integer
+          minimum: 1
+        type:
+          enum: [progress, clarification, proposal, completed, failed]
+        occurredAt:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+    WorkflowReference:
+      type: object
+      additionalProperties: false
+      required: [workflowId, status]
+      properties:
+        workflowId:
+          type: string
+        status:
+          enum: [accepted, running]
+    BookingAuthorization:
+      type: object
+      additionalProperties: false
+      required: [id, tripId, tripVersion, termsHash, status, authorizedAt, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        tripVersion:
+          type: integer
+          minimum: 1
+        termsHash:
+          type: string
+        status:
+          enum: [pending, authorized, invalidated, expired, consumed]
+        authorizedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+    BookingTransaction:
+      type: object
+      additionalProperties: false
+      required: [id, tripId, authorizationId, operation, status, components, startedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        authorizationId:
+          type: string
+          format: uuid
+        operation:
+          enum: [book_trip, reschedule_component, cancel_component]
+        status:
+          enum: [requested, running, partially_confirmed, confirmed, action_required, failed, cancelled]
+        components:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [componentId, status]
+            properties:
+              componentId:
+                type: string
+                format: uuid
+              status:
+                enum: [proposed, authorized, booking, confirmed, failed, unknown, action_required, cancelled]
+              providerReference:
+                type: [string, 'null']
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, 'null']
+          format: date-time
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, correlationId]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          type: string
+        detail:
+          type: string
+        correlationId:
+          type: string
