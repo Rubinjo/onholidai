@@ -68,6 +68,7 @@ Root value object contained in each `TripVersion`.
 
 | Field | Type | Rules |
 |---|---|---|
+| `departureOrigin` | DepartureOrigin | Required, resolved and traveller-confirmed before flight estimation |
 | `availabilityWindows` | AvailabilityWindow[] | At least one before estimation |
 | `duration` | DurationPreference | Must fit at least one availability window |
 | `travellerParty` | TravellerParty | At least one adult for initial scope |
@@ -78,6 +79,20 @@ Root value object contained in each `TripVersion`.
 | `components` | TravelComponent[] | Maximum 32 |
 | `price` | TripPrice | Currency-consistent totals |
 | `warnings` | TripWarning[] | Unresolved material conflicts visible |
+
+### DepartureOrigin
+
+| Field | Type | Rules |
+|---|---|---|
+| `kind` | enum | `city` or `airport` |
+| `placeId` | opaque place identity | Required; disambiguated within country |
+| `name` | string | 1-120 characters |
+| `countryCode` | ISO 3166-1 alpha-2 code | Required |
+| `timezone` | IANA timezone | Required and valid |
+| `airportCode` | IATA code or null | Three uppercase letters for airport; null for city |
+| `confirmedByUser` | boolean | Must be true before flight estimation |
+
+Return travel defaults to this origin. City-level searches may consider its airports but must disclose the proposed airport; a different city requires an accepted origin change. Never infer origin from IP or identity. Legacy snapshots missing origin remain readable under their prior schemaVersion; upgrading them requires explicit origin confirmation before new flight estimates and never fabricates a value.
 
 ### AvailabilityWindow
 
@@ -152,7 +167,7 @@ An `ItineraryItem` contains type (`activity`, `meal`, `free_time`, `travel`, `no
 
 ### TravelSegment
 
-Contains mode (`walk`, `public_transport`, `drive`, `flight`, `rail`, `transfer`, `ferry`, `other`), origin and destination, planned departure/arrival, duration, route geometry, directions summary, source, and freshness timestamp. Times must be ordered and timezone-qualified.
+Contains mode (`walk`, `public_transport`, `drive`, `flight`, `rail`, `transfer`, `ferry`, `other`), origin and destination, planned departure/arrival, duration, route geometry, directions summary, source, and freshness timestamp. Times must be ordered and timezone-qualified. Record the duration upper bound where supplied, timing evidence, verification status, and feasibilityPolicyVersion. Apply spec.md's feasibility policy v1; missing evidence cannot produce a verified pass.
 
 ### TravelComponent
 
@@ -192,6 +207,7 @@ Versioned summary with `constraints`, `preferences`, `decisions`, `rejectedOptio
 | `eventCursor` | integer | Monotonic replay position |
 | `startedAt`, `completedAt` | timestamp | UTC |
 | `errorCategory` | safe enum or null | No raw sensitive error payload |
+| `leaseExpiresAt` | UTC timestamp or null | 90-second queued/running lease renewed by durable progress every 15 seconds; suspended while awaiting clarification |
 
 ### ChangeProposal
 
@@ -199,6 +215,8 @@ Versioned summary with `constraints`, `preferences`, `decisions`, `rejectedOptio
 |---|---|---|
 | `id`, `tripId`, `agentRunId` | UUID | Required |
 | `baseTripVersion` | integer | Must equal current version at apply time |
+| `purpose` | enum | `initial_estimate`, `refinement`, `finalization` |
+| `initiatingRequestId` | UUID | Required; must match the scoped run request |
 | `operations` | typed operation[] | Allowlisted draft-only operations |
 | `affectedFacts` | structured paths/IDs | Required for impact review |
 | `rationale`, `tradeoffs` | string/list | Traveller-facing |
@@ -207,7 +225,7 @@ Versioned summary with `constraints`, `preferences`, `decisions`, `rejectedOptio
 | `status` | enum | State machine below |
 | `createdAt`, `expiresAt` | timestamp | Stale proposals cannot apply |
 
-Permitted operations include destination, date, duration, traveller, preference, constraint, itinerary-item, and draft-component changes. Booking, payment, cancellation, and rescheduling operations are not valid proposal operations.
+Permitted operations include departure origin, destination, date, duration, traveller, preference, constraint, itinerary-item, and draft-component changes. Booking, payment, cancellation, and rescheduling operations are not valid proposal operations. Initial estimates use the same proposal/acceptance machinery in US1; the agent supplies draft operations and rationale, while web resolves trusted offer facts and recomputes price/impacts. No top-level price write is a valid operation. Requesting research never implies proposal acceptance.
 
 ## Transactional Booking Entities
 
@@ -218,14 +236,14 @@ Immutable authorization bound to exact revalidated terms.
 | Field | Type | Rules |
 |---|---|---|
 | `id`, `tripId`, `userId` | UUID | Required |
-| `tripVersion` | integer | Must remain current for execution |
+| `tripVersion` | integer | Must match current version at execution start and before the first provider write |
 | `termsSnapshot` | canonical structured data | Exact components, travellers, dates, prices, taxes, terms, currency, expiry |
 | `termsHash` | cryptographic digest | Computed from canonical snapshot |
 | `status` | enum | `pending`, `authorized`, `invalidated`, `expired`, `consumed` |
 | `authorizedAt`, `expiresAt` | timestamp | Execution must occur in window |
 | `invalidatedReason` | enum or null | Material change reason |
 
-Authorization is invalidated by material changes to price, dates, travellers, inventory, components, or cancellation terms.
+Authorization is invalidated by material changes to price, dates, travellers, departure origin, inventory, components, or cancellation terms. Starting execution consumes the one-shot authorization into an immutable transaction-owned execution basis; consumption never grants permission to use changed or expired terms.
 
 ### BookingTransaction
 
@@ -235,9 +253,14 @@ Authorization is invalidated by material changes to price, dates, travellers, in
 | `operation` | enum | `book_trip`, `reschedule_component`, `cancel_component` |
 | `idempotencyKey` | string | Globally unique for operation and terms hash |
 | `workflowId` | string | Unique Temporal workflow identity |
+| `executionBasis` | immutable value | Authorized user, operation, authorization ID, starting tripVersion, canonical terms snapshot/hash and expiry |
+| `lastObservedTripVersion` | positive integer | Mutable execution checkpoint; advances only through proven same-transaction status/evidence versions |
+| `executionStatus` | enum | `active`, `invalidated`, `expired`, `completed` |
 | `status` | enum | State machine below |
 | `startedAt`, `completedAt` | timestamp | UTC |
 | `requestedBy` | UUID | Authorized actor |
+
+The initial execution basis is claimed with the authorization and idempotency record in one database transaction. Its original authorization is consumed once; later material changes invalidate executionStatus rather than rewriting that authorization. Before every provider write, compare current version and material terms against the basis. Later version advances are allowed only if every intervening version identifies this transaction and changes only status, lifecycle or evidence fields. Canonical material terms exclude those status/evidence fields, but retain exact offer/inventory IDs, departure origin, dates, travellers, amounts/currency, cancellation conditions and other authorized terms. A provider confirmation with changed material facts invalidates execution and stops pending writes. Any external version advance requires renewed authorization; it is never silently merged. A short database transaction serializes the durable provider-write claim with trip-edit acceptance; affected material edits are rejected while a claim is in flight or unknown. Do not hold a database transaction across a provider network call. Reconciliation resolves the claim, and earlier successful confirmations remain durable.
 
 ### BookingComponentAttempt
 
@@ -273,7 +296,7 @@ proposed -> stale
 accepted -> stale (version changed before apply)
 ```
 
-Only the web domain can move `accepted` to `applied`, after validation and an optimistic version check.
+Only the web domain can move `accepted` to `applied`, after validation and an optimistic version check. This rule includes initial-estimate proposals; their model/repository/basic acceptance endpoint exists in US1, before US2 extends refinement/history.
 
 ### Offer and Price
 
@@ -325,7 +348,7 @@ A timeout produces `unknown`, not an inferred success or failure. Cancellation a
 3. Scheduled dates fit a declared availability window and duration bounds unless an accepted proposal records the stated deviation benefit.
 4. Itinerary items cannot overlap impossibly after accounting for travel and transition time; unresolved hard conflicts block finalization.
 5. Customer projections never contain supplier amount or platform margin.
-6. Authorization terms hash, trip version, user, and expiry must match at workflow start and before the first provider write.
+6. Authorization terms hash, trip version, user, and expiry must match at workflow start and before the first provider write. Every later write checks the immutable execution basis and only accepts proven same-transaction status/evidence version advances; changed terms, expiry, external edits or an unresolved competing write stop dispatch.
 7. Confirmed status always has provider evidence; uncertain outcomes remain `unknown` or `action_required`.
 8. Conversation, summaries, retrieved context, and model output cannot mutate authoritative state directly.
 9. Sensitive traveller/payment values do not enter prompts, general logs, traces, or fixtures.

@@ -104,34 +104,40 @@ paths:
           $ref: '#/components/responses/VersionConflict'
         '422':
           $ref: '#/components/responses/ValidationError'
-  /trips/{tripId}/commands/undo:
+  "/trips/{tripId}/commands/undo":
     post:
-      tags: [Trips]
-      operationId: undoTripVersion
+      tags: ["Trips"]
+      operationId: "undoTripVersion"
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        -
+          $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
-          application/json:
+          "application/json":
             schema:
-              allOf:
-                - $ref: '#/components/schemas/VersionedCommand'
-                - type: object
-                  required: [restoreVersion]
-                  properties:
-                    restoreVersion:
-                      type: integer
-                      minimum: 1
+              type: "object"
+              additionalProperties: false
+              required: ["requestId","expectedVersion","restoreVersion"]
+              properties:
+                requestId:
+                  type: "string"
+                  format: "uuid"
+                expectedVersion:
+                  type: "integer"
+                  minimum: 1
+                restoreVersion:
+                  type: "integer"
+                  minimum: 1
       responses:
-        '200':
-          description: Prior snapshot restored as a new version
+        "200":
+          description: "Prior snapshot restored as a new version"
           content:
-            application/json:
+            "application/json":
               schema:
-                $ref: '#/components/schemas/TripEnvelope'
-        '409':
-          $ref: '#/components/responses/VersionConflict'
+                $ref: "#/components/schemas/TripEnvelope"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
   /trips/{tripId}/commands/finalize:
     post:
       tags: [Trips]
@@ -155,43 +161,46 @@ paths:
           $ref: '#/components/responses/VersionConflict'
         '422':
           $ref: '#/components/responses/ValidationError'
-  /trips/{tripId}/agent-runs:
+  "/trips/{tripId}/agent-runs":
     post:
-      tags: [Agent Runs]
-      operationId: startAgentRun
+      tags: ["Agent Runs"]
+      operationId: "startAgentRun"
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        -
+          $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
-          application/json:
+          "application/json":
             schema:
-              type: object
+              type: "object"
               additionalProperties: false
-              required: [requestId, baseTripVersion, conversationId, message]
+              required: ["requestId","baseTripVersion","conversationId","message","purpose"]
               properties:
                 requestId:
-                  type: string
-                  format: uuid
+                  type: "string"
+                  format: "uuid"
                 baseTripVersion:
-                  type: integer
+                  type: "integer"
                   minimum: 1
                 conversationId:
-                  type: string
-                  format: uuid
+                  type: "string"
+                  format: "uuid"
                 message:
-                  type: string
+                  type: "string"
                   minLength: 1
                   maxLength: 12000
+                purpose:
+                  enum: ["initial_estimate","refinement","finalization"]
       responses:
-        '202':
-          description: Agent run accepted
+        "202":
+          description: "Agent run accepted"
           content:
-            application/json:
+            "application/json":
               schema:
-                $ref: '#/components/schemas/AgentRun'
-        '409':
-          $ref: '#/components/responses/VersionConflict'
+                $ref: "#/components/schemas/AgentRun"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
   /agent-runs/{runId}:
     get:
       tags: [Agent Runs]
@@ -496,6 +505,107 @@ paths:
                         occurredAt:
                           type: string
                           format: date-time
+  "/internal/agent-runs/{runId}/events/{cursor}":
+    put:
+      tags: ["Internal Agent Tools"]
+      operationId: "persistAgentRunEvent"
+      summary: "Commit scoped durable agent event and return its idempotent receipt"
+      security:
+        -
+          internalService: []
+      x-required-scope: "run:write"
+      x-service-audience: "web"
+      x-run-binding: true
+      parameters:
+        -
+          $ref: "#/components/parameters/RunId"
+        -
+          name: "cursor"
+          in: "path"
+          required: true
+          schema:
+            type: "integer"
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/PersistAgentEventRequest"
+      responses:
+        "200":
+          description: "Durable record committed, or original receipt for exact replay"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/AgentPersistenceReceipt"
+        "401":
+          description: "Missing, invalid, expired or wrong-audience credential"
+          content:
+            "application/problem+json":
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: "Run/user/trip/request binding or scope mismatch"
+          content:
+            "application/problem+json":
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: "Cursor gap, conflicting fingerprint, stale terminal state or unmatched result event"
+          content:
+            "application/problem+json":
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  "/internal/agent-runs/{runId}/result":
+    put:
+      tags: ["Internal Agent Tools"]
+      operationId: "persistAgentRunResult"
+      summary: "Commit scoped durable agent result and return its idempotent receipt"
+      security:
+        -
+          internalService: []
+      x-required-scope: "run:write"
+      x-service-audience: "web"
+      x-run-binding: true
+      parameters:
+        -
+          $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/PersistAgentResultRequest"
+      responses:
+        "200":
+          description: "Durable record committed, or original receipt for exact replay"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/AgentPersistenceReceipt"
+        "401":
+          description: "Missing, invalid, expired or wrong-audience credential"
+          content:
+            "application/problem+json":
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: "Run/user/trip/request binding or scope mismatch"
+          content:
+            "application/problem+json":
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "409":
+          description: "Cursor gap, conflicting fingerprint, stale terminal state or unmatched result event"
+          content:
+            "application/problem+json":
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          $ref: "#/components/responses/ValidationError"
 components:
   securitySchemes:
     browserSession:
@@ -529,18 +639,32 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     VersionConflict:
-      description: Expected trip version is stale
+      description: "Expected trip version is stale"
       content:
-        application/problem+json:
+        "application/problem+json":
           schema:
-            allOf:
-              - $ref: '#/components/schemas/Problem'
-              - type: object
-                required: [currentVersion]
-                properties:
-                  currentVersion:
-                    type: integer
-                    minimum: 1
+            type: "object"
+            additionalProperties: false
+            required: ["type","title","status","code","correlationId","currentVersion"]
+            properties:
+              type:
+                type: "string"
+                format: "uri-reference"
+              title:
+                type: "string"
+              status:
+                type: "integer"
+                minimum: 400
+                maximum: 599
+              code:
+                type: "string"
+              detail:
+                type: "string"
+              correlationId:
+                type: "string"
+              currentVersion:
+                type: "integer"
+                minimum: 1
     NotFound:
       description: Resource not found or not visible to the actor
       content:
@@ -548,344 +672,578 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
-    CreateTripRequest:
-      type: object
+    DepartureOrigin:
+      type: "object"
       additionalProperties: false
-      required: [requestId, title, currency, snapshot]
+      required: ["kind","placeId","name","countryCode","timezone","airportCode","confirmedByUser"]
+      properties:
+        kind:
+          enum: ["city","airport"]
+        placeId:
+          type: "string"
+          minLength: 1
+        name:
+          type: "string"
+          minLength: 1
+          maxLength: 120
+        countryCode:
+          type: "string"
+          pattern: "^[A-Z]{2}$"
+        timezone:
+          type: "string"
+          minLength: 1
+          description: "Valid IANA timezone; domain validates registry membership."
+        airportCode:
+          type: ["string","null"]
+          pattern: "^[A-Z]{3}$"
+        confirmedByUser:
+          const: true
+      allOf:
+        -
+          if:
+            properties:
+              kind:
+                const: "airport"
+          then:
+            properties:
+              airportCode:
+                type: "string"
+                pattern: "^[A-Z]{3}$"
+          else:
+            properties:
+              airportCode:
+                type: "null"
+    EstimatedCostRange:
+      type: "object"
+      additionalProperties: false
+      required: ["currency","minimumMinor","maximumMinor"]
+      properties:
+        currency:
+          type: "string"
+          pattern: "^[A-Z]{3}$"
+        minimumMinor:
+          type: "integer"
+          minimum: 0
+        maximumMinor:
+          type: "integer"
+          minimum: 0
+          description: "Domain validates maximumMinor >= minimumMinor and the preview's currency."
+    BookingExecutionBasis:
+      type: "object"
+      additionalProperties: false
+      description: "Customer-safe reference to immutable approved terms; never includes internal supplier pricing or sensitive execution inputs."
+      required: ["tripVersion","termsHash","expiresAt"]
+      properties:
+        tripVersion:
+          type: "integer"
+          minimum: 1
+        termsHash:
+          type: "string"
+          minLength: 32
+          maxLength: 256
+        expiresAt:
+          type: "string"
+          format: "date-time"
+    PersistAgentEventRequest:
+      type: "object"
+      additionalProperties: false
+      description: "Path runId/cursor, reserved run/request/user/trip/base-version and service-token grant must all match. Exact retries reuse receipts; gaps or changed fingerprints return 409 without a write."
+      required: ["version","requestId","userId","tripId","baseTripVersion","event"]
+      properties:
+        version:
+          const: "1"
+        requestId:
+          type: "string"
+          format: "uuid"
+        userId:
+          type: "string"
+          format: "uuid"
+        tripId:
+          type: "string"
+          format: "uuid"
+        baseTripVersion:
+          type: "integer"
+          minimum: 1
+        event:
+          $ref: "./agent-api.openapi.yaml#/components/schemas/AgentEvent"
+    PersistAgentResultRequest:
+      type: "object"
+      additionalProperties: false
+      description: "Result commits only after its matching clarification/proposal/terminal event at eventCursor; failed result is null. Identity must match the reserved run. Recorded proposals do not apply to trips."
+      required: ["version","requestId","userId","tripId","baseTripVersion","eventCursor","status","result"]
+      properties:
+        version:
+          const: "1"
+        requestId:
+          type: "string"
+          format: "uuid"
+        userId:
+          type: "string"
+          format: "uuid"
+        tripId:
+          type: "string"
+          format: "uuid"
+        baseTripVersion:
+          type: "integer"
+          minimum: 1
+        eventCursor:
+          type: "integer"
+          minimum: 1
+        status:
+          enum: ["awaiting_clarification","proposed","completed","failed"]
+        result:
+          oneOf:
+            -
+              $ref: "./agent-api.openapi.yaml#/components/schemas/AgentResult"
+            -
+              type: "null"
+      allOf:
+        -
+          if:
+            properties:
+              status:
+                const: "failed"
+          then:
+            properties:
+              result:
+                type: "null"
+          else:
+            properties:
+              result:
+                $ref: "./agent-api.openapi.yaml#/components/schemas/AgentResult"
+        - if:
+            properties:
+              status:
+                const: "awaiting_clarification"
+          then:
+            properties:
+              result:
+                properties:
+                  kind:
+                    const: "clarification"
+        - if:
+            properties:
+              status:
+                const: "proposed"
+          then:
+            properties:
+              result:
+                properties:
+                  kind:
+                    const: "proposal"
+        - if:
+            properties:
+              status:
+                const: "completed"
+          then:
+            properties:
+              result:
+                properties:
+                  kind:
+                    const: "answer"
+    AgentPersistenceReceipt:
+      type: "object"
+      additionalProperties: false
+      required: ["runId","requestId","acceptedCursor","resultRecorded"]
+      properties:
+        runId:
+          type: "string"
+          format: "uuid"
+        requestId:
+          type: "string"
+          format: "uuid"
+        acceptedCursor:
+          type: "integer"
+          minimum: 1
+        resultRecorded:
+          type: "boolean"
+    CreateTripRequest:
+      type: "object"
+      additionalProperties: false
+      required: ["requestId","title","currency","snapshot"]
       properties:
         requestId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         title:
-          type: string
+          type: "string"
           minLength: 1
           maxLength: 120
         currency:
-          type: string
-          pattern: '^[A-Z]{3}$'
+          type: "string"
+          pattern: "^[A-Z]{3}$"
         snapshot:
-          $ref: '#/components/schemas/TripSnapshot'
+          $ref: "#/components/schemas/TripSnapshot"
     VersionedCommand:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [requestId, expectedVersion]
+      required: ["requestId","expectedVersion"]
       properties:
         requestId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         expectedVersion:
-          type: integer
+          type: "integer"
           minimum: 1
     TripMutationRequest:
-      allOf:
-        - $ref: '#/components/schemas/VersionedCommand'
-        - type: object
-          required: [operations]
-          properties:
-            operations:
-              type: array
-              minItems: 1
-              maxItems: 32
-              items:
-                $ref: '#/components/schemas/DraftOperation'
-    DraftOperation:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [operation, target, value]
+      required: ["requestId","expectedVersion","operations"]
+      properties:
+        requestId:
+          type: "string"
+          format: "uuid"
+        expectedVersion:
+          type: "integer"
+          minimum: 1
+        operations:
+          type: "array"
+          minItems: 1
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/DraftOperation"
+    DraftOperation:
+      type: "object"
+      additionalProperties: false
+      required: ["operation","target","value"]
       properties:
         operation:
-          enum: [add, replace, remove, reorder]
+          enum: ["add","replace","remove","reorder"]
         target:
-          type: string
-          pattern: '^/(availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$'
+          type: "string"
+          pattern: "^/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$"
         value: {}
     TripEnvelope:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [tripId, version, lifecycleState, snapshot, updatedAt]
+      required: ["tripId","version","lifecycleState","snapshot","updatedAt"]
       properties:
         tripId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         version:
-          type: integer
+          type: "integer"
           minimum: 1
         lifecycleState:
-          enum: [draft, finalized, partially_booked, booked, cancelled]
+          enum: ["draft","finalized","partially_booked","booked","cancelled"]
         snapshot:
-          $ref: '#/components/schemas/TripSnapshot'
+          $ref: "#/components/schemas/TripSnapshot"
         updatedAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
     TripSnapshot:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [availabilityWindows, duration, travellerParty, preferences, constraints, destinations, itineraryDays, components, price, warnings]
+      required: ["departureOrigin","availabilityWindows","duration","travellerParty","preferences","constraints","destinations","itineraryDays","components","price","warnings"]
       properties:
         availabilityWindows:
-          type: array
+          type: "array"
           minItems: 1
           items:
-            type: object
+            type: "object"
             additionalProperties: true
         duration:
-          type: object
-          required: [minimumDays, idealDays, maximumDays]
+          type: "object"
+          required: ["minimumDays","idealDays","maximumDays"]
           properties:
             minimumDays:
-              type: integer
+              type: "integer"
               minimum: 1
             idealDays:
-              type: integer
+              type: "integer"
               minimum: 1
             maximumDays:
-              type: integer
+              type: "integer"
               minimum: 1
         travellerParty:
-          type: object
+          type: "object"
           additionalProperties: true
         preferences:
-          type: object
+          type: "object"
           additionalProperties: true
         constraints:
-          type: array
+          type: "array"
           items:
-            type: object
+            type: "object"
             additionalProperties: true
         destinations:
-          type: array
+          type: "array"
           minItems: 1
           maxItems: 8
           items:
-            type: object
+            type: "object"
             additionalProperties: true
         itineraryDays:
-          type: array
+          type: "array"
           items:
-            type: object
+            type: "object"
             additionalProperties: true
         components:
-          type: array
+          type: "array"
           maxItems: 32
           items:
-            type: object
+            type: "object"
             additionalProperties: true
         price:
-          $ref: '#/components/schemas/PublicPrice'
+          $ref: "#/components/schemas/PublicPrice"
         warnings:
-          type: array
+          type: "array"
           items:
-            type: object
+            type: "object"
             additionalProperties: true
+        departureOrigin:
+          description: "Resolved traveller-confirmed origin for estimation. Null is a legacy/draft read projection that blocks flight estimation until explicitly confirmed."
+          oneOf:
+            -
+              $ref: "#/components/schemas/DepartureOrigin"
+            -
+              type: "null"
     PublicPrice:
-      type: object
-      description: Customer projection intentionally excludes supplier amount and platform margin.
+      type: "object"
+      description: "Customer projection intentionally excludes supplier amount and platform margin."
       additionalProperties: false
-      required: [currency, finalCustomerMinor, status, checkedAt]
+      required: ["currency","finalCustomerMinor","status","checkedAt"]
       properties:
         currency:
-          type: string
-          pattern: '^[A-Z]{3}$'
+          type: "string"
+          pattern: "^[A-Z]{3}$"
         finalCustomerMinor:
-          type: integer
+          type: "integer"
           minimum: 0
         taxesMinor:
-          type: integer
+          type: "integer"
           minimum: 0
         feesMinor:
-          type: integer
+          type: "integer"
           minimum: 0
         status:
-          enum: [estimated, quoted, live, expired, confirmed]
+          enum: ["estimated","quoted","live","expired","confirmed"]
         checkedAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
         expiresAt:
-          type: [string, 'null']
-          format: date-time
+          type: ["string","null"]
+          format: "date-time"
     ChangeProposal:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [id, tripId, agentRunId, baseTripVersion, operations, affectedFacts, rationale, status, createdAt, expiresAt]
+      required: ["id","purpose","initiatingRequestId","tripId","agentRunId","baseTripVersion","operations","affectedFacts","rationale","status","createdAt","expiresAt"]
       properties:
         id:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         tripId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         agentRunId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         baseTripVersion:
-          type: integer
+          type: "integer"
           minimum: 1
         operations:
-          type: array
+          type: "array"
           minItems: 1
           maxItems: 32
           items:
-            $ref: '#/components/schemas/DraftOperation'
+            $ref: "#/components/schemas/DraftOperation"
         affectedFacts:
-          type: array
+          type: "array"
           items:
-            type: string
+            type: "string"
         rationale:
-          type: string
+          type: "string"
         tradeoffs:
-          type: array
+          type: "array"
           items:
-            type: string
+            type: "string"
         ambiguities:
-          type: array
+          type: "array"
           items:
-            type: string
+            type: "string"
         status:
-          enum: [proposed, needs_clarification, accepted, applied, rejected, stale]
+          enum: ["proposed","needs_clarification","accepted","applied","rejected","stale"]
         createdAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
         expiresAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
+        purpose:
+          enum: ["initial_estimate","refinement","finalization"]
+        initiatingRequestId:
+          type: "string"
+          format: "uuid"
+        previewSnapshot:
+          $ref: "#/components/schemas/TripSnapshot"
+        estimatedCostRange:
+          $ref: "#/components/schemas/EstimatedCostRange"
+        styleCompatibility:
+          type: "string"
+          minLength: 1
+        constraintSummary:
+          type: "array"
+          items:
+            type: "string"
+        warnings:
+          type: "array"
+          items:
+            type: "string"
+      allOf:
+        -
+          if:
+            properties:
+              purpose:
+                const: "initial_estimate"
+          then:
+            required: ["previewSnapshot","estimatedCostRange","styleCompatibility","constraintSummary","warnings"]
     AgentRun:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [id, tripId, baseTripVersion, status, nextEventCursor, createdAt]
+      required: ["id","tripId","baseTripVersion","status","nextEventCursor","createdAt"]
       properties:
         id:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         tripId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         baseTripVersion:
-          type: integer
+          type: "integer"
           minimum: 1
         status:
-          enum: [queued, running, awaiting_clarification, proposed, completed, failed, cancelled]
+          enum: ["queued","running","awaiting_clarification","proposed","completed","failed","cancelled"]
         proposal:
           oneOf:
-            - $ref: '#/components/schemas/ChangeProposal'
-            - type: 'null'
+            -
+              $ref: "#/components/schemas/ChangeProposal"
+            -
+              type: "null"
         nextEventCursor:
-          type: integer
+          type: "integer"
           minimum: 0
         createdAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
         completedAt:
-          type: [string, 'null']
-          format: date-time
+          type: ["string","null"]
+          format: "date-time"
     AgentEvent:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [version, runId, cursor, type, occurredAt, payload]
+      required: ["version","runId","cursor","type","occurredAt","payload"]
       properties:
         version:
-          const: '1'
+          const: "1"
         runId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         cursor:
-          type: integer
+          type: "integer"
           minimum: 1
         type:
-          enum: [progress, clarification, proposal, completed, failed]
+          enum: ["progress","clarification","proposal","completed","failed"]
         occurredAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
         payload:
-          type: object
+          type: "object"
           additionalProperties: true
     WorkflowReference:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [workflowId, status]
+      required: ["workflowId","status"]
       properties:
         workflowId:
-          type: string
+          type: "string"
         status:
-          enum: [accepted, running]
+          enum: ["accepted","running"]
     BookingAuthorization:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [id, tripId, tripVersion, termsHash, status, authorizedAt, expiresAt]
+      required: ["id","tripId","tripVersion","termsHash","status","authorizedAt","expiresAt"]
       properties:
         id:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         tripId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         tripVersion:
-          type: integer
+          type: "integer"
           minimum: 1
         termsHash:
-          type: string
+          type: "string"
         status:
-          enum: [pending, authorized, invalidated, expired, consumed]
+          enum: ["pending","authorized","invalidated","expired","consumed"]
         authorizedAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
         expiresAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
     BookingTransaction:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [id, tripId, authorizationId, operation, status, components, startedAt]
+      required: ["id","tripId","authorizationId","operation","status","components","startedAt","executionBasis","lastObservedTripVersion","executionStatus"]
       properties:
         id:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         tripId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         authorizationId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         operation:
-          enum: [book_trip, reschedule_component, cancel_component]
+          enum: ["book_trip","reschedule_component","cancel_component"]
         status:
-          enum: [requested, running, partially_confirmed, confirmed, action_required, failed, cancelled]
+          enum: ["requested","running","partially_confirmed","confirmed","action_required","failed","cancelled"]
         components:
-          type: array
+          type: "array"
           items:
-            type: object
+            type: "object"
             additionalProperties: false
-            required: [componentId, status]
+            required: ["componentId","status"]
             properties:
               componentId:
-                type: string
-                format: uuid
+                type: "string"
+                format: "uuid"
               status:
-                enum: [proposed, authorized, booking, confirmed, failed, unknown, action_required, cancelled]
+                enum: ["proposed","authorized","booking","confirmed","failed","unknown","action_required","cancelled"]
               providerReference:
-                type: [string, 'null']
+                type: ["string","null"]
         startedAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
         completedAt:
-          type: [string, 'null']
-          format: date-time
+          type: ["string","null"]
+          format: "date-time"
+        executionBasis:
+          $ref: "#/components/schemas/BookingExecutionBasis"
+        lastObservedTripVersion:
+          type: "integer"
+          minimum: 1
+        executionStatus:
+          enum: ["active","invalidated","expired","completed"]
     Problem:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [type, title, status, code, correlationId]
+      required: ["type","title","status","code","correlationId"]
       properties:
         type:
-          type: string
-          format: uri-reference
+          type: "string"
+          format: "uri-reference"
         title:
-          type: string
+          type: "string"
         status:
-          type: integer
+          type: "integer"
           minimum: 400
           maximum: 599
         code:
-          type: string
+          type: "string"
         detail:
-          type: string
+          type: "string"
         correlationId:
-          type: string
+          type: "string"
