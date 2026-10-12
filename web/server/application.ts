@@ -5,6 +5,7 @@ import { Pool } from "pg";
 import { createAuth } from "@/server/auth/auth";
 import { loadServerConfig } from "@/server/config";
 import { createDatabase } from "@/server/db/database";
+import { createPlaceLookupProvider } from "@/server/supply/places";
 
 // This is the process composition root. Domain services receive its dependencies
 // explicitly; only Next.js entry points read the registered application.
@@ -18,7 +19,7 @@ export function createApplication(environment: Record<string, string | undefined
   try {
     const auth = createAuth(config, authPool);
     return {
-      config, database, auth,
+      config, database, auth, places: createPlaceLookupProvider(config.PROVIDER_MODE),
       shutdown(): Promise<void> {
         shutdownPromise ??= Promise.allSettled([database.destroy(), authPool.end()]).then((results) => {
           const failures = results.filter((result) => result.status === "rejected");

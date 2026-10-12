@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onholidai.local/contracts/supply/offers-v1.schema.json",
+  "title": "Planning Offer v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["component", "eligibility", "occupancy", "accessibility", "attribution", "unverifiedFacts"],
+  "properties": {
+    "component": {
+      "allOf": [
+        { "$ref": "../trip-domain/snapshot-v1.schema.json#/properties/components/items" },
+        { "type": "object", "properties": {
+          "bookingStatus": { "const": "unbooked" },
+          "price": { "type": "object", "properties": { "status": { "enum": ["estimated", "quoted", "expired"] } } }
+        } }
+      ]
+    },
+    "eligibility": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "minimumAge", "maximumAge"],
+      "properties": {
+        "status": { "enum": ["eligible", "ineligible", "unverified"] },
+        "minimumAge": { "type": ["integer", "null"], "minimum": 0 },
+        "maximumAge": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "occupancy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["maximumAdults", "maximumChildren"],
+      "properties": {
+        "maximumAdults": { "type": ["integer", "null"], "minimum": 1 },
+        "maximumChildren": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "accessibility": { "enum": ["verified", "unverified", "unsupported"] },
+    "attribution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "sourceUrl"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "sourceUrl": { "type": ["string", "null"], "format": "uri" }
+      }
+    },
+    "unverifiedFacts": {
+      "type": "array", "maxItems": 5,
+      "items": { "enum": ["eligibility", "occupancy", "accessibility", "terms", "details"] }
+    }
+  }
+}

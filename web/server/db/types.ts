@@ -1,6 +1,7 @@
 import type { ColumnType, Generated, JSONColumnType } from "kysely";
 
 import type { DraftOperation, TripSnapshot } from "@/domain/trip/schema";
+import type { ChangeProposal } from "@/domain/trip/proposal";
 
 export type TripLifecycleState = "draft" | "finalized" | "partially_booked" | "booked" | "cancelled";
 export type TripInitiatingActor = "user" | "agent_proposal" | "system_revalidation" | "booking_workflow";
@@ -113,6 +114,8 @@ export interface AuditEventTable {
 }
 
 export interface TripCoreDatabase {
+  agentRuns: AgentRunTable;
+  changeProposals: ChangeProposalTable;
   trips: TripTable;
   tripVersions: TripVersionTable;
   conversations: ConversationTable;
@@ -121,4 +124,37 @@ export interface TripCoreDatabase {
   outboxEvents: OutboxEventTable;
   idempotencyRecords: IdempotencyRecordTable;
   auditEvents: AuditEventTable;
+}
+
+export interface AgentRunTable {
+  id: string;
+  tripId: string;
+  conversationId: string;
+  ownerUserId: string;
+  requestId: string;
+  baseTripVersion: number;
+  purpose: ChangeProposal["purpose"];
+  requestFingerprint: string;
+  status: Generated<"queued" | "running" | "awaiting_clarification" | "proposed" | "completed" | "failed" | "cancelled">;
+  eventCursor: Generated<number>;
+  leaseExpiresAt: Timestamp | null;
+  startedAt: GeneratedTimestamp;
+  completedAt: Timestamp | null;
+  errorCategory: "interrupted" | "deadline" | "source_unavailable" | "invalid_result" | null;
+  result: Json<Record<string, unknown> | null>;
+}
+
+export interface ChangeProposalTable {
+  id: string;
+  tripId: string;
+  agentRunId: string;
+  initiatingRequestId: string;
+  baseTripVersion: number;
+  purpose: ChangeProposal["purpose"];
+  proposal: Json<ChangeProposal>;
+  requestFingerprint: string;
+  status: ChangeProposal["status"];
+  createdAt: Timestamp;
+  expiresAt: Timestamp;
+  appliedVersion: number | null;
 }

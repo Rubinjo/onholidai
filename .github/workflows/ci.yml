@@ -34,6 +34,12 @@ jobs:
       - name: Type-check web
         run: pnpm --filter @onholidai/web typecheck
       - name: Build web
+        env:
+          DATABASE_URL: postgresql://build:build@localhost:5432/build
+          BETTER_AUTH_URL: http://localhost:3000
+          BETTER_AUTH_SECRET: build-only-auth-secret-0000000000000000
+          SERVICE_TOKEN_SECRET: build-only-service-secret-000000000000
+          PRICING_DIAGNOSTIC_SECRET: build-only-pricing-secret-000000000000
         run: pnpm --filter @onholidai/web build
       - name: Detect Vitest suites
         id: vitest
@@ -88,7 +94,7 @@ jobs:
         env:
           PGPASSWORD: synthetic-admin
         run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f infra/postgres/test-roles.sql
-      - name: Verify foundation transactions and migration compatibility
+      - name: Verify foundation and initial trip transactions and migration compatibility
         run: pnpm --dir web test:foundation
 
   agent:

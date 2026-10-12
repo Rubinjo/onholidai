@@ -4,6 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 describe("explicit application composition", () => {
+  it("requires explicit production identity and independently signed diagnostics", async () => {
+    const { loadServerConfig } = await import("../../server/config");
+    expect(() => loadServerConfig({ NODE_ENV: "production" })).toThrow("DATABASE_URL");
+    expect(() => loadServerConfig({ NODE_ENV: "production", DATABASE_URL: "postgresql://local/db",
+      BETTER_AUTH_SECRET: "synthetic-development-secret-000000" })).toThrow("BETTER_AUTH_SECRET");
+    const local = loadServerConfig({ NODE_ENV: "test" });
+    expect(local.SERVICE_TOKEN_SECRET).not.toBe(local.PRICING_DIAGNOSTIC_SECRET);
+  });
   it("can import factories without evaluating environment configuration", async () => {
     vi.stubEnv("PROVIDER_MODE", "invalid");
     try {

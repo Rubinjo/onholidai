@@ -104,6 +104,8 @@ services:
     command:
       - |
         export BETTER_AUTH_SECRET="$$(cat /run/secrets/web_auth_secret)"
+        export SERVICE_TOKEN_SECRET="$$(cat /run/secrets/service_token_secret)"
+        export PRICING_DIAGNOSTIC_SECRET="$$(cat /run/secrets/pricing_diagnostic_secret)"
         export DATABASE_URL="postgresql://onholidai_web:$$(cat /run/secrets/app_db_password)@postgres:5432/onholidai"
         exec pnpm --filter @onholidai/web start
     environment:
@@ -118,6 +120,8 @@ services:
     secrets:
       - app_db_password
       - web_auth_secret
+      - service_token_secret
+      - pricing_diagnostic_secret
     depends_on:
       postgres:
         condition: service_healthy
@@ -211,6 +215,10 @@ secrets:
     file: ./secrets/worker_db_password.txt
   web_auth_secret:
     file: ./secrets/web_auth_secret.txt
+  service_token_secret:
+    file: ./secrets/service_token_secret.txt
+  pricing_diagnostic_secret:
+    file: ./secrets/pricing_diagnostic_secret.txt
 
 volumes:
   postgres-data:

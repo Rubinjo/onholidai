@@ -13,6 +13,8 @@ This guide defines the runnable end-to-end evidence expected after implementatio
 
 ## Start the Local Stack
 
+The web application now requires independent `service_token_secret.txt` and `pricing_diagnostic_secret.txt` files in `infra/compose/secrets/`, alongside `web_auth_secret.txt`. Each contains at least 32 characters; use distinct values. The service key will be shared with the agent transport when run orchestration is enabled; the pricing key stays in web/authorized diagnostic callers. Local non-container development uses the synthetic defaults in `.env.example`. Production startup requires explicit database/auth/service/diagnostic configuration. Build-only credentials in CI and Dockerfile are placeholders for shell compilation and are not installed as runtime environment values.
+
 Readiness is staged. After setup, install locked dependencies, start `--profile infrastructure` and run web/agent shell health checks with `pnpm dev`; no migration job, application container profile or booking worker is required. After foundation, run the `migrations` profile. The complete commands below require all story implementations through US4; `applications` runs containerized app services and `booking` runs the worker.
 
 ```bash

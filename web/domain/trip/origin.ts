@@ -1,0 +1,1 @@
+export { departureOriginSchema } from "./schema";

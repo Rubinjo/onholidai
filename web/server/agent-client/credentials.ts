@@ -7,6 +7,7 @@ export type ServiceAudience = "agent" | "web";
 export type ServiceScope =
   | "context:read"
   | "proposal:create"
+  | "pricing:read"
   | "run:write"
   | "trip:read";
 
@@ -44,7 +45,7 @@ const AUDIENCE_SCOPES: Readonly<
   Record<ServiceAudience, ReadonlySet<ServiceScope>>
 > = {
   agent: new Set(["trip:read", "context:read", "proposal:create"]),
-  web: new Set(["run:write"]),
+  web: new Set(["run:write", "trip:read", "context:read", "proposal:create", "pricing:read"]),
 };
 
 const CLAIM_KEYS = new Set([

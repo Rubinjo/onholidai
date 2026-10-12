@@ -25,6 +25,7 @@ const [sourceAgentApi, sourceWebApi, promotedAgentApi, promotedWebApi] = await P
 );
 
 const requiredOperations = new Map([
+  ["/places", "get"],
   ["/agent-runs/{runId}/clarifications", "post"],
   ["/trips/{tripId}/conversations", "get"],
   ["/trips/{tripId}/versions", "get"],
@@ -179,6 +180,14 @@ function checkClosedComposition(value, location = "contract") {
 
 checkClosedComposition(sourceAgentApi, "source agent OpenAPI");
 checkClosedComposition(sourceWebApi, "source web OpenAPI");
+
+const offersPath = path.join(promotedRoot, "supply", "offers-v1.schema.json");
+const offersSchema = JSON.parse(await read(offersPath));
+const componentReference = offersSchema.properties.component.allOf[0].$ref;
+const [componentFile, componentPointer] = componentReference.split("#");
+const componentDocument = JSON.parse(await read(path.resolve(path.dirname(offersPath), componentFile)));
+assert(resolveJsonPointer(componentDocument, `#${componentPointer}`), "Planning offers must resolve their component schema");
+checkClosedComposition(offersSchema, "planning offer schema");
 
 const [sourceWebText, promotedWebText] = await Promise.all([
   read(sourceWeb),

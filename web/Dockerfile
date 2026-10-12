@@ -17,7 +17,12 @@ RUN pnpm install --frozen-lockfile --filter @onholidai/web...
 FROM dependencies AS build
 
 COPY web web
-RUN pnpm --filter @onholidai/web build
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build \
+    BETTER_AUTH_URL=http://localhost:3000 \
+    BETTER_AUTH_SECRET=build-only-auth-secret-0000000000000000 \
+    SERVICE_TOKEN_SECRET=build-only-service-secret-000000000000 \
+    PRICING_DIAGNOSTIC_SECRET=build-only-pricing-secret-000000000000 \
+    pnpm --filter @onholidai/web build
 
 FROM base AS runtime
 

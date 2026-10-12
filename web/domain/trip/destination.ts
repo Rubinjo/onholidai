@@ -1,0 +1,43 @@
+import { z } from "zod";
+
+import { destinationSchema, geographyPointSchema, timezoneSchema } from "./schema";
+
+export { destinationSchema };
+export const placeCandidateSchema = z.object({
+  placeId: z.string().trim().min(1).max(256),
+  kind: z.enum(["country", "city", "place", "airport"]),
+  name: z.string().trim().min(1).max(120),
+  countryCode: z.string().regex(/^[A-Z]{2}$/),
+  timezone: timezoneSchema,
+  airportCode: z.string().regex(/^[A-Z]{3}$/).nullable(),
+  location: geographyPointSchema.nullable(),
+}).strict().superRefine((place, context) => {
+  if ((place.kind === "airport") !== (place.airportCode !== null)) {
+    context.addIssue({ code: "custom", path: ["airportCode"], message: "Only airports require an airport code" });
+  }
+});
+export const placeLookupInputSchema = z.object({
+  query: z.string().trim().min(1).max(200),
+  countryCode: z.string().regex(/^[A-Z]{2}$/).optional(),
+}).strict();
+export type PlaceCandidate = z.infer<typeof placeCandidateSchema>;
+export interface PlaceLookupProvider {
+  search(input: z.infer<typeof placeLookupInputSchema>, signal: AbortSignal): Promise<readonly PlaceCandidate[]>;
+}
+
+export async function lookupPlaces(provider: PlaceLookupProvider, rawInput: unknown) {
+  const input = placeLookupInputSchema.parse(rawInput);
+  const candidates = z.array(placeCandidateSchema).max(20)
+    .parse(await provider.search(input, AbortSignal.timeout(8_000)))
+    .filter((candidate) => !input.countryCode || candidate.countryCode === input.countryCode);
+  if (new Set(candidates.map((candidate) => candidate.placeId)).size !== candidates.length) {
+    throw new Error("Place provider returned duplicate identities");
+  }
+  return { candidates, ambiguous: candidates.length > 1 };
+}
+
+export function resolvePlace(candidates: readonly PlaceCandidate[], selectedPlaceId?: string): PlaceCandidate {
+  const matches = candidates.filter((candidate) => candidate.placeId === selectedPlaceId);
+  if (matches.length !== 1) throw new Error("Select one resolved geographic identity");
+  return placeCandidateSchema.parse(matches[0]);
+}

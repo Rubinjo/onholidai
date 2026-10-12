@@ -2,7 +2,7 @@ import "server-only";
 
 import type { AuthSession, AuthUser } from "@/server/auth/auth";
 
-export const INTERNAL_TEAM_ROLES = ["support", "operations", "admin"] as const;
+export const INTERNAL_TEAM_ROLES = ["support", "operations", "admin", "pricing_auditor", "administrator"] as const;
 
 export type InternalTeamRole = (typeof INTERNAL_TEAM_ROLES)[number];
 export type AuthorizationUser = Pick<AuthUser, "id"> & {

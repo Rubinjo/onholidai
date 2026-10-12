@@ -66,10 +66,10 @@
             },
             "version": {
               "type": "integer",
-              "minimum": 2
+              "minimum": 1
             },
             "previousVersion": {
-              "type": "integer",
+              "type": ["integer", "null"],
               "minimum": 1
             },
             "initiatingActor": {

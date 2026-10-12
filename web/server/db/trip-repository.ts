@@ -10,6 +10,7 @@ export type LockedTrip = Pick<
 >;
 
 export interface TripRepositoryPort {
+  insertTrip(trip: Insertable<TripTable>): Promise<void>;
   lockTrip(tripId: string): Promise<LockedTrip | undefined>;
   insertVersion(version: TripVersion): Promise<void>;
   advanceCurrentVersion(
@@ -25,6 +26,10 @@ export interface TripRepositoryPort {
 
 export class TripRepository implements TripRepositoryPort {
   constructor(private readonly transaction: Transaction<Database>) {}
+
+  async insertTrip(trip: Insertable<TripTable>): Promise<void> {
+    await this.transaction.insertInto("trips").values(trip).executeTakeFirstOrThrow();
+  }
 
   lockTrip(tripId: string): Promise<LockedTrip | undefined> {
     return this.transaction

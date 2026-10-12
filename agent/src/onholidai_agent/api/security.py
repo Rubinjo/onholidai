@@ -12,11 +12,11 @@ SERVICE_TOKEN_DEFAULT_TTL_SECONDS = 60
 SERVICE_TOKEN_MAX_TTL_SECONDS = 300
 
 ServiceAudience = Literal["agent", "web"]
-ServiceScope = Literal["context:read", "proposal:create", "run:write", "trip:read"]
+ServiceScope = Literal["context:read", "proposal:create", "run:write", "trip:read", "pricing:read"]
 
 _AUDIENCE_SCOPES: Mapping[ServiceAudience, frozenset[ServiceScope]] = {
     "agent": frozenset(("trip:read", "context:read", "proposal:create")),
-    "web": frozenset(("run:write",)),
+    "web": frozenset(("run:write", "trip:read", "context:read", "proposal:create", "pricing:read")),
 }
 _CLAIM_KEYS: frozenset[str] = frozenset(
     (

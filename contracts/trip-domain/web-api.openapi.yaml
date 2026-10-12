@@ -15,6 +15,58 @@ tags:
   - name: Booking
   - name: Internal Agent Tools
 paths:
+  /places:
+    get:
+      tags: [Trips]
+      operationId: lookupPlaces
+      summary: Search bounded geographic candidates for explicit traveller selection
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - name: countryCode
+          in: query
+          schema: { type: string, pattern: '^[A-Z]{2}$' }
+      responses:
+        '200':
+          description: Up to twenty candidates; multiple matches require explicit selection
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [candidates, ambiguous, source]
+                properties:
+                  ambiguous: { type: boolean }
+                  source: { enum: [synthetic, provider] }
+                  candidates:
+                    type: array
+                    maxItems: 20
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [placeId, kind, name, countryCode, timezone, airportCode, location]
+                      properties:
+                        placeId: { type: string, minLength: 1, maxLength: 256 }
+                        kind: { enum: [country, city, place, airport] }
+                        name: { type: string, minLength: 1, maxLength: 120 }
+                        countryCode: { type: string, pattern: '^[A-Z]{2}$' }
+                        timezone: { type: string }
+                        airportCode: { type: [string, 'null'], pattern: '^[A-Z]{3}$' }
+                        location:
+                          oneOf:
+                            - type: object
+                              additionalProperties: false
+                              required: [latitude, longitude]
+                              properties:
+                                latitude: { type: number, minimum: -90, maximum: 90 }
+                                longitude: { type: number, minimum: -180, maximum: 180 }
+                            - type: 'null'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          description: Geographic provider unavailable; preserve current selections
   /trips:
     post:
       tags: [Trips]
@@ -630,6 +682,14 @@ paths:
       security:
         - internalService: []
       parameters:
+        - name: x-user-id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+        - name: x-request-id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
         - $ref: '#/components/parameters/TripId'
         - name: baseTripVersion
           in: query
@@ -660,6 +720,18 @@ paths:
         - internalService: []
       x-required-roles: [pricing_auditor, administrator]
       parameters:
+        - name: x-user-id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+        - name: x-request-id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+        - name: x-base-trip-version
+          in: header
+          description: Required when the version query parameter is omitted; must match the scoped token.
+          schema: { type: integer, minimum: 1 }
         - $ref: '#/components/parameters/TripId'
         - name: version
           in: query
@@ -689,6 +761,14 @@ paths:
       security:
         - internalService: []
       parameters:
+        - name: x-user-id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+        - name: x-request-id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
         - $ref: '#/components/parameters/TripId'
       requestBody:
         required: true

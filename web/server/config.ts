@@ -12,6 +12,8 @@ const serverConfigSchema = z
     BETTER_AUTH_SECRET: z.string().min(32).default("synthetic-development-secret-000000"),
     BETTER_AUTH_URL: z.url().default("http://localhost:3000"),
     AGENT_BASE_URL: z.url().default("http://localhost:8000"),
+    SERVICE_TOKEN_SECRET: z.string().min(32).default("synthetic-local-service-secret-000000000"),
+    PRICING_DIAGNOSTIC_SECRET: z.string().min(32).default("synthetic-local-pricing-secret-000000000"),
     TEMPORAL_ADDRESS: z.string().default("localhost:7233"),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
     TRAVEL_PROVIDER_API_KEY: z.string().optional(),
@@ -29,5 +31,16 @@ const serverConfigSchema = z
 export type ServerConfig = z.infer<typeof serverConfigSchema>;
 
 export function loadServerConfig(environment: Record<string, string | undefined>): ServerConfig {
-  return serverConfigSchema.parse(environment);
+  if (environment.NODE_ENV === "production") {
+    for (const key of ["DATABASE_URL", "BETTER_AUTH_SECRET", "BETTER_AUTH_URL", "SERVICE_TOKEN_SECRET", "PRICING_DIAGNOSTIC_SECRET"] as const) {
+      if (!environment[key] || environment[key]?.startsWith("synthetic")) {
+        throw new Error(`Production requires explicit ${key}`);
+      }
+    }
+  }
+  const config = serverConfigSchema.parse(environment);
+  if (config.SERVICE_TOKEN_SECRET === config.PRICING_DIAGNOSTIC_SECRET) {
+    throw new Error("Pricing diagnostics require an independent signing secret");
+  }
+  return config;
 }

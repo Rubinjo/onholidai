@@ -142,3 +142,27 @@ def test_binds_context_and_enforces_ttl_bound() -> None:
             scopes=FIXTURE["scopes"],
             ttl_seconds=301,
         )
+
+
+@pytest.mark.parametrize("scope", ["trip:read", "context:read", "proposal:create"])
+def test_web_tokens_can_grant_scoped_internal_reads_and_proposals(scope: str) -> None:
+    token = create_service_token(
+        secret=FIXTURE["secret"],
+        audience="web",
+        context=CONTEXT,
+        scopes=[scope],
+        issued_at=FIXTURE["issuedAt"],
+    )
+    claims = verify(token, expected_audience="web", required_scopes=[scope])
+    assert claims.scopes == (scope,)
+    assert claims.user_id == CONTEXT.user_id
+
+
+def test_agent_tokens_cannot_grant_internal_pricing_access() -> None:
+    with pytest.raises(ServiceTokenError, match="unknown scope"):
+        create_service_token(
+            secret=FIXTURE["secret"],
+            audience="agent",
+            context=CONTEXT,
+            scopes=["pricing:read"],
+        )

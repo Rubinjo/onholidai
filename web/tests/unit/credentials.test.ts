@@ -60,6 +60,14 @@ const verifyOptions = {
 };
 
 describe("internal service credentials", () => {
+  it("allows scoped web reads while excluding diagnostics from agent grants", () => {
+    const context = fixture.context;
+    const token = createServiceToken({ secret: fixture.secret, audience: "web", ...context,
+      scopes: ["trip:read"], issuedAt: fixture.issuedAt });
+    expect(verifyServiceToken(token, { ...verifyOptions, expectedAudience: "web" }).scopes).toEqual(["trip:read"]);
+    expect(() => createServiceToken({ secret: fixture.secret, audience: "agent", ...context,
+      scopes: ["pricing:read"], issuedAt: fixture.issuedAt })).toThrow("unknown scope");
+  });
   it("round-trips the deterministic cross-language fixture", () => {
     const token = fixtureToken();
     const claims = verifyServiceToken(token, verifyOptions);

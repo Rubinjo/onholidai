@@ -16,7 +16,8 @@ const commitInputSchema = z
   .object({
     tripId: z.uuid(),
     ownerUserId: z.string().trim().min(1),
-    expectedVersion: z.number().int().positive(),
+    expectedVersion: z.number().int().nonnegative(),
+    creation: z.object({ title: z.string().trim().min(1).max(120) }).strict().optional(),
     requestId: z.uuid(),
     idempotencyKey: z.string().trim().min(1).max(256),
     requestFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
@@ -30,12 +31,21 @@ const commitInputSchema = z
     auditEventId: z.uuid(),
     traceId: z.string().trim().min(1).max(128).nullable().default(null),
   })
-  .strict();
+  .strict()
+  .superRefine((input, context) => {
+    if ((input.expectedVersion === 0) !== (input.creation !== undefined)) {
+      context.addIssue({ code: "custom", path: ["creation"], message: "Version zero requires initial trip creation" });
+    }
+    if (input.creation && (input.initiatingActor !== "user" || input.proposalId !== null
+      || input.inverseOperation !== null)) {
+      context.addIssue({ code: "custom", path: ["creation"], message: "Initial creation must be a user command with a non-reversible reason" });
+    }
+  });
 
 const commitResultSchema = z
   .object({
     tripId: z.uuid(),
-    previousVersion: z.number().int().positive(),
+    previousVersion: z.number().int().positive().nullable(),
     version: z.number().int().positive(),
     outboxEventId: z.uuid(),
     replayed: z.boolean(),
@@ -86,7 +96,7 @@ function defaultRepositoryFactory(transaction: Transaction<Database>): CommitRep
   };
 }
 
-function canonicalJson(value: unknown): string {
+export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value !== null && typeof value === "object") {
     const object = value as Record<string, unknown>;
@@ -106,20 +116,22 @@ export async function commitTripMutation(
   const input = commitInputSchema.parse(rawInput);
   const now = (options.now ?? (() => new Date()))();
   const repositoryFactory = options.repositoryFactory ?? defaultRepositoryFactory;
-  const scope = `trip:${input.tripId}:mutation`;
+  const scope = input.creation ? `user:${input.ownerUserId}:trip:create` : `trip:${input.tripId}:mutation`;
   // Bind the receipt to validated domain facts and the authenticated actor.
   // Server-generated delivery/audit/trace IDs may differ on an exact retry.
   const requestFingerprint = createHash("sha256").update(canonicalJson({
-    tripId: input.tripId, ownerUserId: input.ownerUserId, expectedVersion: input.expectedVersion,
+    ...(input.creation ? { creation: input.creation } : { tripId: input.tripId }),
+    ownerUserId: input.ownerUserId, expectedVersion: input.expectedVersion,
     requestId: input.requestId, requestFingerprint: input.requestFingerprint,
-    snapshot: input.snapshot, initiatingActor: input.initiatingActor, proposalId: input.proposalId,
+    snapshot: input.creation ? { ...input.snapshot, price: { ...input.snapshot.price, checkedAt: null } } : input.snapshot,
+    initiatingActor: input.initiatingActor, proposalId: input.proposalId,
     changeSummary: input.changeSummary, inverseOperation: input.inverseOperation,
     nonReversibleReason: input.nonReversibleReason,
   })).digest("hex");
 
   const nextVersion = input.expectedVersion + 1;
   const version = tripVersionSchema.parse({
-    tripId: input.tripId, version: nextVersion, previousVersion: input.expectedVersion,
+    tripId: input.tripId, version: nextVersion, previousVersion: input.expectedVersion || null,
     schemaVersion: 1, snapshot: input.snapshot, initiatingActor: input.initiatingActor,
     initiatingRequestId: input.requestId, proposalId: input.proposalId,
     changeSummary: input.changeSummary, inverseOperation: input.inverseOperation,
@@ -128,9 +140,11 @@ export async function commitTripMutation(
 
   return database.transaction().execute(async (transaction) => {
     const repositories = repositoryFactory(transaction);
-    const trip = await repositories.trips.lockTrip(input.tripId);
-    if (!trip) throw new TripNotFoundError();
-    if (trip.ownerUserId !== input.ownerUserId) throw new TripOwnershipError();
+    const trip = input.creation ? undefined : await repositories.trips.lockTrip(input.tripId);
+    if (!input.creation) {
+      if (!trip) throw new TripNotFoundError();
+      if (trip.ownerUserId !== input.ownerUserId) throw new TripOwnershipError();
+    }
 
     const claim = await repositories.idempotency.claim({
       scope,
@@ -139,15 +153,26 @@ export async function commitTripMutation(
       expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
     });
     if (claim.kind === "replay") {
-      return { ...commitResultSchema.parse(claim.result), replayed: true };
+      const receipt = commitResultSchema.parse(claim.result);
+      if (input.creation) {
+        const original = await repositories.trips.lockTrip(receipt.tripId);
+        if (!original) throw new TripNotFoundError();
+        if (original.ownerUserId !== input.ownerUserId) throw new TripOwnershipError();
+      }
+      return { ...receipt, replayed: true };
     }
 
-    if (trip.currentVersion !== input.expectedVersion) {
+    if (trip && trip.currentVersion !== input.expectedVersion) {
       throw new TripVersionConflictError(input.expectedVersion, trip.currentVersion);
     }
 
+    if (input.creation) {
+      await repositories.trips.insertTrip({ id: input.tripId, ownerUserId: input.ownerUserId,
+        title: input.creation.title, lifecycleState: "draft", currentVersion: 1,
+        currency: input.snapshot.price.currency, createdAt: now, updatedAt: now, lastActivityAt: now });
+    }
     await repositories.trips.insertVersion(version);
-    const advanced = await repositories.trips.advanceCurrentVersion(
+    const advanced = input.creation ? true : await repositories.trips.advanceCurrentVersion(
       input.tripId,
       input.expectedVersion,
       nextVersion,
@@ -155,7 +180,7 @@ export async function commitTripMutation(
       now,
     );
     if (!advanced) {
-      throw new TripVersionConflictError(input.expectedVersion, trip.currentVersion);
+      throw new TripVersionConflictError(input.expectedVersion, trip?.currentVersion ?? input.expectedVersion);
     }
 
     await repositories.trips.appendOutbox({
@@ -168,7 +193,7 @@ export async function commitTripMutation(
       payload: {
         tripId: input.tripId,
         version: nextVersion,
-        previousVersion: input.expectedVersion,
+        previousVersion: input.expectedVersion || null,
         initiatingActor: input.initiatingActor,
         requestId: input.requestId,
         reloadRequired: true,
@@ -192,7 +217,7 @@ export async function commitTripMutation(
 
     const result = commitResultSchema.parse({
       tripId: input.tripId,
-      previousVersion: input.expectedVersion,
+      previousVersion: input.expectedVersion || null,
       version: nextVersion,
       outboxEventId: input.outboxEventId,
       replayed: false,
