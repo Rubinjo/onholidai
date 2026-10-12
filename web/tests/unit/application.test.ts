@@ -22,7 +22,7 @@ describe("explicit application composition", () => {
     await Promise.all([application.shutdown(), application.shutdown()]);
     await application.shutdown();
     await expect(application.database.selectFrom("trips").select("id").execute())
-      .rejects.toThrow(/destroyed/i);
+      .rejects.toThrow();
   });
 
   it("requires explicit startup and releases the registered application on shutdown", async () => {

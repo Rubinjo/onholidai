@@ -64,8 +64,9 @@ interface SignInPageProps {
 }
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
+  const requestHeaders = await headers();
   const [session, params] = await Promise.all([
-    getSession(getApplication().auth, await headers()), searchParams,
+    getSession(getApplication().auth, requestHeaders), searchParams,
   ]);
   const redirectTo = safeRedirectPath(params.redirectTo);
   const hasInvalidCredentials = params.error === "invalid-credentials";
