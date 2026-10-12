@@ -52,7 +52,7 @@ Each requested component returns exactly one outcome:
 - `unavailable`: provider confirms no bookable offer;
 - `unknown`: truth cannot be established before the deadline.
 
-A canonical authorization snapshot may include only unexpired `unchanged` or traveller-accepted `changed` terms. The snapshot includes the exact normalized fields and a deterministic hash.
+A canonical authorization snapshot may include only unexpired `unchanged` or traveller-accepted `changed` terms. The snapshot includes the exact normalized fields, confirmed departure origin, and a deterministic hash. Booking status, lifecycle and provider-confirmation reference are excluded from material-term comparison; offer/inventory identity, dates, travellers, prices/currency and cancellation conditions are retained. A confirmation with changed material terms stops remaining writes.
 
 ## Write Result
 
@@ -71,6 +71,7 @@ Timeouts map to `unknown`. Activities query status before retrying an ambiguous 
 - Component key: transaction key plus immutable component identity.
 - PostgreSQL uniqueness prevents reuse for another request fingerprint.
 - Temporal replay and repeated API calls return the recorded outcome when the key is complete.
+- Every write checks the transaction's immutable execution basis, expiry, provenance of status-only version advances, and durable write claim. Material edits cannot commit while an affected claim is in flight or unknown; reconciliation resolves claims before new writes or edits.
 - Providers lacking safe write idempotency use one attempt followed by status reconciliation or manual action; they are never retried blindly.
 
 ## Partial Failure and Recovery

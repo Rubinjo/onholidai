@@ -146,316 +146,408 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
-    CreateAgentRunRequest:
-      type: object
+    AnswerResult:
+      type: "object"
       additionalProperties: false
-      required: [contractVersion, actor, requestId, conversationId, message, context]
+      required: ["kind","message"]
+      properties:
+        kind:
+          const: "answer"
+        message:
+          type: "string"
+    ClarificationResult:
+      type: "object"
+      additionalProperties: false
+      required: ["kind","message","clarification"]
+      properties:
+        kind:
+          const: "clarification"
+        message:
+          type: "string"
+        clarification:
+          $ref: "#/components/schemas/Clarification"
+    ProposalResult:
+      type: "object"
+      additionalProperties: false
+      required: ["kind","message","proposal"]
+      properties:
+        kind:
+          const: "proposal"
+        message:
+          type: "string"
+        proposal:
+          $ref: "#/components/schemas/ChangeProposal"
+    CreateAgentRunRequest:
+      type: "object"
+      additionalProperties: false
+      required: ["contractVersion","actor","requestId","conversationId","message","context","purpose"]
       properties:
         contractVersion:
-          const: '1'
+          const: "1"
         actor:
-          $ref: '#/components/schemas/ActorContext'
+          $ref: "#/components/schemas/ActorContext"
         requestId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         conversationId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         message:
-          type: string
+          type: "string"
           minLength: 1
           maxLength: 12000
         context:
-          $ref: '#/components/schemas/PromptContext'
+          $ref: "#/components/schemas/PromptContext"
+        purpose:
+          enum: ["initial_estimate","refinement","finalization"]
     ActorContext:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [userId, tripId, baseTripVersion, scopes]
+      required: ["userId","tripId","baseTripVersion","scopes"]
       properties:
         userId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         tripId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         baseTripVersion:
-          type: integer
+          type: "integer"
           minimum: 1
         scopes:
-          type: array
+          type: "array"
           items:
-            enum: [trip:read, context:read, proposal:create]
+            enum: ["trip:read","context:read","proposal:create"]
           allOf:
-            - contains:
-                const: trip:read
-            - contains:
-                const: proposal:create
+            -
+              contains:
+                const: "trip:read"
+            -
+              contains:
+                const: "proposal:create"
     PromptContext:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [tripSummary, conversationSummary, recentMessages, contextBudget]
+      required: ["tripSummary","conversationSummary","recentMessages","contextBudget"]
       properties:
         tripSummary:
-          type: object
-          description: Compact authoritative projection at baseTripVersion.
+          type: "object"
+          description: "Compact authoritative projection at baseTripVersion."
           additionalProperties: true
         conversationSummary:
-          $ref: '#/components/schemas/ConversationSummary'
+          $ref: "#/components/schemas/ConversationSummary"
         recentMessages:
-          type: array
+          type: "array"
           maxItems: 20
           items:
-            $ref: '#/components/schemas/ContextMessage'
+            $ref: "#/components/schemas/ContextMessage"
         contextBudget:
-          type: object
+          type: "object"
           additionalProperties: false
-          required: [maximumTokens, compactionThresholdPercent]
+          required: ["maximumTokens","compactionThresholdPercent"]
           properties:
             maximumTokens:
-              type: integer
+              type: "integer"
               minimum: 1000
             compactionThresholdPercent:
-              type: integer
+              type: "integer"
               minimum: 1
               maximum: 100
               const: 70
     ConversationSummary:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [constraints, preferences, decisions, rejectedOptions, openQuestions, sourceTripVersion]
+      required: ["constraints","preferences","decisions","rejectedOptions","openQuestions","sourceTripVersion"]
       properties:
         constraints:
-          type: array
+          type: "array"
           items:
-            type: string
+            type: "string"
         preferences:
-          type: array
+          type: "array"
           items:
-            type: string
+            type: "string"
         decisions:
-          type: array
+          type: "array"
           items:
-            type: string
+            type: "string"
         rejectedOptions:
-          type: array
+          type: "array"
           items:
-            type: string
+            type: "string"
         openQuestions:
-          type: array
+          type: "array"
           items:
-            type: string
+            type: "string"
         sourceTripVersion:
-          type: integer
+          type: "integer"
           minimum: 1
     ContextMessage:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [id, role, redactedContent, occurredAt]
+      required: ["id","role","redactedContent","occurredAt"]
       properties:
         id:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         role:
-          enum: [user, assistant, system]
+          enum: ["user","assistant","system"]
         redactedContent:
-          type: string
+          type: "string"
         occurredAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
     AgentRun:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [id, requestId, tripId, baseTripVersion, status, nextEventCursor, createdAt]
+      required: ["id","requestId","tripId","baseTripVersion","status","nextEventCursor","createdAt"]
       properties:
         id:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         requestId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         tripId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         baseTripVersion:
-          type: integer
+          type: "integer"
           minimum: 1
         status:
-          enum: [queued, running, awaiting_clarification, proposed, completed, failed, cancelled]
+          enum: ["queued","running","awaiting_clarification","proposed","completed","failed","cancelled"]
         result:
           oneOf:
-            - $ref: '#/components/schemas/AgentResult'
-            - type: 'null'
+            -
+              $ref: "#/components/schemas/AgentResult"
+            -
+              type: "null"
         nextEventCursor:
-          type: integer
+          type: "integer"
           minimum: 0
         createdAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
         completedAt:
-          type: [string, 'null']
-          format: date-time
+          type: ["string","null"]
+          format: "date-time"
     AgentResult:
-      type: object
-      additionalProperties: false
-      required: [kind, message]
-      properties:
-        kind:
-          enum: [answer, clarification, proposal]
-        message:
-          type: string
-        clarification:
-          oneOf:
-            - $ref: '#/components/schemas/Clarification'
-            - type: 'null'
-        proposal:
-          oneOf:
-            - $ref: '#/components/schemas/ChangeProposal'
-            - type: 'null'
+      oneOf:
+        -
+          $ref: "#/components/schemas/AnswerResult"
+        -
+          $ref: "#/components/schemas/ClarificationResult"
+        -
+          $ref: "#/components/schemas/ProposalResult"
+      discriminator:
+        propertyName: "kind"
     Clarification:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [id, question, materialReason]
+      required: ["id","question","materialReason"]
       properties:
         id:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         question:
-          type: string
+          type: "string"
         materialReason:
-          enum: [scope, price, accessibility, feasibility, experience, transaction]
+          enum: ["scope","price","accessibility","feasibility","experience","transaction"]
     ChangeProposal:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [id, baseTripVersion, operations, affectedFacts, rationale, tradeoffs, warnings, expiresAt]
+      required: ["id","purpose","initiatingRequestId","baseTripVersion","operations","affectedFacts","rationale","tradeoffs","warnings","expiresAt"]
       properties:
         id:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         baseTripVersion:
-          type: integer
+          type: "integer"
           minimum: 1
         operations:
-          type: array
+          type: "array"
           minItems: 1
           maxItems: 32
           items:
-            $ref: '#/components/schemas/DraftOperation'
+            $ref: "#/components/schemas/DraftOperation"
         affectedFacts:
-          type: array
+          type: "array"
           minItems: 1
           items:
-            type: string
+            type: "string"
         rationale:
-          type: string
+          type: "string"
         tradeoffs:
-          type: array
+          type: "array"
           items:
-            type: string
+            type: "string"
         warnings:
-          type: array
+          type: "array"
           items:
-            type: string
+            type: "string"
         expiresAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
+        purpose:
+          enum: ["initial_estimate","refinement","finalization"]
+        initiatingRequestId:
+          type: "string"
+          format: "uuid"
     DraftOperation:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [operation, target, value]
+      required: ["operation","target","value"]
       properties:
         operation:
-          enum: [add, replace, remove, reorder]
+          enum: ["add","replace","remove","reorder"]
         target:
-          type: string
-          pattern: '^/(availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$'
+          type: "string"
+          pattern: "^/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$"
         value: {}
     AgentEvent:
       oneOf:
-        - $ref: '#/components/schemas/ProgressEvent'
-        - $ref: '#/components/schemas/ClarificationEvent'
-        - $ref: '#/components/schemas/ProposalEvent'
-        - $ref: '#/components/schemas/TerminalEvent'
+        -
+          $ref: "#/components/schemas/ProgressEvent"
+        -
+          $ref: "#/components/schemas/ClarificationEvent"
+        -
+          $ref: "#/components/schemas/ProposalEvent"
+        -
+          $ref: "#/components/schemas/TerminalEvent"
       discriminator:
-        propertyName: type
+        propertyName: "type"
     EventBase:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [version, runId, cursor, type, occurredAt]
+      required: ["version","runId","cursor","type","occurredAt"]
       properties:
         version:
-          const: '1'
+          const: "1"
         runId:
-          type: string
-          format: uuid
+          type: "string"
+          format: "uuid"
         cursor:
-          type: integer
+          type: "integer"
           minimum: 1
         type:
-          type: string
+          type: "string"
         occurredAt:
-          type: string
-          format: date-time
+          type: "string"
+          format: "date-time"
     ProgressEvent:
-      allOf:
-        - $ref: '#/components/schemas/EventBase'
-        - type: object
-          required: [type, stage, message]
-          properties:
-            type:
-              const: progress
-            stage:
-              enum: [understanding, researching, evaluating, composing]
-            message:
-              type: string
-    ClarificationEvent:
-      allOf:
-        - $ref: '#/components/schemas/EventBase'
-        - type: object
-          required: [type, clarification]
-          properties:
-            type:
-              const: clarification
-            clarification:
-              $ref: '#/components/schemas/Clarification'
-    ProposalEvent:
-      allOf:
-        - $ref: '#/components/schemas/EventBase'
-        - type: object
-          required: [type, proposal]
-          properties:
-            type:
-              const: proposal
-            proposal:
-              $ref: '#/components/schemas/ChangeProposal'
-    TerminalEvent:
-      allOf:
-        - $ref: '#/components/schemas/EventBase'
-        - type: object
-          required: [type, status]
-          properties:
-            type:
-              enum: [completed, failed]
-            status:
-              enum: [completed, failed]
-            safeErrorCode:
-              type: [string, 'null']
-    Problem:
-      type: object
+      type: "object"
       additionalProperties: false
-      required: [type, title, status, code, correlationId]
+      required: ["version","runId","cursor","type","occurredAt","stage","message"]
+      properties:
+        version:
+          const: "1"
+        runId:
+          type: "string"
+          format: "uuid"
+        cursor:
+          type: "integer"
+          minimum: 1
+        type:
+          const: "progress"
+        occurredAt:
+          type: "string"
+          format: "date-time"
+        stage:
+          enum: ["understanding","researching","evaluating","composing"]
+        message:
+          type: "string"
+    ClarificationEvent:
+      type: "object"
+      additionalProperties: false
+      required: ["version","runId","cursor","type","occurredAt","clarification"]
+      properties:
+        version:
+          const: "1"
+        runId:
+          type: "string"
+          format: "uuid"
+        cursor:
+          type: "integer"
+          minimum: 1
+        type:
+          const: "clarification"
+        occurredAt:
+          type: "string"
+          format: "date-time"
+        clarification:
+          $ref: "#/components/schemas/Clarification"
+    ProposalEvent:
+      type: "object"
+      additionalProperties: false
+      required: ["version","runId","cursor","type","occurredAt","proposal"]
+      properties:
+        version:
+          const: "1"
+        runId:
+          type: "string"
+          format: "uuid"
+        cursor:
+          type: "integer"
+          minimum: 1
+        type:
+          const: "proposal"
+        occurredAt:
+          type: "string"
+          format: "date-time"
+        proposal:
+          $ref: "#/components/schemas/ChangeProposal"
+    TerminalEvent:
+      type: "object"
+      additionalProperties: false
+      required: ["version","runId","cursor","type","occurredAt","status"]
+      properties:
+        version:
+          const: "1"
+        runId:
+          type: "string"
+          format: "uuid"
+        cursor:
+          type: "integer"
+          minimum: 1
+        type:
+          enum: ["completed","failed"]
+        occurredAt:
+          type: "string"
+          format: "date-time"
+        status:
+          enum: ["completed","failed"]
+        safeErrorCode:
+          type: ["string","null"]
+      allOf:
+        - if:
+            properties:
+              type:
+                const: "completed"
+          then:
+            properties:
+              status:
+                const: "completed"
+          else:
+            properties:
+              status:
+                const: "failed"
+    Problem:
+      type: "object"
+      additionalProperties: false
+      required: ["type","title","status","code","correlationId"]
       properties:
         type:
-          type: string
-          format: uri-reference
+          type: "string"
+          format: "uri-reference"
         title:
-          type: string
+          type: "string"
         status:
-          type: integer
+          type: "integer"
           minimum: 400
           maximum: 599
         code:
-          type: string
+          type: "string"
         detail:
-          type: string
+          type: "string"
         correlationId:
-          type: string
+          type: "string"

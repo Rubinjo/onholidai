@@ -53,7 +53,7 @@
 
 ## Request, Streaming, and Contract Pattern
 
-**Decision**: Use JSON request/response for durable reads and commands. `POST /agent-runs` starts asynchronous agent work and returns a run identifier; versioned server-sent events provide progress, clarification, proposal, and completion events, with status polling as the fallback. Pydantic models produce versioned OpenAPI/JSON Schema artifacts; generated TypeScript types and Zod validators consume those artifacts, and both services run contract tests.
+**Decision**: Use JSON request/response for durable reads and commands. Web reserves runs before dispatch; the agent persists scoped events/results through the callback contract in contracts/web-api.openapi.yaml before exposing SSE or final status. Receipts deduplicate run/cursor and request fingerprints; gaps/conflicts reject atomically. Progress renews a 90-second lease every 15 seconds; interrupted queued/running runs become failed; clarification suspends the lease until resume, and explicit retries start new research requests. Pydantic models produce versioned OpenAPI/JSON Schema artifacts; generated TypeScript types and Zod validators consume them and both services run contract tests.
 
 **Rationale**: Commands retain clear retry, status, and concurrency semantics while the user receives progressive agent feedback. SSE fits one-way events and standard web infrastructure better than a bidirectional socket. Generated runtime validation prevents cross-language drift.
 
@@ -61,7 +61,7 @@
 
 ## Proposal Validation and Application
 
-**Decision**: The LangGraph tool set is limited to `get_trip`, `propose_trip_changes`, and `retrieve_relevant_context`. Every agent change is a structured proposal against a base trip version. The web domain validates it and may apply a valid, unambiguous, non-transactional proposal only after the UI records acceptance. Version mismatch returns a conflict and never merges silently.
+**Decision**: Trip-domain LangGraph tools are `get_trip`, `propose_trip_changes`, and `retrieve_relevant_context`; separate research tools remain read-only. Every agent change, including an initial estimate, is a structured proposal with purpose, initiating request and base trip version. A traveller-confirmed city/airport origin is mandatory for flight estimation; return defaults to that origin. US1 owns the common proposal/acceptance primitives, with US2 extending refinement and history. Only explicit UI acceptance lets web validate, price and apply operations. Version mismatch returns a conflict and never merges silently.
 
 **Rationale**: Conversation remains advisory, the trip aggregate remains authoritative, and every accepted draft change is inspectable and reversible. Focused clarification is reserved for materially ambiguous requests.
 
@@ -85,7 +85,7 @@
 
 ## Temporal Ownership and Authorization Snapshot
 
-**Decision**: TypeScript workers in `web/` exclusively own `RevalidateBooking`, `BookTrip`, `RescheduleComponent`, and recovery workflows. Revalidation creates an immutable canonical terms snapshot containing components, provider offer identifiers, travellers, dates, prices, taxes, cancellation terms, currency, and expiry. Authorization binds user, trip version, and expiry to the snapshot hash.
+**Decision**: TypeScript workers in `web/` own revalidation, booking, rescheduling and recovery. Revalidation snapshots exact components, offer IDs, origin, travellers, dates, prices/taxes/fees, cancellation terms, currency and expiry. Authorization requires the current version at start and first write; consuming it creates an immutable execution basis. Further writes validate that basis, expiry and a provenance-checked chain of same-transaction status/evidence versions. Changed material facts or external versions stop pending writes. Durable write claims serialize dispatch with material edits; unknown outcomes are reconciled before releasing claims.
 
 **Rationale**: Booking ownership stays with the authenticated trip and pricing domain. Any material change invalidates the authorization. Python Temporal workflows are deferred until an agent-owned process has durable waits or long retries.
 
@@ -130,6 +130,12 @@
 **Rationale**: Outcome class, latency, retries, provider, trip/workflow identifiers, and error category are operationally useful without exposing payment data, traveller details, precise personal constraints, credentials, supplier cost, or margin.
 
 **Alternatives considered**: Capture-then-scrub creates avoidable sensitive copies and depends on perfect field detection. Unredacted production LangSmith traces were rejected.
+
+## Clarification Follow-through (2026-10-10)
+
+**Decision**: Follow spec.md's feasibility/evaluation/usability policy v1 and the per-story gates in plan.md. Freeze deterministic corpora and expectations before user-story implementation; distinguish simulated from live-provider results and actual usability evidence. Setup starts the infrastructure profile and service shells, foundation adds migrations, and US4 adds the booking worker. Earlier increments never depend on later operational capabilities.
+
+**Rationale**: These decisions resolve analysis I1–I3, U1–U3 and A1–A2 without adding product services or weakening exact-term authorization.
 
 ## Redis Introduction Rule
 

@@ -13,17 +13,17 @@ This guide defines the runnable end-to-end evidence expected after implementatio
 
 ## Start the Local Stack
 
-From the repository root after project scaffolding is implemented:
+Readiness is staged. After setup, install locked dependencies, start `--profile infrastructure` and run web/agent shell health checks with `pnpm dev`; no migration job, application container profile or booking worker is required. After foundation, run the `migrations` profile. The complete commands below require all story implementations through US4; `applications` runs containerized app services and `booking` runs the worker.
 
 ```bash
 pnpm install --frozen-lockfile
 uv sync --project agent --frozen
-docker compose -f infra/compose/compose.yml up -d
-pnpm --dir web db:migrate
-pnpm dev
+docker compose -f infra/compose/compose.yml --profile infrastructure up -d
+docker compose -f infra/compose/compose.yml --profile migrations run --rm migrate
+docker compose -f infra/compose/compose.yml --profile infrastructure --profile applications --profile booking up -d
 ```
 
-Expected services: Next.js web/BFF, FastAPI agent, PostgreSQL 18 with PostGIS, Temporal development server and UI, TypeScript booking worker, and local observability collectors. Redis is not required for the initial validation stack.
+Expected full-stack services: Next.js web/BFF, FastAPI agent, PostgreSQL 18 with PostGIS, Temporal development server and UI, TypeScript booking worker, and local observability collectors. Migration runs once through the controlled job before application/worker startup; do not rerun it concurrently with a separate local migration command. Redis is not required.
 
 Run baseline checks in separate commands:
 
@@ -36,25 +36,25 @@ pnpm test:contracts
 pnpm test:e2e
 ```
 
-All checks must pass. Test failures are not waived merely because an end-to-end happy path succeeds.
+Each story runs its implemented suites and the applicable foundation/compatibility/accessibility checks; setup verifies shells/tooling only. Run the complete command matrix and all scenarios after US4. Do not waive failures in implemented behavior, or require a later story's UI/workflow to pass an earlier checkpoint. Corpus and participant protocols are defined in spec.md; record versions, seeds and denominators before implementation.
 
 ## Scenario 1: Create an Initial Estimate
 
 1. Open the trip setup using only the keyboard.
-2. Add Japan and South Korea through search, then add Tokyo, Kyoto, and Seoul.
+2. Confirm Amsterdam, Netherlands, Europe/Amsterdam as departure origin, with return to that origin; add Japan and South Korea through search, then Tokyo, Kyoto, and Seoul.
 3. Add two availability windows and mark one preferred and one flexible.
 4. Set duration to 12 minimum, 15 ideal, and 18 maximum days.
 5. Add two adults and one child with age at trip start.
 6. Set all five style preferences and enter constraints for no activities before 10:00, vegetarian food, and no more than three hotel changes.
-7. Submit and observe agent progress.
+7. Submit and observe agent progress, review the initial_estimate proposal, and explicitly accept it. Repeat with a competing version change and verify stale acceptance fails atomically.
 
 Expected:
 
 - Initial agent progress appears within 2 seconds and the estimate completes within the 30-second p95 budget under deterministic test conditions.
-- The left summary, non-map itinerary controls, map, conversation, and total all show the same trip version.
+- The US1 estimate summary, accessible route preview and estimated total show the accepted version. The full three-pane workspace, conversation/history reload and cross-pane convergence are US2 checks in Scenario 2.
 - Preferred and flexible dates remain distinguishable; any alternative date is proposed, not silently selected.
 - Every price is labelled estimated and constraints are either reflected or visibly unresolved.
-- Reloading the browser restores the same authoritative snapshot and conversation.
+- Reloading restores the accepted authoritative estimate and its stored rationale; no proposal is applied merely by submitting research or reconnecting. Before flight search, missing/ambiguous origin requires confirmation and alternative airports remain reviewable.
 
 ## Scenario 2: Proposal, Acceptance, Conflict, and Undo
 
@@ -66,7 +66,8 @@ Expected:
 
 Expected:
 
-- The first request invokes only the allowlisted tools in [agent-tools.schema.json](./contracts/agent-tools.schema.json).
+- The first request invokes only the allowlisted trip-domain tools in [agent-tools.schema.json](./contracts/agent-tools.schema.json), plus explicitly read-only research integrations.
+- The editable summary, geographic/list itinerary, conversation and persistent total display the same version. Reload restores that snapshot plus the redacted conversation/history; this expectation starts at US2.
 - No authoritative state changes before proposal acceptance.
 - Acceptance with a stale `expectedVersion` returns a conflict and does not merge or partially apply operations.
 - Fresh acceptance creates one immutable trip version and updates all panes within 2 seconds.
@@ -88,7 +89,7 @@ Expected:
 
 ## Scenario 4: Accessible Map and Three-Pane Workspace
 
-1. Complete setup, refinement, proposal review, undo, finalization, and booking-summary navigation with keyboard and screen reader.
+1. At each story checkpoint, complete its available journey with keyboard and screen reader; after US4 complete setup, refinement, proposal review, undo, finalization and booking-summary navigation together.
 2. Disable map loading and repeat destination selection and itinerary review.
 3. Enable reduced motion and high zoom at desktop and mobile widths.
 
@@ -148,6 +149,8 @@ Expected:
 - The API acknowledges workflow start within 500 ms and records the first component status within 5 seconds under local deterministic conditions.
 - Repeated requests and Temporal replay reuse stable idempotency keys and create no duplicate provider actions.
 - The accommodation is `unknown`, not failed, until status reconciliation confirms it.
+- Flight confirmation advances the displayed trip version; rail still executes under the same immutable basis only after checking all intervening versions are status/evidence updates from this transaction with unchanged terms.
+- Repeat with an external material edit before rail dispatch and with changed confirmed fare terms: pending writes stop and require fresh authorization; a material edit racing an in-flight/unknown write is rejected until reconciliation.
 - Confirmed flight and rail remain confirmed; no automatic cancellation occurs.
 - The failed activity and any uncertain component show explicit recovery actions.
 - The final itinerary distinguishes confirmed, failed, and action-required components and retains provider evidence.
@@ -183,7 +186,8 @@ Expected:
 - Snapshot schema migrations preserve current and historical trip reads.
 - Provider doubles cover changed terms, unavailable offers, timeout-after-commit, duplicate writes, contradictory callbacks, and partial failure.
 - Error envelopes expose safe codes and correlation IDs, not raw provider or model payloads.
+- Callback replay returns original durable receipts; conflicting fingerprints/cursor gaps do not commit, cross-run credentials are denied, result receipt follows its event receipt, and disconnect/process restart reloads stored outcomes or exposes interrupted failure without automatic trip application.
 
 ## Completion Evidence
 
-Record test command results, Playwright desktop/mobile screenshots, keyboard and screen-reader notes, representative trace IDs, Temporal workflow histories, and redacted booking outcomes. Acceptance requires passing behavior, contract, type, lint, migration, accessibility, and consequential-action safeguards; document any approved exception with owner and expiry.
+Record test command results, policy/corpus versions and seeds, actual success/failure denominators, Playwright desktop/mobile screenshots, keyboard and screen-reader notes, representative trace IDs, Temporal workflow histories, and redacted booking outcomes. Apply spec.md's fixed 20-person usability protocol separately from deterministic evaluation; include failed cases and report simulated versus live performance distinctly. Acceptance requires passing behavior, contract, type, lint, migration, accessibility, and consequential-action safeguards; document any approved exception with owner and expiry.
