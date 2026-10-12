@@ -1,0 +1,216 @@
+name: onholidai
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.6
+    profiles: [infrastructure]
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+    ports:
+      - "5432:5432"
+    secrets:
+      - postgres_admin_password
+      - app_db_password
+      - migration_db_password
+      - temporal_db_password
+      - worker_db_password
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  temporal:
+    image: temporalio/auto-setup:1.27.2
+    profiles: [infrastructure]
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export POSTGRES_PWD="$$(cat /run/secrets/temporal_db_password)"
+        exec /etc/temporal/entrypoint.sh /etc/temporal/auto-setup.sh
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
+      TEMPORAL_BROADCAST_ADDRESS: temporal
+    ports:
+      - "7233:7233"
+    secrets:
+      - temporal_db_password
+    volumes:
+      - ../temporal/development.yaml:/etc/temporal/config/dynamicconfig/development.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, temporal, operator, cluster, health, --address, temporal:7233]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  temporal-ui:
+    image: temporalio/ui:2.34.0
+    profiles: [infrastructure]
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8080:8080"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    profiles: [infrastructure]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    profiles: [infrastructure]
+    command: [--config=/etc/otelcol-contrib/config.yaml]
+    volumes:
+      - ../observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "13133:13133"
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: web/Dockerfile
+    profiles: [applications]
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export BETTER_AUTH_SECRET="$$(cat /run/secrets/web_auth_secret)"
+        export DATABASE_URL="postgresql://onholidai_web:$$(cat /run/secrets/app_db_password)@postgres:5432/onholidai"
+        exec pnpm --filter @onholidai/web start
+    environment:
+      NODE_ENV: production
+      PROVIDER_MODE: deterministic
+      BETTER_AUTH_URL: http://localhost:3000
+      AGENT_BASE_URL: http://agent:8000
+      TEMPORAL_ADDRESS: temporal:7233
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    ports:
+      - "3000:3000"
+    secrets:
+      - app_db_password
+      - web_auth_secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:3000/api/health').then((response) => { if (!response.ok) process.exit(1) })"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: agent/Dockerfile
+    profiles: [applications]
+    environment:
+      PROVIDER_MODE: deterministic
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    ports:
+      - "8000:8000"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: web/Dockerfile
+    profiles: [migrations]
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export MIGRATION_DATABASE_URL="postgresql://onholidai_migration:$$(cat /run/secrets/migration_db_password)@postgres:5432/onholidai"
+        exec pnpm --filter @onholidai/web db:migrate
+    environment:
+      NODE_ENV: production
+      PROVIDER_MODE: deterministic
+    secrets:
+      - migration_db_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  booking-worker:
+    build:
+      context: ../..
+      dockerfile: web/Dockerfile
+    profiles: [booking]
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export DATABASE_URL="postgresql://onholidai_worker:$$(cat /run/secrets/worker_db_password)@postgres:5432/onholidai"
+        exec pnpm --filter @onholidai/web booking:worker
+    environment:
+      NODE_ENV: production
+      PROVIDER_MODE: deterministic
+      TEMPORAL_ADDRESS: temporal:7233
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    secrets:
+      - worker_db_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    restart: unless-stopped
+
+secrets:
+  postgres_admin_password:
+    file: ./secrets/postgres_admin_password.txt
+  app_db_password:
+    file: ./secrets/app_db_password.txt
+  migration_db_password:
+    file: ./secrets/migration_db_password.txt
+  temporal_db_password:
+    file: ./secrets/temporal_db_password.txt
+  worker_db_password:
+    file: ./secrets/worker_db_password.txt
+  web_auth_secret:
+    file: ./secrets/web_auth_secret.txt
+
+volumes:
+  postgres-data:

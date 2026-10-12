@@ -1,0 +1,68 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+  transform/privacy:
+    error_mode: propagate
+    trace_statements:
+      - context: resource
+        statements:
+          - 'keep_keys(attributes, ["deployment.environment.name", "service.name", "service.version"])'
+      - context: span
+        statements:
+          - 'keep_keys(attributes, ["error.type", "http.request.method", "http.response.status_code", "http.route", "onholidai.correlation_id", "onholidai.duration_ms", "onholidai.error.category", "onholidai.operation", "onholidai.outcome", "onholidai.provider", "onholidai.request_id", "onholidai.retry_count", "onholidai.run_id", "onholidai.trip_id", "onholidai.workflow_id", "url.route"])'
+      - context: spanevent
+        statements:
+          - 'keep_keys(attributes, ["error.type", "onholidai.correlation_id", "onholidai.error.category", "onholidai.operation", "onholidai.outcome", "onholidai.provider", "onholidai.request_id", "onholidai.retry_count", "onholidai.run_id", "onholidai.trip_id", "onholidai.workflow_id"])'
+    metric_statements:
+      - context: resource
+        statements:
+          - 'keep_keys(attributes, ["deployment.environment.name", "service.name", "service.version"])'
+      - context: datapoint
+        statements:
+          - 'keep_keys(attributes, ["http.request.method", "http.response.status_code", "http.route", "onholidai.correlation_id", "onholidai.error.category", "onholidai.operation", "onholidai.outcome", "onholidai.provider", "onholidai.request_id", "onholidai.retry_count", "onholidai.run_id", "onholidai.trip_id", "onholidai.workflow_id", "url.route"])'
+    log_statements:
+      - context: resource
+        statements:
+          - 'keep_keys(attributes, ["deployment.environment.name", "service.name", "service.version"])'
+      - context: log
+        statements:
+          - 'set(body, "redacted")'
+          - 'keep_keys(attributes, ["error.type", "http.request.method", "http.response.status_code", "http.route", "onholidai.correlation_id", "onholidai.error.category", "onholidai.operation", "onholidai.outcome", "onholidai.provider", "onholidai.request_id", "onholidai.retry_count", "onholidai.run_id", "onholidai.trip_id", "onholidai.workflow_id", "url.route"])'
+
+exporters:
+  debug:
+    verbosity: basic
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/privacy, batch]
+      exporters: [otlp/jaeger, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/privacy, batch]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/privacy, batch]
+      exporters: [debug]

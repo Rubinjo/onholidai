@@ -1,0 +1,77 @@
+import type { Insertable, Selectable, Transaction } from "kysely";
+
+import type { TripVersion } from "@/domain/trip/schema";
+import type { Database } from "@/server/db/database";
+import type { AuditEventTable, OutboxEventTable, TripTable } from "@/server/db/types";
+
+export type LockedTrip = Pick<
+  Selectable<TripTable>,
+  "id" | "ownerUserId" | "currentVersion" | "currency"
+>;
+
+export interface TripRepositoryPort {
+  lockTrip(tripId: string): Promise<LockedTrip | undefined>;
+  insertVersion(version: TripVersion): Promise<void>;
+  advanceCurrentVersion(
+    tripId: string,
+    expectedVersion: number,
+    nextVersion: number,
+    currency: string,
+    changedAt: Date,
+  ): Promise<boolean>;
+  appendOutbox(event: Insertable<OutboxEventTable>): Promise<void>;
+  appendAudit(event: Insertable<AuditEventTable>): Promise<void>;
+}
+
+export class TripRepository implements TripRepositoryPort {
+  constructor(private readonly transaction: Transaction<Database>) {}
+
+  lockTrip(tripId: string): Promise<LockedTrip | undefined> {
+    return this.transaction
+      .selectFrom("trips")
+      .select(["id", "ownerUserId", "currentVersion", "currency"])
+      .where("id", "=", tripId)
+      .forUpdate()
+      .executeTakeFirst();
+  }
+
+  async insertVersion(version: TripVersion): Promise<void> {
+    await this.transaction
+      .insertInto("tripVersions")
+      .values({
+        ...version,
+        createdAt: new Date(version.createdAt),
+      })
+      .executeTakeFirstOrThrow();
+  }
+
+  async advanceCurrentVersion(
+    tripId: string,
+    expectedVersion: number,
+    nextVersion: number,
+    currency: string,
+    changedAt: Date,
+  ): Promise<boolean> {
+    const updated = await this.transaction
+      .updateTable("trips")
+      .set({
+        currentVersion: nextVersion,
+        currency,
+        updatedAt: changedAt,
+        lastActivityAt: changedAt,
+      })
+      .where("id", "=", tripId)
+      .where("currentVersion", "=", expectedVersion)
+      .returning(["id"])
+      .executeTakeFirst();
+    return updated !== undefined;
+  }
+
+  async appendOutbox(event: Insertable<OutboxEventTable>): Promise<void> {
+    await this.transaction.insertInto("outboxEvents").values(event).executeTakeFirstOrThrow();
+  }
+
+  async appendAudit(event: Insertable<AuditEventTable>): Promise<void> {
+    await this.transaction.insertInto("auditEvents").values(event).executeTakeFirstOrThrow();
+  }
+}

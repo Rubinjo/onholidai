@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onholidai.local/contracts/events/trip-events-v1.schema.json",
+  "title": "Trip Events v1",
+  "description": "Redacted notifications of committed trip state. Consumers deduplicate id and reload aggregateId/aggregateVersion.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/TripVersionCommittedEvent"
+    }
+  ],
+  "$defs": {
+    "TripVersionCommittedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "eventType",
+        "eventVersion",
+        "aggregateType",
+        "aggregateId",
+        "aggregateVersion",
+        "occurredAt",
+        "payload"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "eventType": {
+          "const": "trip.version.committed"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "aggregateType": {
+          "const": "trip"
+        },
+        "aggregateId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "aggregateVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tripId",
+            "version",
+            "previousVersion",
+            "initiatingActor",
+            "requestId",
+            "reloadRequired"
+          ],
+          "properties": {
+            "tripId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "previousVersion": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "initiatingActor": {
+              "enum": [
+                "user",
+                "agent_proposal",
+                "system_revalidation",
+                "booking_workflow"
+              ]
+            },
+            "requestId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "reloadRequired": {
+              "const": true
+            }
+          }
+        }
+      }
+    }
+  }
+}

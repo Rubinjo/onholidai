@@ -9,12 +9,23 @@ These contracts define the boundaries among the browser, `web/`, `agent/`, Tempo
 | `agent-tools.schema.json` | Agent/domain design | LangGraph tool adapters and evaluation tests | Tool names and versioned schemas are allowlisted; transactional tools are forbidden |
 | `travel-supply.md` | First-party supply boundary | Search services and Temporal activities | Read and transaction capabilities remain separate; provider additions preserve normalized outcomes |
 
+T006 promotes these source contracts to `contracts/agent-api/openapi.yaml`,
+`contracts/agent-api/tools.schema.json`, `contracts/trip-domain/web-api.openapi.yaml`,
+and `contracts/supply/README.md`. Promoted files are exact copies except that the promoted
+web contract rewrites `./agent-api.openapi.yaml` references to `../agent-api/openapi.yaml`.
+The executable validator rejects source/promotion drift and unresolved local or file references.
+
 ## Clarified Handoffs (2026-10-10)
 
 - `AgentResult.kind=proposal` is the only structured estimate handoff: purpose initial_estimate, initiatingRequestId, baseTripVersion and draft-only operations. No opaque answer text or SSE payload can be applied. Web records the proposal, resolves trusted offer facts/recomputes price, and waits for explicit UI acceptance in US1.
 - Web persists events/results through scoped internal PUT callbacks before SSE/status delivery. Requests include run/trip/user/base-version/request identity; credentials have web audience and run:write bound to that run. These infrastructure callbacks are not model tools. Exact replay returns the original receipt; changed fingerprints, cursor gaps or unmatched result/event pairs return 409 atomically. Progress renews a 90-second lease every 15 seconds; expired queued/running runs become failed/interrupted and require an explicit new research request; awaiting_clarification suspends the lease until resume.
 - Internal SSE objects become public envelopes with version/runId/cursor/type/occurredAt preserved and type-specific fields under payload; public proposal fields are enriched from the web repository and prices are customer-safe. Before publishing, validate both schemas and the receipt cursor.
+- Clarification forwarding preserves the original run request identity. Conversation and version reads return only actor-authorized redacted messages, immutable snapshots, initiating requests, affected facts and reversibility metadata.
+- Direct edits are two-step commands: `edit-preview` returns complete material impacts, a preview snapshot and an expiring fingerprint; `edit` accepts only the same operations, base version and fingerprint. Proposal rejection never mutates the trip.
+- Revalidation status is independently readable and returns one typed unchanged/changed/unavailable/unknown outcome per component plus immutable customer-safe terms/hash/expiry when complete. Recovery is status-first. Cancellation and rescheduling consume operation- and component-scoped authorization; rescheduling has separate revalidation, authorization and execution routes and cannot imply changes to unrelated components.
+- Supplier costs and platform margins appear only on the internal pricing diagnostic guarded by an internal credential and the `pricing_auditor` or `administrator` role. Browser trip, event, booking and revalidation projections remain customer-safe.
 - departureOrigin is a confirmed disambiguated city/airport with country and timezone; default return is that origin. Draft operation allowlists include departureOrigin. Legacy snapshots require explicit migration/confirmation, never an inferred origin.
+- Closed object schemas declare every legitimate field in the object that closes them. `allOf` is used only to refine already-declared fields or requirements; event variants are flattened rather than extending a closed base object.
 - Booking start/first write validates authorization against the exact current version; later writes use immutable executionBasis plus a provenance-checked status/evidence-only version chain. All material facts stay bound and expiry is checked before every write. New confirmed prices/terms, external edits or ambiguous write claims stop dispatch.
 - These contracts are unimplemented v1 design drafts. Required origin/purpose fields are synchronized before first release; after deployment incompatible changes require a new contract version and snapshot migration.
 

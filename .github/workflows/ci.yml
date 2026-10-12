@@ -1,0 +1,190 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PNPM_VERSION: 10.18.3
+  UV_VERSION: 0.9.18
+
+jobs:
+  web:
+    name: Web setup checks
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Node.js
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version-file: .node-version
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare "pnpm@${PNPM_VERSION}" --activate
+      - name: Install locked Node.js dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint web
+        run: pnpm --filter @onholidai/web lint
+      - name: Type-check web
+        run: pnpm --filter @onholidai/web typecheck
+      - name: Build web
+        run: pnpm --filter @onholidai/web build
+      - name: Detect Vitest suites
+        id: vitest
+        shell: bash
+        run: |
+          if find web/tests -type f \( -name '*.test.ts' -o -name '*.test.tsx' \) -print -quit | grep -q .; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Vitest suites are not implemented yet; skipping."
+          fi
+      - name: Run Vitest suites
+        if: steps.vitest.outputs.available == 'true'
+        run: pnpm --filter @onholidai/web test
+
+  agent:
+    name: Agent setup checks
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version-file: agent/.python-version
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1e862dfacbd1d6d858c55d9b792c756523627244 # v7.1.4
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Install locked Python dependencies
+        run: uv sync --project agent --frozen
+      - name: Lint agent
+        run: uv run --project agent ruff check agent
+      - name: Type-check agent
+        run: uv run --project agent pyright agent/src agent/tests
+      - name: Test agent
+        run: uv run --project agent pytest agent/tests
+
+  contracts:
+    name: Contract validation
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Detect contract suites
+        id: suites
+        shell: bash
+        run: |
+          if find web/tests/contract -type f -name '*.test.ts' -print -quit 2>/dev/null | grep -q .; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false" >> "$GITHUB_OUTPUT"
+            echo "Web contract suites are not implemented yet; skipping."
+          fi
+          if find agent/tests/contract -type f -name 'test_*.py' -print -quit 2>/dev/null | grep -q .; then
+            echo "agent=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "agent=false" >> "$GITHUB_OUTPUT"
+            echo "Agent contract suites are not implemented yet; skipping."
+          fi
+      - name: Set up Node.js
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version-file: .node-version
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare "pnpm@${PNPM_VERSION}" --activate
+      - name: Install locked Node.js dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate contract references and drift
+        run: node scripts/validate-contracts.mjs
+      - name: Test web contracts
+        if: steps.suites.outputs.web == 'true'
+        run: pnpm --filter @onholidai/web test:contracts
+      - name: Set up Python for agent contracts
+        if: steps.suites.outputs.agent == 'true'
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version-file: agent/.python-version
+      - name: Set up uv for agent contracts
+        if: steps.suites.outputs.agent == 'true'
+        uses: astral-sh/setup-uv@1e862dfacbd1d6d858c55d9b792c756523627244 # v7.1.4
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Install locked agent dependencies
+        if: steps.suites.outputs.agent == 'true'
+        run: uv sync --project agent --frozen
+      - name: Test agent contracts
+        if: steps.suites.outputs.agent == 'true'
+        run: uv run --project agent pytest agent/tests/contract
+
+  later-suites:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: SQL migration compatibility
+            probe: web/tests/integration/migration-compatibility.test.ts
+            probe-type: file
+            command: pnpm --dir web db:migrate:test
+            install-browsers: false
+          - name: Playwright browser suite
+            probe: web/tests/e2e
+            probe-type: playwright
+            command: pnpm test:e2e
+            install-browsers: true
+          - name: Temporal workflow suite
+            probe: web/tests/integration/booking-workflows.test.ts
+            probe-type: file
+            command: pnpm --dir web test:temporal
+            install-browsers: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Detect implemented capability
+        id: capability
+        shell: bash
+        env:
+          PROBE: ${{ matrix.probe }}
+          PROBE_TYPE: ${{ matrix.probe-type }}
+          SUITE_NAME: ${{ matrix.name }}
+        run: |
+          available=false
+          if [[ "$PROBE_TYPE" == "file" && -f "$PROBE" ]]; then
+            available=true
+          elif [[ "$PROBE_TYPE" == "playwright" && -d "$PROBE" ]] && find "$PROBE" -type f -name '*.spec.ts' -print -quit | grep -q .; then
+            available=true
+          fi
+          echo "available=$available" >> "$GITHUB_OUTPUT"
+          if [[ "$available" == "false" ]]; then
+            echo "$SUITE_NAME is not implemented yet; skipping."
+          fi
+      - name: Set up Node.js
+        if: steps.capability.outputs.available == 'true'
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version-file: .node-version
+      - name: Enable pinned pnpm
+        if: steps.capability.outputs.available == 'true'
+        run: |
+          corepack enable
+          corepack prepare "pnpm@${PNPM_VERSION}" --activate
+      - name: Install locked Node.js dependencies
+        if: steps.capability.outputs.available == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        if: steps.capability.outputs.available == 'true' && matrix.install-browsers
+        run: pnpm --dir web exec playwright install --with-deps
+      - name: Run suite
+        if: steps.capability.outputs.available == 'true'
+        run: ${{ matrix.command }}

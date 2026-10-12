@@ -300,7 +300,7 @@ components:
     AgentRun:
       type: "object"
       additionalProperties: false
-      required: ["id","requestId","tripId","baseTripVersion","status","nextEventCursor","createdAt"]
+      required: ["id","requestId","tripId","baseTripVersion","status","nextEventCursor","leaseExpiresAt","lastDurableProgressAt","interruptionReason","createdAt"]
       properties:
         id:
           type: "string"
@@ -325,6 +325,17 @@ components:
         nextEventCursor:
           type: "integer"
           minimum: 0
+        leaseExpiresAt:
+          type: ["string","null"]
+          format: "date-time"
+          description: "Queued/running lease expires after 90 seconds and is suspended while awaiting clarification."
+        lastDurableProgressAt:
+          type: ["string","null"]
+          format: "date-time"
+          description: "Durably persisted progress renews the lease at least every 15 seconds."
+        interruptionReason:
+          type: ["string","null"]
+          enum: ["lease_expired",null]
         createdAt:
           type: "string"
           format: "date-time"
