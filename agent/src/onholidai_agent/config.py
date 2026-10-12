@@ -28,6 +28,3 @@ class Settings(BaseSettings):
             if missing:
                 raise ValueError(f"Missing live-provider settings: {', '.join(missing)}")
         return self
-
-
-settings = Settings()

@@ -13,6 +13,9 @@ import { migrate } from "../../server/db/migrate";
 export interface IsolatedTestDatabase {
   readonly databaseName: string;
   readonly connectionString: string;
+  readonly migrationConnectionString: string;
+  readonly workerConnectionString: string;
+  readonly adminConnectionString: string;
   readonly database: Kysely<Database>;
   cleanup(): Promise<void>;
 }
@@ -21,12 +24,15 @@ export interface IsolatedTestDatabaseOptions {
   readonly adminConnectionString?: string;
   readonly migrationConnectionString?: string;
   readonly applicationConnectionString?: string;
+  readonly workerConnectionString?: string;
+  readonly migrationsDirectory?: string;
 }
 
 export function hasIsolatedDatabaseConfiguration(): boolean {
   return Boolean(
     process.env.TEST_DATABASE_ADMIN_URL &&
-      (process.env.TEST_DATABASE_MIGRATION_URL ?? process.env.MIGRATION_DATABASE_URL),
+      (process.env.TEST_DATABASE_MIGRATION_URL ?? process.env.MIGRATION_DATABASE_URL) &&
+      process.env.TEST_DATABASE_APP_URL && process.env.TEST_DATABASE_WORKER_URL,
   );
 }
 
@@ -43,10 +49,12 @@ export async function createIsolatedTestDatabase({
     process.env.TEST_DATABASE_MIGRATION_URL ?? process.env.MIGRATION_DATABASE_URL,
   applicationConnectionString =
     process.env.TEST_DATABASE_APP_URL ?? process.env.DATABASE_URL,
+  workerConnectionString = process.env.TEST_DATABASE_WORKER_URL,
+  migrationsDirectory,
 }: IsolatedTestDatabaseOptions = {}): Promise<IsolatedTestDatabase> {
-  if (!adminConnectionString || !migrationConnectionString) {
+  if (!adminConnectionString || !migrationConnectionString || !applicationConnectionString || !workerConnectionString) {
     throw new Error(
-      "TEST_DATABASE_ADMIN_URL and TEST_DATABASE_MIGRATION_URL are required for isolated tests",
+      "Isolated tests require admin, migration, application and worker database URLs",
     );
   }
 
@@ -56,7 +64,7 @@ export async function createIsolatedTestDatabase({
     databaseName,
   );
   const connectionString = connectionStringForDatabase(
-    applicationConnectionString ?? migrationConnectionString,
+    applicationConnectionString,
     databaseName,
   );
   const adminPool = new Pool({
@@ -75,7 +83,15 @@ export async function createIsolatedTestDatabase({
     await adminPool.query(
       `GRANT CONNECT ON DATABASE "${databaseName}" TO onholidai_migration, onholidai_web, onholidai_worker`,
     );
-    await migrate(migrationUrl);
+    const extensionPool = new Pool({
+      connectionString: connectionStringForDatabase(adminConnectionString, databaseName), max: 1,
+    });
+    try {
+      await extensionPool.query("CREATE EXTENSION IF NOT EXISTS postgis");
+    } finally {
+      await extensionPool.end();
+    }
+    await migrate(migrationUrl, migrationsDirectory);
   } catch (error) {
     if (databaseCreated) {
       await adminPool.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
@@ -99,6 +115,9 @@ export async function createIsolatedTestDatabase({
   return {
     databaseName,
     connectionString,
+    migrationConnectionString: migrationUrl,
+    workerConnectionString: connectionStringForDatabase(workerConnectionString, databaseName),
+    adminConnectionString: connectionStringForDatabase(adminConnectionString, databaseName),
     database,
     async cleanup() {
       if (cleanedUp) {

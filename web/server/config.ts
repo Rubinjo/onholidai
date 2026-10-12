@@ -26,4 +26,8 @@ const serverConfigSchema = z
     }
   });
 
-export const serverConfig = serverConfigSchema.parse(process.env);
+export type ServerConfig = z.infer<typeof serverConfigSchema>;
+
+export function loadServerConfig(environment: Record<string, string | undefined>): ServerConfig {
+  return serverConfigSchema.parse(environment);
+}

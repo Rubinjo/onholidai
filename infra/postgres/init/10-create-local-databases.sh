@@ -21,6 +21,9 @@ WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'onholidai_wor
 SELECT format('CREATE ROLE temporal LOGIN CREATEDB PASSWORD %L', :'temporal_password')
 WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'temporal') \gexec
 
+SELECT 'CREATE ROLE onholidai_test_untrusted NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE'
+WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'onholidai_test_untrusted') \gexec
+
 SELECT 'CREATE DATABASE onholidai OWNER onholidai_migration'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'onholidai') \gexec
 

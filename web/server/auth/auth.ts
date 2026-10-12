@@ -3,72 +3,68 @@ import "server-only";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { PostgresDialect } from "kysely";
-import { headers } from "next/headers";
-import { Pool } from "pg";
+import type { Pool } from "pg";
 
-import { serverConfig } from "@/server/config";
+import type { ServerConfig } from "@/server/config";
 
-const authPool = new Pool({
-  application_name: "onholidai-auth",
-  connectionString: serverConfig.DATABASE_URL,
-  max: 10,
-});
-
-export const auth = betterAuth({
-  appName: "Onholidai",
-  baseURL: serverConfig.BETTER_AUTH_URL,
-  secret: serverConfig.BETTER_AUTH_SECRET,
-  trustedOrigins: [serverConfig.BETTER_AUTH_URL],
-  database: {
-    casing: "snake",
-    dialect: new PostgresDialect({ pool: authPool }),
-    schemaName: "app",
-    type: "postgres",
-  },
-  advanced: {
+export function createAuth(config: ServerConfig, pool: Pool) {
+  return betterAuth({
+    appName: "Onholidai",
+    baseURL: config.BETTER_AUTH_URL,
+    secret: config.BETTER_AUTH_SECRET,
+    trustedOrigins: [config.BETTER_AUTH_URL],
     database: {
-      generateId: "uuid",
+      casing: "snake",
+      dialect: new PostgresDialect({ pool }),
+      schemaName: "app",
+      type: "postgres",
     },
-  },
-  emailAndPassword: {
-    enabled: true,
-  },
-  user: {
-    additionalFields: {
-      locale: {
-        defaultValue: "en-GB",
-        required: true,
-        type: "string",
-      },
-      defaultCurrency: {
-        defaultValue: "GBP",
-        required: true,
-        type: "string",
-      },
-      internalTeamRole: {
-        input: false,
-        required: false,
-        type: "string",
+    advanced: {
+      database: {
+        generateId: "uuid",
       },
     },
-  },
-  plugins: [nextCookies()],
-});
-
-export type AuthSession = typeof auth.$Infer.Session;
-export type AuthUser = AuthSession["user"];
-
-export async function getSession(): Promise<AuthSession | null> {
-  return auth.api.getSession({ headers: await headers() });
-}
-
-export async function signInWithEmail(email: string, password: string) {
-  return auth.api.signInEmail({
-    body: { email, password },
-    headers: await headers(),
+    emailAndPassword: {
+      enabled: true,
+    },
+    user: {
+      additionalFields: {
+        locale: {
+          defaultValue: "en-GB",
+          required: true,
+          type: "string",
+        },
+        defaultCurrency: {
+          defaultValue: "GBP",
+          required: true,
+          type: "string",
+        },
+        internalTeamRole: {
+          input: false,
+          required: false,
+          type: "string",
+        },
+      },
+    },
+    plugins: [nextCookies()],
   });
 }
 
-export async function signOut() {
-  return auth.api.signOut({ headers: await headers() });
+export type ApplicationAuth = ReturnType<typeof createAuth>;
+export type AuthSession = ApplicationAuth["$Infer"]["Session"];
+export type AuthUser = AuthSession["user"];
+
+export async function getSession(auth: ApplicationAuth, requestHeaders: Headers): Promise<AuthSession | null> {
+  return auth.api.getSession({ headers: requestHeaders });
+}
+
+export async function signInWithEmail(auth: ApplicationAuth, email: string, password: string, requestHeaders: Headers) {
+  return auth.api.signInEmail({
+    body: { email, password },
+    headers: requestHeaders,
+  });
+}
+
+export async function signOut(auth: ApplicationAuth, requestHeaders: Headers) {
+  return auth.api.signOut({ headers: requestHeaders });
 }

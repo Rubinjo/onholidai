@@ -18,6 +18,7 @@
     "corpus:generate": "node scripts/generate-evaluation-corpus.mjs",
     "corpus:check": "node scripts/generate-evaluation-corpus.mjs --check",
     "db:migrate:test": "vitest run tests/integration/migration-compatibility.test.ts --passWithNoTests",
+    "test:foundation": "vitest run --config vitest.foundation.config.ts",
     "test:temporal": "vitest run tests/integration/booking-workflows.test.ts --passWithNoTests"
   },
   "dependencies": {

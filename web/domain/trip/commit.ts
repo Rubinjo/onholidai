@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { Kysely, Transaction } from "kysely";
 import { z } from "zod";
 
@@ -84,6 +86,18 @@ function defaultRepositoryFactory(transaction: Transaction<Database>): CommitRep
   };
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object).filter((key) => object[key] !== undefined).sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
+  }
+  const encoded = JSON.stringify(value);
+  if (encoded === undefined) throw new Error("Mutation values must be JSON serializable");
+  return encoded;
+}
+
 export async function commitTripMutation(
   database: Kysely<Database>,
   rawInput: CommitTripMutationInput,
@@ -93,45 +107,44 @@ export async function commitTripMutation(
   const now = (options.now ?? (() => new Date()))();
   const repositoryFactory = options.repositoryFactory ?? defaultRepositoryFactory;
   const scope = `trip:${input.tripId}:mutation`;
+  // Bind the receipt to validated domain facts and the authenticated actor.
+  // Server-generated delivery/audit/trace IDs may differ on an exact retry.
+  const requestFingerprint = createHash("sha256").update(canonicalJson({
+    tripId: input.tripId, ownerUserId: input.ownerUserId, expectedVersion: input.expectedVersion,
+    requestId: input.requestId, requestFingerprint: input.requestFingerprint,
+    snapshot: input.snapshot, initiatingActor: input.initiatingActor, proposalId: input.proposalId,
+    changeSummary: input.changeSummary, inverseOperation: input.inverseOperation,
+    nonReversibleReason: input.nonReversibleReason,
+  })).digest("hex");
+
+  const nextVersion = input.expectedVersion + 1;
+  const version = tripVersionSchema.parse({
+    tripId: input.tripId, version: nextVersion, previousVersion: input.expectedVersion,
+    schemaVersion: 1, snapshot: input.snapshot, initiatingActor: input.initiatingActor,
+    initiatingRequestId: input.requestId, proposalId: input.proposalId,
+    changeSummary: input.changeSummary, inverseOperation: input.inverseOperation,
+    nonReversibleReason: input.nonReversibleReason, createdAt: now.toISOString(),
+  });
 
   return database.transaction().execute(async (transaction) => {
     const repositories = repositoryFactory(transaction);
+    const trip = await repositories.trips.lockTrip(input.tripId);
+    if (!trip) throw new TripNotFoundError();
+    if (trip.ownerUserId !== input.ownerUserId) throw new TripOwnershipError();
+
     const claim = await repositories.idempotency.claim({
       scope,
       key: input.idempotencyKey,
-      requestFingerprint: input.requestFingerprint,
+      requestFingerprint,
       expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
     });
     if (claim.kind === "replay") {
       return { ...commitResultSchema.parse(claim.result), replayed: true };
     }
 
-    const trip = await repositories.trips.lockTrip(input.tripId);
-    if (!trip) {
-      throw new TripNotFoundError();
-    }
-    if (trip.ownerUserId !== input.ownerUserId) {
-      throw new TripOwnershipError();
-    }
     if (trip.currentVersion !== input.expectedVersion) {
       throw new TripVersionConflictError(input.expectedVersion, trip.currentVersion);
     }
-
-    const nextVersion = input.expectedVersion + 1;
-    const version = tripVersionSchema.parse({
-      tripId: input.tripId,
-      version: nextVersion,
-      previousVersion: input.expectedVersion,
-      schemaVersion: 1,
-      snapshot: input.snapshot,
-      initiatingActor: input.initiatingActor,
-      initiatingRequestId: input.requestId,
-      proposalId: input.proposalId,
-      changeSummary: input.changeSummary,
-      inverseOperation: input.inverseOperation,
-      nonReversibleReason: input.nonReversibleReason,
-      createdAt: now.toISOString(),
-    });
 
     await repositories.trips.insertVersion(version);
     const advanced = await repositories.trips.advanceCurrentVersion(
@@ -187,7 +200,7 @@ export async function commitTripMutation(
     await repositories.idempotency.complete(
       scope,
       input.idempotencyKey,
-      input.requestFingerprint,
+      requestFingerprint,
       result,
     );
     return result;

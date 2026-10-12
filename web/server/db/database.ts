@@ -9,7 +9,6 @@ import {
 } from "kysely";
 import { Pool, type PoolConfig } from "pg";
 
-import { serverConfig } from "@/server/config";
 import type { TripCoreDatabase } from "@/server/db/types";
 
 declare const geographyPoint4326Brand: unique symbol;
@@ -45,16 +44,16 @@ export interface Database extends TripCoreDatabase {
 }
 
 export interface DatabaseConnectionOptions {
-  connectionString?: string;
+  connectionString: string;
   applicationName?: string;
   maxConnections?: number;
 }
 
 export function createDatabase({
-  connectionString = serverConfig.DATABASE_URL,
+  connectionString,
   applicationName = "onholidai-web",
   maxConnections = 10,
-}: DatabaseConnectionOptions = {}): Kysely<Database> {
+}: DatabaseConnectionOptions): Kysely<Database> {
   const poolConfig: PoolConfig = {
     application_name: applicationName,
     connectionString,
@@ -70,5 +69,3 @@ export function createDatabase({
 
   return connection.withSchema("app");
 }
-
-export const database = createDatabase();

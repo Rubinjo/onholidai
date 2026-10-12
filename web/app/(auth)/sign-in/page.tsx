@@ -1,4 +1,7 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+
+import { getApplication } from "@/server/application";
 
 import {
   getSession,
@@ -38,7 +41,7 @@ async function signInAction(formData: FormData) {
   }
 
   try {
-    await signInWithEmail(email, password);
+    await signInWithEmail(getApplication().auth, email, password, await headers());
   } catch {
     redirect(`/sign-in?error=invalid-credentials&redirectTo=${encodeURIComponent(redirectTo)}`);
   }
@@ -49,7 +52,7 @@ async function signInAction(formData: FormData) {
 async function signOutAction() {
   "use server";
 
-  await signOut();
+  await signOut(getApplication().auth, await headers());
   redirect("/sign-in");
 }
 
@@ -61,7 +64,9 @@ interface SignInPageProps {
 }
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
-  const [session, params] = await Promise.all([getSession(), searchParams]);
+  const [session, params] = await Promise.all([
+    getSession(getApplication().auth, await headers()), searchParams,
+  ]);
   const redirectTo = safeRedirectPath(params.redirectTo);
   const hasInvalidCredentials = params.error === "invalid-credentials";
 

@@ -1,4 +1,4 @@
-import type { Insertable, Selectable, Transaction } from "kysely";
+import { sql, type Insertable, type Selectable, type Transaction } from "kysely";
 
 import type { TripVersion } from "@/domain/trip/schema";
 import type { Database } from "@/server/db/database";
@@ -40,6 +40,8 @@ export class TripRepository implements TripRepositoryPort {
       .insertInto("tripVersions")
       .values({
         ...version,
+        // pg encodes JavaScript arrays as PostgreSQL arrays, not JSON arrays.
+        changeSummary: sql<string[]>`${JSON.stringify(version.changeSummary)}::jsonb`,
         createdAt: new Date(version.createdAt),
       })
       .executeTakeFirstOrThrow();
