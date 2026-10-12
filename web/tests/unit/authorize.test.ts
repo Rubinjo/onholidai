@@ -31,7 +31,7 @@ describe("ownership authorization", () => {
   it("rejects an unauthenticated request", () => {
     expect(() =>
       authorization.requireOwnerOrInternalTeamRole(null, "user-1"),
-    ).toThrowError(
+    ).toThrow(
       expect.objectContaining({ code: "UNAUTHENTICATED", status: 401 }),
     );
   });
@@ -39,7 +39,7 @@ describe("ownership authorization", () => {
   it("rejects a different user", () => {
     expect(() =>
       authorization.requireOwnerOrInternalTeamRole(session("user-2"), "user-1"),
-    ).toThrowError(expect.objectContaining({ code: "FORBIDDEN", status: 403 }));
+    ).toThrow(expect.objectContaining({ code: "FORBIDDEN", status: 403 }));
   });
 });
 
@@ -58,7 +58,7 @@ describe("internal team authorization", () => {
         session("admin-user", "admin"),
         "user-1",
       ),
-    ).toThrowError(expect.objectContaining({ code: "FORBIDDEN" }));
+    ).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
   });
 
   it("rejects unknown and unpermitted role values", () => {
@@ -66,11 +66,11 @@ describe("internal team authorization", () => {
       authorization.requireInternalTeamRole(session("user-2", "superuser"), [
         "support",
       ]),
-    ).toThrowError(expect.objectContaining({ code: "FORBIDDEN" }));
+    ).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
     expect(() =>
       authorization.requireInternalTeamRole(session("user-3", "operations"), [
         "admin",
       ]),
-    ).toThrowError(expect.objectContaining({ code: "FORBIDDEN" }));
+    ).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
   });
 });
