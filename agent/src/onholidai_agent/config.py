@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     web_base_url: str = "http://localhost:3000"
     service_token_secret: str = "synthetic-local-service-secret-000000000"
-    nebius_base_url: str = "https://api.studio.nebius.ai/v1"
+    nebius_base_url: str = "https://api.tokenfactory.nebius.com/v1"
     nebius_api_key: str | None = None
     nebius_model: str = "synthetic-model"
     maps_grounding_api_key: str | None = None
