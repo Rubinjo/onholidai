@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": ["component", "eligibility", "occupancy", "accessibility", "attribution", "unverifiedFacts"],
   "properties": {
+    "selectionGroup": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Comparable quotes for one planning requirement; default is a whole-query quote per component type." },
     "component": {
       "allOf": [
         { "$ref": "../trip-domain/snapshot-v1.schema.json#/properties/components/items" },

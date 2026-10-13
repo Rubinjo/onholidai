@@ -1,15 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    ...(process.env.US1_STORAGE_STATE ? { storageState: process.env.US1_STORAGE_STATE } : {}),
+    baseURL,
     trace: "on-first-retry",
   },
   webServer: {
     command: "pnpm dev",
-    url: "http://127.0.0.1:3000/api/health",
+    url: `${baseURL}/api/health`,
+    env: { BETTER_AUTH_URL: baseURL },
     reuseExistingServer: true,
   },
   projects: [

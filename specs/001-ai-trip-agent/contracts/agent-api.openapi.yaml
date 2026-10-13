@@ -1,564 +1,1866 @@
-openapi: 3.1.0
-info:
-  title: OnHolid.ai Internal Agent API
-  version: 1.0.0
-  description: >-
-    Internal FastAPI boundary for LangGraph runs. This API reads bounded context
-    and emits recommendations or proposals; it never mutates trips or executes transactions.
-servers:
-  - url: http://agent:8000/internal/v1
-security:
-  - internalService: []
-paths:
-  /agent-runs:
-    post:
-      operationId: createAgentRun
-      summary: Start an idempotent agent run against an exact trip version
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateAgentRunRequest'
-      responses:
-        '202':
-          description: Run accepted or prior result returned for the same request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentRun'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
-          description: Reused request ID with different content or stale base version
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-  /agent-runs/{runId}:
-    get:
-      operationId: getAgentRun
-      parameters:
-        - $ref: '#/components/parameters/RunId'
-      responses:
-        '200':
-          description: Durable status and typed final result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentRun'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /agent-runs/{runId}/events:
-    get:
-      operationId: streamAgentRunEvents
-      summary: Replay and follow versioned run events
-      parameters:
-        - $ref: '#/components/parameters/RunId'
-        - name: after
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 0
-      responses:
-        '200':
-          description: >-
-            SSE stream with monotonically increasing event IDs. Last-Event-ID or
-            `after` resumes without rerunning tools.
-          content:
-            text/event-stream:
-              schema:
-                type: string
-              x-sse-event-schema:
-                $ref: '#/components/schemas/AgentEvent'
-  /agent-runs/{runId}/clarifications:
-    post:
-      operationId: answerClarification
-      summary: Resume a run with a user's answer to the current focused question
-      parameters:
-        - $ref: '#/components/parameters/RunId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [requestId, questionId, answer]
-              properties:
-                requestId:
-                  type: string
-                  format: uuid
-                questionId:
-                  type: string
-                  format: uuid
-                answer:
-                  type: string
-                  minLength: 1
-                  maxLength: 4000
-      responses:
-        '202':
-          description: Run resumed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentRun'
-        '409':
-          description: Question is stale or already answered
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
-components:
-  securitySchemes:
-    internalService:
-      type: http
-      scheme: bearer
-      bearerFormat: short-lived service token
-  parameters:
-    RunId:
-      name: runId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-  responses:
-    Unauthorized:
-      description: Missing, invalid, expired, or insufficient service credential
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-    NotFound:
-      description: Run not found within the actor scope
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-    ValidationError:
-      description: Contract or safe-domain validation failed
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
-  schemas:
-    AnswerResult:
-      type: "object"
-      additionalProperties: false
-      required: ["kind","message"]
-      properties:
-        kind:
-          const: "answer"
-        message:
-          type: "string"
-    ClarificationResult:
-      type: "object"
-      additionalProperties: false
-      required: ["kind","message","clarification"]
-      properties:
-        kind:
-          const: "clarification"
-        message:
-          type: "string"
-        clarification:
-          $ref: "#/components/schemas/Clarification"
-    ProposalResult:
-      type: "object"
-      additionalProperties: false
-      required: ["kind","message","proposal"]
-      properties:
-        kind:
-          const: "proposal"
-        message:
-          type: "string"
-        proposal:
-          $ref: "#/components/schemas/ChangeProposal"
-    CreateAgentRunRequest:
-      type: "object"
-      additionalProperties: false
-      required: ["contractVersion","actor","requestId","conversationId","message","context","purpose"]
-      properties:
-        contractVersion:
-          const: "1"
-        actor:
-          $ref: "#/components/schemas/ActorContext"
-        requestId:
-          type: "string"
-          format: "uuid"
-        conversationId:
-          type: "string"
-          format: "uuid"
-        message:
-          type: "string"
-          minLength: 1
-          maxLength: 12000
-        context:
-          $ref: "#/components/schemas/PromptContext"
-        purpose:
-          enum: ["initial_estimate","refinement","finalization"]
-    ActorContext:
-      type: "object"
-      additionalProperties: false
-      required: ["userId","tripId","baseTripVersion","scopes"]
-      properties:
-        userId:
-          type: "string"
-          format: "uuid"
-        tripId:
-          type: "string"
-          format: "uuid"
-        baseTripVersion:
-          type: "integer"
-          minimum: 1
-        scopes:
-          type: "array"
-          items:
-            enum: ["trip:read","context:read","proposal:create"]
-          allOf:
-            -
-              contains:
-                const: "trip:read"
-            -
-              contains:
-                const: "proposal:create"
-    PromptContext:
-      type: "object"
-      additionalProperties: false
-      required: ["tripSummary","conversationSummary","recentMessages","contextBudget"]
-      properties:
-        tripSummary:
-          type: "object"
-          description: "Compact authoritative projection at baseTripVersion."
-          additionalProperties: true
-        conversationSummary:
-          $ref: "#/components/schemas/ConversationSummary"
-        recentMessages:
-          type: "array"
-          maxItems: 20
-          items:
-            $ref: "#/components/schemas/ContextMessage"
-        contextBudget:
-          type: "object"
-          additionalProperties: false
-          required: ["maximumTokens","compactionThresholdPercent"]
-          properties:
-            maximumTokens:
-              type: "integer"
-              minimum: 1000
-            compactionThresholdPercent:
-              type: "integer"
-              minimum: 1
-              maximum: 100
-              const: 70
-    ConversationSummary:
-      type: "object"
-      additionalProperties: false
-      required: ["constraints","preferences","decisions","rejectedOptions","openQuestions","sourceTripVersion"]
-      properties:
-        constraints:
-          type: "array"
-          items:
-            type: "string"
-        preferences:
-          type: "array"
-          items:
-            type: "string"
-        decisions:
-          type: "array"
-          items:
-            type: "string"
-        rejectedOptions:
-          type: "array"
-          items:
-            type: "string"
-        openQuestions:
-          type: "array"
-          items:
-            type: "string"
-        sourceTripVersion:
-          type: "integer"
-          minimum: 1
-    ContextMessage:
-      type: "object"
-      additionalProperties: false
-      required: ["id","role","redactedContent","occurredAt"]
-      properties:
-        id:
-          type: "string"
-          format: "uuid"
-        role:
-          enum: ["user","assistant","system"]
-        redactedContent:
-          type: "string"
-        occurredAt:
-          type: "string"
-          format: "date-time"
-    AgentRun:
-      type: "object"
-      additionalProperties: false
-      required: ["id","requestId","tripId","baseTripVersion","status","nextEventCursor","leaseExpiresAt","lastDurableProgressAt","interruptionReason","createdAt"]
-      properties:
-        id:
-          type: "string"
-          format: "uuid"
-        requestId:
-          type: "string"
-          format: "uuid"
-        tripId:
-          type: "string"
-          format: "uuid"
-        baseTripVersion:
-          type: "integer"
-          minimum: 1
-        status:
-          enum: ["queued","running","awaiting_clarification","proposed","completed","failed","cancelled"]
-        result:
-          oneOf:
-            -
-              $ref: "#/components/schemas/AgentResult"
-            -
-              type: "null"
-        nextEventCursor:
-          type: "integer"
-          minimum: 0
-        leaseExpiresAt:
-          type: ["string","null"]
-          format: "date-time"
-          description: "Queued/running lease expires after 90 seconds and is suspended while awaiting clarification."
-        lastDurableProgressAt:
-          type: ["string","null"]
-          format: "date-time"
-          description: "Durably persisted progress renews the lease at least every 15 seconds."
-        interruptionReason:
-          type: ["string","null"]
-          enum: ["lease_expired",null]
-        createdAt:
-          type: "string"
-          format: "date-time"
-        completedAt:
-          type: ["string","null"]
-          format: "date-time"
-    AgentResult:
-      oneOf:
-        -
-          $ref: "#/components/schemas/AnswerResult"
-        -
-          $ref: "#/components/schemas/ClarificationResult"
-        -
-          $ref: "#/components/schemas/ProposalResult"
-      discriminator:
-        propertyName: "kind"
-    Clarification:
-      type: "object"
-      additionalProperties: false
-      required: ["id","question","materialReason"]
-      properties:
-        id:
-          type: "string"
-          format: "uuid"
-        question:
-          type: "string"
-        materialReason:
-          enum: ["scope","price","accessibility","feasibility","experience","transaction"]
-    ChangeProposal:
-      type: "object"
-      additionalProperties: false
-      required: ["id","purpose","initiatingRequestId","baseTripVersion","operations","affectedFacts","rationale","tradeoffs","warnings","expiresAt"]
-      properties:
-        id:
-          type: "string"
-          format: "uuid"
-        baseTripVersion:
-          type: "integer"
-          minimum: 1
-        operations:
-          type: "array"
-          minItems: 1
-          maxItems: 32
-          items:
-            $ref: "#/components/schemas/DraftOperation"
-        affectedFacts:
-          type: "array"
-          minItems: 1
-          items:
-            type: "string"
-        rationale:
-          type: "string"
-        tradeoffs:
-          type: "array"
-          items:
-            type: "string"
-        warnings:
-          type: "array"
-          items:
-            type: "string"
-        expiresAt:
-          type: "string"
-          format: "date-time"
-        purpose:
-          enum: ["initial_estimate","refinement","finalization"]
-        initiatingRequestId:
-          type: "string"
-          format: "uuid"
-    DraftOperation:
-      type: "object"
-      additionalProperties: false
-      required: ["operation","target","value"]
-      properties:
-        operation:
-          enum: ["add","replace","remove","reorder"]
-        target:
-          type: "string"
-          pattern: "^/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$"
-        value: {}
-    AgentEvent:
-      oneOf:
-        -
-          $ref: "#/components/schemas/ProgressEvent"
-        -
-          $ref: "#/components/schemas/ClarificationEvent"
-        -
-          $ref: "#/components/schemas/ProposalEvent"
-        -
-          $ref: "#/components/schemas/TerminalEvent"
-      discriminator:
-        propertyName: "type"
-    EventBase:
-      type: "object"
-      additionalProperties: false
-      required: ["version","runId","cursor","type","occurredAt"]
-      properties:
-        version:
-          const: "1"
-        runId:
-          type: "string"
-          format: "uuid"
-        cursor:
-          type: "integer"
-          minimum: 1
-        type:
-          type: "string"
-        occurredAt:
-          type: "string"
-          format: "date-time"
-    ProgressEvent:
-      type: "object"
-      additionalProperties: false
-      required: ["version","runId","cursor","type","occurredAt","stage","message"]
-      properties:
-        version:
-          const: "1"
-        runId:
-          type: "string"
-          format: "uuid"
-        cursor:
-          type: "integer"
-          minimum: 1
-        type:
-          const: "progress"
-        occurredAt:
-          type: "string"
-          format: "date-time"
-        stage:
-          enum: ["understanding","researching","evaluating","composing"]
-        message:
-          type: "string"
-    ClarificationEvent:
-      type: "object"
-      additionalProperties: false
-      required: ["version","runId","cursor","type","occurredAt","clarification"]
-      properties:
-        version:
-          const: "1"
-        runId:
-          type: "string"
-          format: "uuid"
-        cursor:
-          type: "integer"
-          minimum: 1
-        type:
-          const: "clarification"
-        occurredAt:
-          type: "string"
-          format: "date-time"
-        clarification:
-          $ref: "#/components/schemas/Clarification"
-    ProposalEvent:
-      type: "object"
-      additionalProperties: false
-      required: ["version","runId","cursor","type","occurredAt","proposal"]
-      properties:
-        version:
-          const: "1"
-        runId:
-          type: "string"
-          format: "uuid"
-        cursor:
-          type: "integer"
-          minimum: 1
-        type:
-          const: "proposal"
-        occurredAt:
-          type: "string"
-          format: "date-time"
-        proposal:
-          $ref: "#/components/schemas/ChangeProposal"
-    TerminalEvent:
-      type: "object"
-      additionalProperties: false
-      required: ["version","runId","cursor","type","occurredAt","status"]
-      properties:
-        version:
-          const: "1"
-        runId:
-          type: "string"
-          format: "uuid"
-        cursor:
-          type: "integer"
-          minimum: 1
-        type:
-          enum: ["completed","failed"]
-        occurredAt:
-          type: "string"
-          format: "date-time"
-        status:
-          enum: ["completed","failed"]
-        safeErrorCode:
-          type: ["string","null"]
-      allOf:
-        - if:
-            properties:
-              type:
-                const: "completed"
-          then:
-            properties:
-              status:
-                const: "completed"
-          else:
-            properties:
-              status:
-                const: "failed"
-    Problem:
-      type: "object"
-      additionalProperties: false
-      required: ["type","title","status","code","correlationId"]
-      properties:
-        type:
-          type: "string"
-          format: "uri-reference"
-        title:
-          type: "string"
-        status:
-          type: "integer"
-          minimum: 400
-          maximum: 599
-        code:
-          type: "string"
-        detail:
-          type: "string"
-        correlationId:
-          type: "string"
+{
+  "components": {
+    "parameters": {
+      "RunId": {
+        "in": "path",
+        "name": "runId",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "NotFound": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "description": "Run not found within the actor scope"
+      },
+      "Unauthorized": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "description": "Invalid or insufficient service credential"
+      },
+      "ValidationError": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        },
+        "description": "Safe contract validation failed"
+      }
+    },
+    "schemas": {
+      "ActorContext": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "properties": {
+              "scopes": {
+                "contains": {
+                  "const": "trip:read"
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "scopes": {
+                "contains": {
+                  "const": "proposal:create"
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        ],
+        "properties": {
+          "baseTripVersion": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/AgentScope"
+            },
+            "maxItems": 3,
+            "minItems": 2,
+            "title": "Scopes",
+            "type": "array"
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "userId": {
+            "$ref": "#/components/schemas/UUIDString"
+          }
+        },
+        "required": [
+          "userId",
+          "tripId",
+          "baseTripVersion",
+          "scopes"
+        ],
+        "title": "ActorContext",
+        "type": "object"
+      },
+      "AgentEvent": {
+        "discriminator": {
+          "mapping": {
+            "clarification": "#/components/schemas/ClarificationEvent",
+            "completed": "#/components/schemas/TerminalEvent",
+            "failed": "#/components/schemas/TerminalEvent",
+            "progress": "#/components/schemas/ProgressEvent",
+            "proposal": "#/components/schemas/ProposalEvent"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ProgressEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ClarificationEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ProposalEvent"
+          },
+          {
+            "$ref": "#/components/schemas/TerminalEvent"
+          }
+        ],
+        "title": "AgentEvent"
+      },
+      "AgentPersistenceReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "acceptedCursor": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "resultRecorded": {
+            "title": "Resultrecorded",
+            "type": "boolean"
+          },
+          "runId": {
+            "$ref": "#/components/schemas/UUIDString"
+          }
+        },
+        "required": [
+          "runId",
+          "requestId",
+          "acceptedCursor",
+          "resultRecorded"
+        ],
+        "title": "AgentPersistenceReceipt",
+        "type": "object"
+      },
+      "AgentResult": {
+        "discriminator": {
+          "mapping": {
+            "answer": "#/components/schemas/AnswerResult",
+            "clarification": "#/components/schemas/ClarificationResult",
+            "proposal": "#/components/schemas/ProposalResult"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AnswerResult"
+          },
+          {
+            "$ref": "#/components/schemas/ClarificationResult"
+          },
+          {
+            "$ref": "#/components/schemas/ProposalResult"
+          }
+        ],
+        "title": "AgentResult"
+      },
+      "AgentRun": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "awaiting_clarification"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "kind": {
+                      "const": "clarification"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "proposed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "kind": {
+                      "const": "proposal"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "completed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "kind": {
+                      "const": "answer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "failed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "purpose": {
+                  "const": "initial_estimate"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "queued",
+                    "running",
+                    "awaiting_clarification",
+                    "proposed",
+                    "failed",
+                    "cancelled"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "queued",
+                    "running"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "leaseExpiresAt": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "awaiting_clarification"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "leaseExpiresAt": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "baseTripVersion": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UTCDateTime"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/UTCDateTime"
+          },
+          "id": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "interruptionReason": {
+            "anyOf": [
+              {
+                "const": "lease_expired",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interruptionreason"
+          },
+          "lastDurableProgressAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UTCDateTime"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "leaseExpiresAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UTCDateTime"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextEventCursor": {
+            "$ref": "#/components/schemas/NonNegativeInt"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/ProposalPurpose"
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "awaiting_clarification",
+              "proposed",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/UUIDString"
+          }
+        },
+        "required": [
+          "id",
+          "requestId",
+          "tripId",
+          "conversationId",
+          "purpose",
+          "baseTripVersion",
+          "status",
+          "nextEventCursor",
+          "leaseExpiresAt",
+          "lastDurableProgressAt",
+          "interruptionReason",
+          "createdAt"
+        ],
+        "title": "AgentRun",
+        "type": "object",
+        "x-equal-fields": [
+          [
+            "result.proposal.initiatingRequestId",
+            "requestId"
+          ],
+          [
+            "result.proposal.baseTripVersion",
+            "baseTripVersion"
+          ],
+          [
+            "result.proposal.purpose",
+            "purpose"
+          ]
+        ]
+      },
+      "AgentScope": {
+        "enum": [
+          "trip:read",
+          "context:read",
+          "proposal:create"
+        ],
+        "type": "string"
+      },
+      "AnswerClarificationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/Text4000"
+          },
+          "questionId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/UUIDString"
+          }
+        },
+        "required": [
+          "requestId",
+          "questionId",
+          "answer"
+        ],
+        "title": "AnswerClarificationRequest",
+        "type": "object"
+      },
+      "AnswerResult": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "answer",
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Text12000"
+          }
+        },
+        "required": [
+          "kind",
+          "message"
+        ],
+        "title": "AnswerResult",
+        "type": "object"
+      },
+      "ChangeProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "affectedFacts": {
+            "items": {
+              "$ref": "#/components/schemas/Text200"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Affectedfacts",
+            "type": "array"
+          },
+          "baseTripVersion": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/UTCDateTime"
+          },
+          "id": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "initiatingRequestId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/DraftOperation"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Operations",
+            "type": "array"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/ProposalPurpose"
+          },
+          "rationale": {
+            "$ref": "#/components/schemas/Text4000"
+          },
+          "tradeoffs": {
+            "items": {
+              "$ref": "#/components/schemas/Text1000"
+            },
+            "maxItems": 32,
+            "title": "Tradeoffs",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/Text1000"
+            },
+            "maxItems": 64,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "purpose",
+          "initiatingRequestId",
+          "baseTripVersion",
+          "operations",
+          "affectedFacts",
+          "rationale",
+          "tradeoffs",
+          "warnings",
+          "expiresAt"
+        ],
+        "title": "ChangeProposal",
+        "type": "object"
+      },
+      "Clarification": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "materialReason": {
+            "enum": [
+              "scope",
+              "price",
+              "accessibility",
+              "feasibility",
+              "experience",
+              "transaction"
+            ],
+            "title": "Materialreason",
+            "type": "string"
+          },
+          "question": {
+            "$ref": "#/components/schemas/Text1000"
+          }
+        },
+        "required": [
+          "id",
+          "question",
+          "materialReason"
+        ],
+        "title": "Clarification",
+        "type": "object"
+      },
+      "ClarificationEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "clarification": {
+            "$ref": "#/components/schemas/Clarification"
+          },
+          "cursor": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UTCDateTime"
+          },
+          "runId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "type": {
+            "const": "clarification",
+            "title": "Type",
+            "type": "string"
+          },
+          "version": {
+            "const": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "runId",
+          "cursor",
+          "occurredAt",
+          "type",
+          "clarification"
+        ],
+        "title": "ClarificationEvent",
+        "type": "object"
+      },
+      "ClarificationResult": {
+        "additionalProperties": false,
+        "properties": {
+          "clarification": {
+            "$ref": "#/components/schemas/Clarification"
+          },
+          "kind": {
+            "const": "clarification",
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Text12000"
+          }
+        },
+        "required": [
+          "kind",
+          "message",
+          "clarification"
+        ],
+        "title": "ClarificationResult",
+        "type": "object"
+      },
+      "Context": {
+        "additionalProperties": false,
+        "properties": {
+          "baseTripVersion": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "userId": {
+            "$ref": "#/components/schemas/UUIDString"
+          }
+        },
+        "required": [
+          "userId",
+          "tripId",
+          "requestId",
+          "baseTripVersion"
+        ],
+        "title": "Context",
+        "type": "object"
+      },
+      "ContextBudget": {
+        "additionalProperties": false,
+        "properties": {
+          "compactionThresholdPercent": {
+            "const": 70,
+            "default": 70,
+            "title": "Compactionthresholdpercent",
+            "type": "integer"
+          },
+          "maximumTokens": {
+            "maximum": 2147483647,
+            "minimum": 1000,
+            "title": "Maximumtokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "maximumTokens"
+        ],
+        "title": "ContextBudget",
+        "type": "object"
+      },
+      "ContextMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UTCDateTime"
+          },
+          "redactedContent": {
+            "$ref": "#/components/schemas/Text12000"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant",
+              "system"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "redactedContent",
+          "occurredAt"
+        ],
+        "title": "ContextMessage",
+        "type": "object"
+      },
+      "ConversationSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "constraints": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Text1000"
+            },
+            "maxItems": 64,
+            "title": "Constraints",
+            "type": "array"
+          },
+          "decisions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Text1000"
+            },
+            "maxItems": 64,
+            "title": "Decisions",
+            "type": "array"
+          },
+          "openQuestions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Text1000"
+            },
+            "maxItems": 20,
+            "title": "Openquestions",
+            "type": "array"
+          },
+          "preferences": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Text1000"
+            },
+            "maxItems": 64,
+            "title": "Preferences",
+            "type": "array"
+          },
+          "rejectedOptions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Text1000"
+            },
+            "maxItems": 64,
+            "title": "Rejectedoptions",
+            "type": "array"
+          },
+          "sourceTripVersion": {
+            "$ref": "#/components/schemas/PositiveInt"
+          }
+        },
+        "required": [
+          "sourceTripVersion"
+        ],
+        "title": "ConversationSummary",
+        "type": "object"
+      },
+      "CreateAgentRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/ActorContext"
+          },
+          "context": {
+            "$ref": "#/components/schemas/PromptContext"
+          },
+          "contractVersion": {
+            "const": "1",
+            "title": "Contractversion",
+            "type": "string"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Text12000"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/ProposalPurpose"
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/UUIDString"
+          }
+        },
+        "required": [
+          "contractVersion",
+          "actor",
+          "requestId",
+          "conversationId",
+          "message",
+          "context",
+          "purpose"
+        ],
+        "title": "CreateAgentRunRequest",
+        "type": "object",
+        "x-equal-fields": [
+          [
+            "context.tripSummary.version",
+            "actor.baseTripVersion"
+          ]
+        ],
+        "x-not-future-fields": [
+          [
+            "context.conversationSummary.sourceTripVersion",
+            "actor.baseTripVersion"
+          ]
+        ]
+      },
+      "DraftOperation": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "enum": [
+              "add",
+              "replace",
+              "remove",
+              "reorder"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "target": {
+            "maxLength": 500,
+            "pattern": "^/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$",
+            "title": "Target",
+            "type": "string",
+            "x-protected-target": true
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonValue",
+            "x-json-bound": {
+              "bytes": 65536,
+              "depth": 16
+            }
+          }
+        },
+        "required": [
+          "operation",
+          "target",
+          "value"
+        ],
+        "title": "DraftOperation",
+        "type": "object"
+      },
+      "EventBase": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UTCDateTime"
+          },
+          "runId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "type": {
+            "$ref": "#/components/schemas/Text120"
+          },
+          "version": {
+            "const": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "runId",
+          "cursor",
+          "occurredAt",
+          "type"
+        ],
+        "title": "EventBase",
+        "type": "object"
+      },
+      "GetTripCall": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/Context"
+          },
+          "input": {
+            "$ref": "#/components/schemas/GetTripInput"
+          },
+          "tool": {
+            "const": "get_trip",
+            "title": "Tool",
+            "type": "string"
+          },
+          "version": {
+            "const": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "tool",
+          "context",
+          "input"
+        ],
+        "title": "GetTripCall",
+        "type": "object"
+      },
+      "GetTripInput": {
+        "additionalProperties": false,
+        "properties": {
+          "componentIds": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UUIDString"
+            },
+            "maxItems": 32,
+            "title": "Componentids",
+            "type": "array"
+          },
+          "detail": {
+            "enum": [
+              "compact",
+              "itinerary",
+              "components",
+              "pricing",
+              "constraints"
+            ],
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "GetTripInput",
+        "type": "object"
+      },
+      "JsonValue": {},
+      "NonNegativeInt": {
+        "maximum": 2147483647,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "PersistAgentEventRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "baseTripVersion": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "event": {
+            "$ref": "#/components/schemas/AgentEvent"
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "userId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "version": {
+            "const": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "requestId",
+          "userId",
+          "tripId",
+          "baseTripVersion",
+          "event"
+        ],
+        "title": "PersistAgentEventRequest",
+        "type": "object",
+        "x-equal-fields": [
+          [
+            "event.proposal.initiatingRequestId",
+            "requestId"
+          ],
+          [
+            "event.proposal.baseTripVersion",
+            "baseTripVersion"
+          ]
+        ]
+      },
+      "PersistAgentResultRequest": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "awaiting_clarification"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "kind": {
+                      "const": "clarification"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "proposed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "kind": {
+                      "const": "proposal"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "completed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "kind": {
+                      "const": "answer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "failed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "baseTripVersion": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "eventCursor": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "requestId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "awaiting_clarification",
+              "proposed",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tripId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "userId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "version": {
+            "const": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "requestId",
+          "userId",
+          "tripId",
+          "baseTripVersion",
+          "eventCursor",
+          "status",
+          "result"
+        ],
+        "title": "PersistAgentResultRequest",
+        "type": "object",
+        "x-equal-fields": [
+          [
+            "result.proposal.initiatingRequestId",
+            "requestId"
+          ],
+          [
+            "result.proposal.baseTripVersion",
+            "baseTripVersion"
+          ]
+        ]
+      },
+      "PositiveInt": {
+        "maximum": 2147483647,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "Problem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[a-z][a-z0-9_]{0,119}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "correlationId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "title": "Correlationid",
+            "type": "string"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Text1000"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "status": {
+            "maximum": 599,
+            "minimum": 400,
+            "title": "Status",
+            "type": "integer"
+          },
+          "title": {
+            "$ref": "#/components/schemas/Text200"
+          },
+          "type": {
+            "$ref": "#/components/schemas/Text500"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "correlationId"
+        ],
+        "title": "Problem",
+        "type": "object"
+      },
+      "ProgressEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Text1000"
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UTCDateTime"
+          },
+          "runId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "stage": {
+            "enum": [
+              "understanding",
+              "researching",
+              "evaluating",
+              "composing"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "type": {
+            "const": "progress",
+            "title": "Type",
+            "type": "string"
+          },
+          "version": {
+            "const": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "runId",
+          "cursor",
+          "occurredAt",
+          "type",
+          "stage",
+          "message"
+        ],
+        "title": "ProgressEvent",
+        "type": "object"
+      },
+      "PromptContext": {
+        "additionalProperties": false,
+        "properties": {
+          "contextBudget": {
+            "$ref": "#/components/schemas/ContextBudget"
+          },
+          "conversationSummary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "recentMessages": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ContextMessage"
+            },
+            "maxItems": 20,
+            "title": "Recentmessages",
+            "type": "array"
+          },
+          "tripSummary": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "maxProperties": 64,
+            "title": "Tripsummary",
+            "type": "object",
+            "x-json-bound": {
+              "allowBookingStatus": true,
+              "bytes": 32768,
+              "depth": 16
+            }
+          }
+        },
+        "required": [
+          "tripSummary",
+          "contextBudget"
+        ],
+        "title": "PromptContext",
+        "type": "object"
+      },
+      "ProposalEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UTCDateTime"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ChangeProposal"
+          },
+          "runId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "type": {
+            "const": "proposal",
+            "title": "Type",
+            "type": "string"
+          },
+          "version": {
+            "const": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "runId",
+          "cursor",
+          "occurredAt",
+          "type",
+          "proposal"
+        ],
+        "title": "ProposalEvent",
+        "type": "object"
+      },
+      "ProposalPurpose": {
+        "enum": [
+          "initial_estimate",
+          "refinement",
+          "finalization"
+        ],
+        "type": "string"
+      },
+      "ProposalResult": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "proposal",
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Text12000"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ChangeProposal"
+          }
+        },
+        "required": [
+          "kind",
+          "message",
+          "proposal"
+        ],
+        "title": "ProposalResult",
+        "type": "object"
+      },
+      "ProposeTripChangesCall": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/Context"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ProposeTripChangesInput"
+          },
+          "tool": {
+            "const": "propose_trip_changes",
+            "title": "Tool",
+            "type": "string"
+          },
+          "version": {
+            "const": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "tool",
+          "context",
+          "input"
+        ],
+        "title": "ProposeTripChangesCall",
+        "type": "object",
+        "x-equal-fields": [
+          [
+            "input.initiatingRequestId",
+            "context.requestId"
+          ]
+        ]
+      },
+      "ProposeTripChangesInput": {
+        "additionalProperties": false,
+        "properties": {
+          "affectedFacts": {
+            "items": {
+              "$ref": "#/components/schemas/Text200"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Affectedfacts",
+            "type": "array"
+          },
+          "ambiguities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Text1000"
+            },
+            "maxItems": 20,
+            "title": "Ambiguities",
+            "type": "array"
+          },
+          "initiatingRequestId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/DraftOperation"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Operations",
+            "type": "array"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/ProposalPurpose"
+          },
+          "rationale": {
+            "$ref": "#/components/schemas/Text4000"
+          }
+        },
+        "required": [
+          "purpose",
+          "initiatingRequestId",
+          "operations",
+          "rationale",
+          "affectedFacts"
+        ],
+        "title": "ProposeTripChangesInput",
+        "type": "object"
+      },
+      "RetrieveRelevantContextCall": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/Context"
+          },
+          "input": {
+            "$ref": "#/components/schemas/RetrieveRelevantContextInput"
+          },
+          "tool": {
+            "const": "retrieve_relevant_context",
+            "title": "Tool",
+            "type": "string"
+          },
+          "version": {
+            "const": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "tool",
+          "context",
+          "input"
+        ],
+        "title": "RetrieveRelevantContextCall",
+        "type": "object"
+      },
+      "RetrieveRelevantContextInput": {
+        "additionalProperties": false,
+        "properties": {
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UTCDateTime"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "entityIds": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UUIDString"
+            },
+            "maxItems": 32,
+            "title": "Entityids",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 20,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "query": {
+            "$ref": "#/components/schemas/Text500"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/Text500"
+          }
+        },
+        "required": [
+          "query",
+          "reason",
+          "limit"
+        ],
+        "title": "RetrieveRelevantContextInput",
+        "type": "object"
+      },
+      "TerminalEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "$ref": "#/components/schemas/PositiveInt"
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UTCDateTime"
+          },
+          "runId": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "safeErrorCode": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_]{0,119}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Safeerrorcode"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "completed",
+              "failed"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "version": {
+            "const": "1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "runId",
+          "cursor",
+          "occurredAt",
+          "type",
+          "status"
+        ],
+        "title": "TerminalEvent",
+        "type": "object",
+        "x-equal-fields": [
+          [
+            "type",
+            "status"
+          ]
+        ]
+      },
+      "Text1000": {
+        "maxLength": 1000,
+        "minLength": 1,
+        "type": "string",
+        "x-nonblank": true
+      },
+      "Text120": {
+        "maxLength": 120,
+        "minLength": 1,
+        "type": "string",
+        "x-nonblank": true
+      },
+      "Text12000": {
+        "maxLength": 12000,
+        "minLength": 1,
+        "type": "string",
+        "x-nonblank": true
+      },
+      "Text200": {
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string",
+        "x-nonblank": true
+      },
+      "Text4000": {
+        "maxLength": 4000,
+        "minLength": 1,
+        "type": "string",
+        "x-nonblank": true
+      },
+      "Text500": {
+        "maxLength": 500,
+        "minLength": 1,
+        "type": "string",
+        "x-nonblank": true
+      },
+      "ToolCall": {
+        "discriminator": {
+          "mapping": {
+            "get_trip": "#/components/schemas/GetTripCall",
+            "propose_trip_changes": "#/components/schemas/ProposeTripChangesCall",
+            "retrieve_relevant_context": "#/components/schemas/RetrieveRelevantContextCall"
+          },
+          "propertyName": "tool"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/GetTripCall"
+          },
+          {
+            "$ref": "#/components/schemas/ProposeTripChangesCall"
+          },
+          {
+            "$ref": "#/components/schemas/RetrieveRelevantContextCall"
+          }
+        ],
+        "title": "ToolCall"
+      },
+      "UTCDateTime": {
+        "format": "date-time",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$",
+        "type": "string"
+      },
+      "UUIDString": {
+        "format": "uuid",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+        "type": "string"
+      }
+    },
+    "securitySchemes": {
+      "internalService": {
+        "bearerFormat": "short-lived scoped service token",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Generated from bounded Pydantic models. Agent runs emit proposals; they do not mutate trips or execute transactions.",
+    "title": "OnHolid.ai Internal Agent API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/agent-runs": {
+      "post": {
+        "operationId": "createAgentRun",
+        "parameters": [
+          {
+            "description": "Identity of the durable web reservation; it is never allocated by the agent.",
+            "in": "header",
+            "name": "x-agent-run-id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRun"
+                }
+              }
+            },
+            "description": "Durable scoped run status and typed result"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request fingerprint or base-version conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "summary": "Start an idempotent research run at an exact trip version"
+      }
+    },
+    "/agent-runs/{runId}": {
+      "get": {
+        "operationId": "getAgentRun",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RunId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRun"
+                }
+              }
+            },
+            "description": "Durable scoped run status and typed result"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/agent-runs/{runId}/clarifications": {
+      "post": {
+        "operationId": "answerClarification",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RunId"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerClarificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRun"
+                }
+              }
+            },
+            "description": "Durable scoped run status and typed result"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Question is stale or already answered"
+          }
+        }
+      }
+    },
+    "/agent-runs/{runId}/events": {
+      "get": {
+        "operationId": "streamAgentRunEvents",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RunId"
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-sse-event-schema": {
+                  "$ref": "#/components/schemas/AgentEvent"
+                }
+              }
+            },
+            "description": "SSE with monotonic IDs; Last-Event-ID or after resumes replay."
+          }
+        },
+        "summary": "Replay recorded events without rerunning tools"
+      }
+    }
+  },
+  "security": [
+    {
+      "internalService": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://agent:8000/internal/v1"
+    }
+  ],
+  "x-protected-draft-keys": [
+    "supplierAmount",
+    "supplierTotal",
+    "supplierMinor",
+    "platformMargin",
+    "platformMarginTotal",
+    "marginMinor",
+    "bookingStatus",
+    "authorization",
+    "payment",
+    "passport",
+    "__proto__",
+    "prototype",
+    "constructor"
+  ]
+}

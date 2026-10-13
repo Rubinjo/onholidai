@@ -320,7 +320,7 @@ paths:
             schema:
               type: "object"
               additionalProperties: false
-              required: ["requestId","baseTripVersion","conversationId","message","purpose"]
+              required: ["requestId","baseTripVersion","message","purpose"]
               properties:
                 requestId:
                   type: "string"
@@ -329,8 +329,9 @@ paths:
                   type: "integer"
                   minimum: 1
                 conversationId:
-                  type: "string"
+                  type: ["string","null"]
                   format: "uuid"
+                  description: Omit or null for the first run; web creates the owned conversation.
                 message:
                   type: "string"
                   minLength: 1
@@ -775,7 +776,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChangeProposal'
+              $ref: '../agent-api/openapi.yaml#/components/schemas/ChangeProposal'
       responses:
         '201':
           description: Proposal recorded without applying it
@@ -943,6 +944,133 @@ paths:
                 $ref: "#/components/schemas/Problem"
         "422":
           $ref: "#/components/responses/ValidationError"
+  /internal/agent-runs/{runId}:
+    get:
+      operationId: readDurableInternalRun
+      security: [{internalService: []}]
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/InternalUserId'
+        - $ref: '#/components/parameters/InternalRequestId'
+      responses:
+        '200':
+          description: Scoped durable status; never restarts research
+          content:
+            application/json:
+              schema:
+                $ref: '../agent-api/openapi.yaml#/components/schemas/AgentRun'
+  /internal/agent-runs/{runId}/validate:
+    post:
+      operationId: bindReservedAgentDispatch
+      security: [{internalService: []}]
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/InternalUserId'
+        - $ref: '#/components/parameters/InternalRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../agent-api/openapi.yaml#/components/schemas/CreateAgentRunRequest'
+      responses:
+        '200':
+          description: Fingerprint matches the reservation and original dispatch
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [accepted]
+                properties:
+                  accepted: {const: true}
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+  /internal/agent-runs/{runId}/events:
+    get:
+      operationId: replayDurableInternalEvents
+      security: [{internalService: []}]
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/InternalUserId'
+        - $ref: '#/components/parameters/InternalRequestId'
+        - in: query
+          name: after
+          schema: {type: integer, minimum: 0, default: 0}
+      responses:
+        '200':
+          description: Recorded contiguous events only
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 256
+                items:
+                  $ref: '../agent-api/openapi.yaml#/components/schemas/AgentEvent'
+  /internal/agent-runs/{runId}/resumes/{questionId}:
+    get:
+      operationId: readDurableResumeReceipt
+      security: [{internalService: []}]
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/InternalUserId'
+        - $ref: '#/components/parameters/InternalRequestId'
+        - in: path
+          name: questionId
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Scoped clarification fingerprint and pre-dispatch cursor
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [fingerprint, eventCursor]
+                properties:
+                  fingerprint: {type: string, pattern: '^[a-f0-9]{64}$'}
+                  eventCursor: {type: integer, minimum: 0}
+  /internal/trips/{tripId}/planning-search:
+    post:
+      operationId: searchScopedPlanningOffers
+      security: [{internalService: []}]
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+        - $ref: '#/components/parameters/InternalUserId'
+        - $ref: '#/components/parameters/InternalRequestId'
+        - in: header
+          name: x-base-trip-version
+          required: true
+          schema: {type: integer, minimum: 1}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [startDate, endDate, destinationIds]
+              properties:
+                startDate: {type: string, format: date}
+                endDate: {type: string, format: date}
+                destinationIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 8
+                  items: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Customer-price projected, unbooked planning offers. Internal costs remain in web-owned records.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [offers, outcomes]
+                properties:
+                  offers: {type: array, maxItems: 32, items: {type: object}}
+                  outcomes: {type: array, maxItems: 4, items: {type: object}}
 components:
   securitySchemes:
     browserSession:
@@ -954,6 +1082,16 @@ components:
       scheme: bearer
       bearerFormat: short-lived service token
   parameters:
+    InternalUserId:
+      name: x-user-id
+      in: header
+      required: true
+      schema: {type: string, format: uuid}
+    InternalRequestId:
+      name: x-request-id
+      in: header
+      required: true
+      schema: {type: string, format: uuid}
     TripId:
       name: tripId
       in: path
@@ -1111,118 +1249,11 @@ components:
           type: "string"
           format: "date-time"
     PersistAgentEventRequest:
-      type: "object"
-      additionalProperties: false
-      description: "Path runId/cursor, reserved run/request/user/trip/base-version and service-token grant must all match. Exact retries reuse receipts; gaps or changed fingerprints return 409 without a write."
-      required: ["version","requestId","userId","tripId","baseTripVersion","event"]
-      properties:
-        version:
-          const: "1"
-        requestId:
-          type: "string"
-          format: "uuid"
-        userId:
-          type: "string"
-          format: "uuid"
-        tripId:
-          type: "string"
-          format: "uuid"
-        baseTripVersion:
-          type: "integer"
-          minimum: 1
-        event:
-          $ref: "../agent-api/openapi.yaml#/components/schemas/AgentEvent"
+      $ref: '../agent-api/openapi.yaml#/components/schemas/PersistAgentEventRequest'
     PersistAgentResultRequest:
-      type: "object"
-      additionalProperties: false
-      description: "Result commits only after its matching clarification/proposal/terminal event at eventCursor; failed result is null. Identity must match the reserved run. Recorded proposals do not apply to trips."
-      required: ["version","requestId","userId","tripId","baseTripVersion","eventCursor","status","result"]
-      properties:
-        version:
-          const: "1"
-        requestId:
-          type: "string"
-          format: "uuid"
-        userId:
-          type: "string"
-          format: "uuid"
-        tripId:
-          type: "string"
-          format: "uuid"
-        baseTripVersion:
-          type: "integer"
-          minimum: 1
-        eventCursor:
-          type: "integer"
-          minimum: 1
-        status:
-          enum: ["awaiting_clarification","proposed","completed","failed"]
-        result:
-          oneOf:
-            -
-              $ref: "../agent-api/openapi.yaml#/components/schemas/AgentResult"
-            -
-              type: "null"
-      allOf:
-        -
-          if:
-            properties:
-              status:
-                const: "failed"
-          then:
-            properties:
-              result:
-                type: "null"
-          else:
-            properties:
-              result:
-                $ref: "../agent-api/openapi.yaml#/components/schemas/AgentResult"
-        - if:
-            properties:
-              status:
-                const: "awaiting_clarification"
-          then:
-            properties:
-              result:
-                properties:
-                  kind:
-                    const: "clarification"
-        - if:
-            properties:
-              status:
-                const: "proposed"
-          then:
-            properties:
-              result:
-                properties:
-                  kind:
-                    const: "proposal"
-        - if:
-            properties:
-              status:
-                const: "completed"
-          then:
-            properties:
-              result:
-                properties:
-                  kind:
-                    const: "answer"
+      $ref: '../agent-api/openapi.yaml#/components/schemas/PersistAgentResultRequest'
     AgentPersistenceReceipt:
-      type: "object"
-      additionalProperties: false
-      required: ["runId","requestId","acceptedCursor","resultRecorded"]
-      properties:
-        runId:
-          type: "string"
-          format: "uuid"
-        requestId:
-          type: "string"
-          format: "uuid"
-        acceptedCursor:
-          type: "integer"
-          minimum: 1
-        resultRecorded:
-          type: "boolean"
+      $ref: '../agent-api/openapi.yaml#/components/schemas/AgentPersistenceReceipt'
     CreateTripRequest:
       type: "object"
       additionalProperties: false
@@ -1605,10 +1636,10 @@ components:
           minimum: 1
         status:
           enum: ["queued","running","awaiting_clarification","proposed","completed","failed","cancelled"]
-        proposal:
+        result:
           oneOf:
             -
-              $ref: "#/components/schemas/ChangeProposal"
+              $ref: "#/components/schemas/PublicAgentResult"
             -
               type: "null"
         nextEventCursor:
@@ -1632,21 +1663,23 @@ components:
           type: ["string","null"]
           format: "date-time"
     ClarificationForwardRequest:
-      type: object
-      additionalProperties: false
-      required: [requestId, clarificationId, answer]
-      properties:
-        requestId:
-          type: string
-          format: uuid
-          description: Must match the run's initiating request identity.
-        clarificationId:
-          type: string
-          format: uuid
-        answer:
-          type: string
-          minLength: 1
-          maxLength: 12000
+      $ref: '../agent-api/openapi.yaml#/components/schemas/AnswerClarificationRequest'
+    PublicAgentResult:
+      oneOf:
+        - $ref: '../agent-api/openapi.yaml#/components/schemas/AnswerResult'
+        - $ref: '../agent-api/openapi.yaml#/components/schemas/ClarificationResult'
+        - type: object
+          additionalProperties: false
+          required: [kind, message, proposal]
+          properties:
+            kind:
+              const: proposal
+            message:
+              type: string
+              minLength: 1
+              maxLength: 12000
+            proposal:
+              $ref: '#/components/schemas/ChangeProposal'
     AgentEvent:
       type: "object"
       additionalProperties: false

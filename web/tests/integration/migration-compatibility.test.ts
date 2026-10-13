@@ -96,7 +96,7 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
       });
       const before = await prior.database.selectFrom("tripVersions").selectAll().execute();
       await expect(migrate(prior.migrationConnectionString))
-        .resolves.toEqual(["003_reversibility_evidence.sql", "004_agent_runs.sql"]);
+        .resolves.toEqual(["003_reversibility_evidence.sql", "004_agent_runs.sql", "005_run_receipts.sql"]);
       expect(await prior.database.selectFrom("tripVersions").selectAll().execute()).toEqual(before);
     } finally {
       await prior?.cleanup();

@@ -1,9 +1,342 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Context": {
+      "additionalProperties": false,
+      "properties": {
+        "baseTripVersion": {
+          "$ref": "#/$defs/PositiveInt"
+        },
+        "requestId": {
+          "$ref": "#/$defs/UUIDString"
+        },
+        "tripId": {
+          "$ref": "#/$defs/UUIDString"
+        },
+        "userId": {
+          "$ref": "#/$defs/UUIDString"
+        }
+      },
+      "required": [
+        "userId",
+        "tripId",
+        "requestId",
+        "baseTripVersion"
+      ],
+      "title": "Context",
+      "type": "object"
+    },
+    "DraftOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "enum": [
+            "add",
+            "replace",
+            "remove",
+            "reorder"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "target": {
+          "maxLength": 500,
+          "pattern": "^/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$",
+          "title": "Target",
+          "type": "string",
+          "x-protected-target": true
+        },
+        "value": {
+          "$ref": "#/$defs/JsonValue",
+          "x-json-bound": {
+            "bytes": 65536,
+            "depth": 16
+          }
+        }
+      },
+      "required": [
+        "operation",
+        "target",
+        "value"
+      ],
+      "title": "DraftOperation",
+      "type": "object"
+    },
+    "GetTripCall": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/Context"
+        },
+        "input": {
+          "$ref": "#/$defs/GetTripInput"
+        },
+        "tool": {
+          "const": "get_trip",
+          "title": "Tool",
+          "type": "string"
+        },
+        "version": {
+          "const": "1",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "tool",
+        "context",
+        "input"
+      ],
+      "title": "GetTripCall",
+      "type": "object"
+    },
+    "GetTripInput": {
+      "additionalProperties": false,
+      "properties": {
+        "componentIds": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/UUIDString"
+          },
+          "maxItems": 32,
+          "title": "Componentids",
+          "type": "array"
+        },
+        "detail": {
+          "enum": [
+            "compact",
+            "itinerary",
+            "components",
+            "pricing",
+            "constraints"
+          ],
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "detail"
+      ],
+      "title": "GetTripInput",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "PositiveInt": {
+      "maximum": 2147483647,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "ProposalPurpose": {
+      "enum": [
+        "initial_estimate",
+        "refinement",
+        "finalization"
+      ],
+      "type": "string"
+    },
+    "ProposeTripChangesCall": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/Context"
+        },
+        "input": {
+          "$ref": "#/$defs/ProposeTripChangesInput"
+        },
+        "tool": {
+          "const": "propose_trip_changes",
+          "title": "Tool",
+          "type": "string"
+        },
+        "version": {
+          "const": "1",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "tool",
+        "context",
+        "input"
+      ],
+      "title": "ProposeTripChangesCall",
+      "type": "object",
+      "x-equal-fields": [
+        [
+          "input.initiatingRequestId",
+          "context.requestId"
+        ]
+      ]
+    },
+    "ProposeTripChangesInput": {
+      "additionalProperties": false,
+      "properties": {
+        "affectedFacts": {
+          "items": {
+            "$ref": "#/$defs/Text200"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Affectedfacts",
+          "type": "array"
+        },
+        "ambiguities": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Text1000"
+          },
+          "maxItems": 20,
+          "title": "Ambiguities",
+          "type": "array"
+        },
+        "initiatingRequestId": {
+          "$ref": "#/$defs/UUIDString"
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/DraftOperation"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Operations",
+          "type": "array"
+        },
+        "purpose": {
+          "$ref": "#/$defs/ProposalPurpose"
+        },
+        "rationale": {
+          "$ref": "#/$defs/Text4000"
+        }
+      },
+      "required": [
+        "purpose",
+        "initiatingRequestId",
+        "operations",
+        "rationale",
+        "affectedFacts"
+      ],
+      "title": "ProposeTripChangesInput",
+      "type": "object"
+    },
+    "RetrieveRelevantContextCall": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/Context"
+        },
+        "input": {
+          "$ref": "#/$defs/RetrieveRelevantContextInput"
+        },
+        "tool": {
+          "const": "retrieve_relevant_context",
+          "title": "Tool",
+          "type": "string"
+        },
+        "version": {
+          "const": "1",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "tool",
+        "context",
+        "input"
+      ],
+      "title": "RetrieveRelevantContextCall",
+      "type": "object"
+    },
+    "RetrieveRelevantContextInput": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UTCDateTime"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "entityIds": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/UUIDString"
+          },
+          "maxItems": 32,
+          "title": "Entityids",
+          "type": "array"
+        },
+        "limit": {
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "query": {
+          "$ref": "#/$defs/Text500"
+        },
+        "reason": {
+          "$ref": "#/$defs/Text500"
+        }
+      },
+      "required": [
+        "query",
+        "reason",
+        "limit"
+      ],
+      "title": "RetrieveRelevantContextInput",
+      "type": "object"
+    },
+    "Text1000": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "type": "string",
+      "x-nonblank": true
+    },
+    "Text200": {
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string",
+      "x-nonblank": true
+    },
+    "Text4000": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "type": "string",
+      "x-nonblank": true
+    },
+    "Text500": {
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+      "x-nonblank": true
+    },
+    "UTCDateTime": {
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$",
+      "type": "string"
+    },
+    "UUIDString": {
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+      "type": "string"
+    }
+  },
   "$id": "https://onholid.ai/contracts/agent-tools/v1",
-  "title": "OnHolid.ai Agent Tool Contracts",
-  "description": "Allowlisted read and proposal tools. Booking, payment, cancellation, rescheduling, and direct trip mutation tools are intentionally absent.",
-  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "discriminator": {
+    "mapping": {
+      "get_trip": "#/$defs/GetTripCall",
+      "propose_trip_changes": "#/$defs/ProposeTripChangesCall",
+      "retrieve_relevant_context": "#/$defs/RetrieveRelevantContextCall"
+    },
+    "propertyName": "tool"
+  },
   "oneOf": [
     {
       "$ref": "#/$defs/GetTripCall"
@@ -15,237 +348,21 @@
       "$ref": "#/$defs/RetrieveRelevantContextCall"
     }
   ],
-  "$defs": {
-    "Context": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "userId",
-        "tripId",
-        "requestId",
-        "baseTripVersion"
-      ],
-      "properties": {
-        "userId": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "tripId": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "requestId": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "baseTripVersion": {
-          "type": "integer",
-          "minimum": 1
-        }
-      }
-    },
-    "GetTripCall": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "version",
-        "tool",
-        "context",
-        "input"
-      ],
-      "properties": {
-        "version": {
-          "const": "1"
-        },
-        "tool": {
-          "const": "get_trip"
-        },
-        "context": {
-          "$ref": "#/$defs/Context"
-        },
-        "input": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "detail"
-          ],
-          "properties": {
-            "detail": {
-              "enum": [
-                "compact",
-                "itinerary",
-                "components",
-                "pricing",
-                "constraints"
-              ]
-            },
-            "componentIds": {
-              "type": "array",
-              "maxItems": 32,
-              "items": {
-                "type": "string",
-                "format": "uuid"
-              }
-            }
-          }
-        }
-      }
-    },
-    "ProposeTripChangesCall": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "version",
-        "tool",
-        "context",
-        "input"
-      ],
-      "properties": {
-        "version": {
-          "const": "1"
-        },
-        "tool": {
-          "const": "propose_trip_changes"
-        },
-        "context": {
-          "$ref": "#/$defs/Context"
-        },
-        "input": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "purpose",
-            "initiatingRequestId",
-            "operations",
-            "rationale",
-            "affectedFacts"
-          ],
-          "properties": {
-            "operations": {
-              "type": "array",
-              "minItems": 1,
-              "maxItems": 32,
-              "items": {
-                "$ref": "#/$defs/DraftOperation"
-              }
-            },
-            "rationale": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 4000
-            },
-            "affectedFacts": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "string",
-                "maxLength": 200
-              }
-            },
-            "ambiguities": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "maxLength": 1000
-              }
-            },
-            "purpose": {
-              "enum": [
-                "initial_estimate",
-                "refinement",
-                "finalization"
-              ]
-            },
-            "initiatingRequestId": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        }
-      }
-    },
-    "DraftOperation": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "operation",
-        "target",
-        "value"
-      ],
-      "properties": {
-        "operation": {
-          "enum": [
-            "add",
-            "replace",
-            "remove",
-            "reorder"
-          ]
-        },
-        "target": {
-          "type": "string",
-          "pattern": "^/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$"
-        },
-        "value": {}
-      }
-    },
-    "RetrieveRelevantContextCall": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "version",
-        "tool",
-        "context",
-        "input"
-      ],
-      "properties": {
-        "version": {
-          "const": "1"
-        },
-        "tool": {
-          "const": "retrieve_relevant_context"
-        },
-        "context": {
-          "$ref": "#/$defs/Context"
-        },
-        "input": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "query",
-            "reason",
-            "limit"
-          ],
-          "properties": {
-            "query": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 500
-            },
-            "reason": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 500
-            },
-            "entityIds": {
-              "type": "array",
-              "maxItems": 32,
-              "items": {
-                "type": "string",
-                "format": "uuid"
-              }
-            },
-            "limit": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 20
-            },
-            "before": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        }
-      }
-    }
-  }
+  "title": "ToolCall",
+  "type": "object",
+  "x-protected-draft-keys": [
+    "supplierAmount",
+    "supplierTotal",
+    "supplierMinor",
+    "platformMargin",
+    "platformMarginTotal",
+    "marginMinor",
+    "bookingStatus",
+    "authorization",
+    "payment",
+    "passport",
+    "__proto__",
+    "prototype",
+    "constructor"
+  ]
 }

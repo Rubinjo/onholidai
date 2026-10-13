@@ -3,6 +3,7 @@ import { z } from "zod";
 import { travelComponentSchema } from "@/domain/trip/schema";
 
 export const planningOfferSchema = z.object({
+  selectionGroup: z.string().trim().min(1).max(120).optional(),
   component: travelComponentSchema,
   eligibility: z.object({ status: z.enum(["eligible", "ineligible", "unverified"]),
     minimumAge: z.number().int().nonnegative().nullable(), maximumAge: z.number().int().nonnegative().nullable() }).strict(),

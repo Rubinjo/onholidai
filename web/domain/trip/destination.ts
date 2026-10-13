@@ -27,8 +27,16 @@ export interface PlaceLookupProvider {
 
 export async function lookupPlaces(provider: PlaceLookupProvider, rawInput: unknown) {
   const input = placeLookupInputSchema.parse(rawInput);
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let found: readonly PlaceCandidate[];
+  try {
+    found = await Promise.race([provider.search(input, controller.signal), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => { controller.abort(); reject(new Error("Place lookup deadline")); }, 8000);
+    })]);
+  } finally { clearTimeout(timer); }
   const candidates = z.array(placeCandidateSchema).max(20)
-    .parse(await provider.search(input, AbortSignal.timeout(8_000)))
+    .parse(found)
     .filter((candidate) => !input.countryCode || candidate.countryCode === input.countryCode);
   if (new Set(candidates.map((candidate) => candidate.placeId)).size !== candidates.length) {
     throw new Error("Place provider returned duplicate identities");

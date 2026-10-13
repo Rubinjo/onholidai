@@ -114,6 +114,10 @@ export interface AuditEventTable {
 }
 
 export interface TripCoreDatabase {
+  agentRunEvents: AgentRunEventTable;
+  agentRunResumes: AgentRunResumeTable;
+  planningOfferRecords: PlanningOfferRecordTable;
+  estimateCandidates: EstimateCandidateTable;
   agentRuns: AgentRunTable;
   changeProposals: ChangeProposalTable;
   trips: TripTable;
@@ -127,6 +131,12 @@ export interface TripCoreDatabase {
 }
 
 export interface AgentRunTable {
+  dispatchFingerprint: Generated<string | null>;
+  activeElapsedMs: Generated<number>;
+  phaseStartedAt: GeneratedTimestamp;
+  lastDurableProgressAt: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  resultFingerprint: Generated<string | null>;
+  resultCursor: Generated<number | null>;
   id: string;
   tripId: string;
   conversationId: string;
@@ -143,6 +153,22 @@ export interface AgentRunTable {
   errorCategory: "interrupted" | "deadline" | "source_unavailable" | "invalid_result" | null;
   result: Json<Record<string, unknown> | null>;
 }
+
+export interface AgentRunEventTable {
+  runId: string; cursor: number; fingerprint: string;
+  event: Json<Record<string, unknown>>; receipt: Json<Record<string, unknown>>;
+  createdAt: GeneratedTimestamp;
+}
+export interface AgentRunResumeTable {
+  runId: string; questionId: string; requestId: string; fingerprint: string;
+  eventCursor: number;
+  createdAt: GeneratedTimestamp;
+}
+export interface PlanningOfferRecordTable {
+  runId: string; componentId: string; offer: Json<Record<string, unknown>>; createdAt: GeneratedTimestamp;
+  query: Json<Record<string, unknown>>;
+}
+export interface EstimateCandidateTable { proposalId: string; snapshot: Json<TripSnapshot> }
 
 export interface ChangeProposalTable {
   id: string;

@@ -103,6 +103,10 @@ def _is_sensitive_string(value: str) -> bool:
 
 
 @overload
+def redact_for_langsmith(value: str, *, production: bool = True) -> str: ...
+
+
+@overload
 def redact_for_langsmith(
     value: Mapping[str, object], *, production: bool = True
 ) -> dict[str, RedactedValue]: ...
@@ -111,7 +115,7 @@ def redact_for_langsmith(
 @overload
 def redact_for_langsmith(
     value: Sequence[object] | Set[object], *, production: bool = True
-) -> list[RedactedValue]: ...
+) -> list[RedactedValue] | str: ...
 
 
 @overload
@@ -145,9 +149,7 @@ def _redact(value: object, *, production: bool, active_ids: set[int]) -> Redacte
             for key, item in cast(Mapping[object, object], value).items():
                 key_text = str(key)
                 normalized = _normalized_key(key)
-                if _is_sensitive_key(key) or (
-                    production and normalized in _PRODUCTION_IO_KEYS
-                ):
+                if _is_sensitive_key(key) or (production and normalized in _PRODUCTION_IO_KEYS):
                     redacted[key_text] = REDACTED
                 else:
                     redacted[key_text] = _redact(

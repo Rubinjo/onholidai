@@ -20,6 +20,7 @@ export default defineConfig({
       "tests/integration/migration-compatibility.test.ts",
       "tests/integration/trip-commit.test.ts",
       "tests/integration/trip-planning.test.ts",
+      "tests/integration/estimate.test.ts",
     ],
   },
 });

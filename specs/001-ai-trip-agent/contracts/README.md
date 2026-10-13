@@ -9,7 +9,7 @@ These contracts define the boundaries among the browser, `web/`, `agent/`, Tempo
 | `agent-tools.schema.json` | Agent/domain design | LangGraph tool adapters and evaluation tests | Tool names and versioned schemas are allowlisted; transactional tools are forbidden |
 | `travel-supply.md` | First-party supply boundary | Search services and Temporal activities | Read and transaction capabilities remain separate; provider additions preserve normalized outcomes |
 
-T006 promotes these source contracts to `contracts/agent-api/openapi.yaml`,
+The Pydantic exporter maintains identical source/promoted agent OpenAPI and tool schemas. T006 promotes the other source contracts to `contracts/agent-api/openapi.yaml`,
 `contracts/agent-api/tools.schema.json`, `contracts/trip-domain/web-api.openapi.yaml`,
 and `contracts/supply/README.md`. Promoted files are exact copies except that the promoted
 web contract rewrites `./agent-api.openapi.yaml` references to `../agent-api/openapi.yaml`.
@@ -32,9 +32,15 @@ The executable validator rejects source/promotion drift and unresolved local or 
 - departureOrigin is a confirmed disambiguated city/airport with country and timezone; default return is that origin. Draft operation allowlists include departureOrigin. Legacy snapshots require explicit migration/confirmation, never an inferred origin.
 - Closed object schemas declare every legitimate field in the object that closes them. `allOf` is used only to refine already-declared fields or requirements; event variants are flattened rather than extending a closed base object.
 - Booking start/first write validates authorization against the exact current version; later writes use immutable executionBasis plus a provenance-checked status/evidence-only version chain. All material facts stay bound and expiry is checked before every write. New confirmed prices/terms, external edits or ambiguous write claims stop dispatch.
-- These contracts are unimplemented v1 design drafts. Required origin/purpose fields are synchronized before first release; after deployment incompatible changes require a new contract version and snapshot migration.
+- These contracts remain pre-release v1. Agent models and their export/generation pipeline are implemented; run execution, callbacks and later story routes are separate tasks. After deployment, incompatible changes require a new contract version and snapshot migration.
 
 ## Contract Pipeline
+
+Run `uv run --project agent python agent/scripts/export_contracts.py`, then `pnpm --dir web agent:contracts`. Their `--check` / `agent:contracts:check` modes fail on drift. `pnpm test:contracts` and CI execute these checks. Agent `.yaml` files contain deterministic JSON, which is valid YAML 1.2. The web callback request/receipt schemas reference the exported Pydantic definitions instead of duplicating their fields.
+
+Generated validators preserve closed objects, tagged alternatives, Unicode character limits, defaults, JSON depth/byte budgets, protected draft targets/values and cross-field request/version/state rules. `x-equal-fields`, `x-not-future-fields`, `x-json-bound`, `x-nonblank` and `x-protected-target` encode rules that plain schema consumers must enforce separately; the generator fails on unsupported schema/conditional keywords. Historical summaries retain their source version without claiming a future version; the authoritative trip projection matches the run base exactly. The 36 synthetic cases in `contracts/agent-api/validation-cases.json` are exercised by Pydantic and generated-Zod suites; they are independent of the frozen usability/evaluation corpus.
+
+An omitted first-run conversation summary resolves to empty lists bound to the reserved trip version via `PromptContext.resolved_summary`. Schema validation alone cannot prove signed actor grants, persisted cursor continuity, receipt durability or result-after-event ordering; the runtime storage/transport tasks enforce those boundaries.
 
 1. Pydantic request, response, event, and error models generate the internal agent OpenAPI document.
 2. TypeScript types and Zod runtime validators are generated from the committed document.
@@ -51,3 +57,5 @@ The executable validator rejects source/promotion drift and unresolved local or 
 - Errors use stable machine codes plus safe user-facing messages and a correlation ID.
 - SSE events are versioned, monotonically ordered, replayable by cursor, and contain no direct trip mutation command.
 - Browser credentials never cross into `agent/`; internal actor context uses a short-lived service credential.
+
+US1 transport is implemented at `/internal/v1/agent-runs` on agent and `/api/v1` on web. Web reserves the run identity/fingerprint before dispatch; first-run conversationId is omitted/null and web allocates it. Public results contain a trusted common proposal; SSE variant fields appear under payload. Scoped status/replay/dispatch-validation/resume-receipt/planning-search endpoints bind user/trip/request/base context. Quotes retain their query and optional selectionGroup so alternatives are not summed together. Partial results cannot authorize proposal acceptance.

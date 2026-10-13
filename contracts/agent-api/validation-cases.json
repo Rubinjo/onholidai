@@ -1,0 +1,977 @@
+{
+  "version": "1",
+  "cases": [
+    {
+      "name": "first-run",
+      "model": "CreateAgentRunRequest",
+      "valid": true,
+      "value": {
+        "contractVersion": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "conversationId": "10000000-0000-4000-8000-000000000005",
+        "purpose": "initial_estimate",
+        "message": "Plan a synthetic trip",
+        "actor": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "baseTripVersion": 3,
+          "scopes": [
+            "trip:read",
+            "proposal:create"
+          ]
+        },
+        "context": {
+          "tripSummary": {
+            "version": 3
+          },
+          "contextBudget": {
+            "maximumTokens": 12000,
+            "compactionThresholdPercent": 70
+          }
+        }
+      }
+    },
+    {
+      "name": "unknown-version",
+      "model": "CreateAgentRunRequest",
+      "valid": false,
+      "value": {
+        "contractVersion": "2",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "conversationId": "10000000-0000-4000-8000-000000000005",
+        "purpose": "initial_estimate",
+        "message": "Plan a synthetic trip",
+        "actor": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "baseTripVersion": 3,
+          "scopes": [
+            "trip:read",
+            "proposal:create"
+          ]
+        },
+        "context": {
+          "tripSummary": {
+            "version": 3
+          },
+          "contextBudget": {
+            "maximumTokens": 12000,
+            "compactionThresholdPercent": 70
+          }
+        }
+      }
+    },
+    {
+      "name": "unsupported-purpose",
+      "model": "CreateAgentRunRequest",
+      "valid": false,
+      "value": {
+        "contractVersion": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "conversationId": "10000000-0000-4000-8000-000000000005",
+        "purpose": "book_trip",
+        "message": "Plan a synthetic trip",
+        "actor": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "baseTripVersion": 3,
+          "scopes": [
+            "trip:read",
+            "proposal:create"
+          ]
+        },
+        "context": {
+          "tripSummary": {
+            "version": 3
+          },
+          "contextBudget": {
+            "maximumTokens": 12000,
+            "compactionThresholdPercent": 70
+          }
+        }
+      }
+    },
+    {
+      "name": "missing-scopes",
+      "model": "CreateAgentRunRequest",
+      "valid": false,
+      "value": {
+        "contractVersion": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "conversationId": "10000000-0000-4000-8000-000000000005",
+        "purpose": "initial_estimate",
+        "message": "Plan a synthetic trip",
+        "actor": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "baseTripVersion": 3,
+          "scopes": [
+            "trip:read"
+          ]
+        },
+        "context": {
+          "tripSummary": {
+            "version": 3
+          },
+          "contextBudget": {
+            "maximumTokens": 12000,
+            "compactionThresholdPercent": 70
+          }
+        }
+      }
+    },
+    {
+      "name": "duplicate-scopes",
+      "model": "CreateAgentRunRequest",
+      "valid": false,
+      "value": {
+        "contractVersion": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "conversationId": "10000000-0000-4000-8000-000000000005",
+        "purpose": "initial_estimate",
+        "message": "Plan a synthetic trip",
+        "actor": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "baseTripVersion": 3,
+          "scopes": [
+            "trip:read",
+            "proposal:create",
+            "trip:read"
+          ]
+        },
+        "context": {
+          "tripSummary": {
+            "version": 3
+          },
+          "contextBudget": {
+            "maximumTokens": 12000,
+            "compactionThresholdPercent": 70
+          }
+        }
+      }
+    },
+    {
+      "name": "wrong-context-version",
+      "model": "CreateAgentRunRequest",
+      "valid": false,
+      "value": {
+        "contractVersion": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "conversationId": "10000000-0000-4000-8000-000000000005",
+        "purpose": "initial_estimate",
+        "message": "Plan a synthetic trip",
+        "actor": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "baseTripVersion": 3,
+          "scopes": [
+            "trip:read",
+            "proposal:create"
+          ]
+        },
+        "context": {
+          "tripSummary": {
+            "version": 4
+          },
+          "contextBudget": {
+            "maximumTokens": 12000,
+            "compactionThresholdPercent": 70
+          }
+        }
+      }
+    },
+    {
+      "name": "supplier-data",
+      "model": "CreateAgentRunRequest",
+      "valid": false,
+      "value": {
+        "contractVersion": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "conversationId": "10000000-0000-4000-8000-000000000005",
+        "purpose": "initial_estimate",
+        "message": "Plan a synthetic trip",
+        "actor": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "baseTripVersion": 3,
+          "scopes": [
+            "trip:read",
+            "proposal:create"
+          ]
+        },
+        "context": {
+          "tripSummary": {
+            "nested": {
+              "supplierAmount": 991234
+            }
+          },
+          "contextBudget": {
+            "maximumTokens": 12000,
+            "compactionThresholdPercent": 70
+          }
+        }
+      }
+    },
+    {
+      "name": "explicit-proposal",
+      "model": "PersistAgentResultRequest",
+      "valid": true,
+      "value": {
+        "version": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "userId": "10000000-0000-4000-8000-000000000001",
+        "tripId": "10000000-0000-4000-8000-000000000002",
+        "baseTripVersion": 3,
+        "eventCursor": 1,
+        "status": "proposed",
+        "result": {
+          "kind": "proposal",
+          "message": "Review",
+          "proposal": {
+            "id": "10000000-0000-4000-8000-000000000006",
+            "purpose": "initial_estimate",
+            "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+            "baseTripVersion": 3,
+            "operations": [
+              {
+                "operation": "replace",
+                "target": "/preferences/pace",
+                "value": 60
+              }
+            ],
+            "affectedFacts": [
+              "pace"
+            ],
+            "rationale": "A relaxed pace",
+            "tradeoffs": [],
+            "warnings": [],
+            "expiresAt": "2030-01-01T00:10:00Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "changed-request",
+      "model": "PersistAgentResultRequest",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "requestId": "10000000-0000-4000-8000-000000000009",
+        "userId": "10000000-0000-4000-8000-000000000001",
+        "tripId": "10000000-0000-4000-8000-000000000002",
+        "baseTripVersion": 3,
+        "eventCursor": 1,
+        "status": "proposed",
+        "result": {
+          "kind": "proposal",
+          "message": "Review",
+          "proposal": {
+            "id": "10000000-0000-4000-8000-000000000006",
+            "purpose": "initial_estimate",
+            "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+            "baseTripVersion": 3,
+            "operations": [
+              {
+                "operation": "replace",
+                "target": "/preferences/pace",
+                "value": 60
+              }
+            ],
+            "affectedFacts": [
+              "pace"
+            ],
+            "rationale": "A relaxed pace",
+            "tradeoffs": [],
+            "warnings": [],
+            "expiresAt": "2030-01-01T00:10:00Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "changed-base",
+      "model": "PersistAgentResultRequest",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "userId": "10000000-0000-4000-8000-000000000001",
+        "tripId": "10000000-0000-4000-8000-000000000002",
+        "baseTripVersion": 4,
+        "eventCursor": 1,
+        "status": "proposed",
+        "result": {
+          "kind": "proposal",
+          "message": "Review",
+          "proposal": {
+            "id": "10000000-0000-4000-8000-000000000006",
+            "purpose": "initial_estimate",
+            "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+            "baseTripVersion": 3,
+            "operations": [
+              {
+                "operation": "replace",
+                "target": "/preferences/pace",
+                "value": 60
+              }
+            ],
+            "affectedFacts": [
+              "pace"
+            ],
+            "rationale": "A relaxed pace",
+            "tradeoffs": [],
+            "warnings": [],
+            "expiresAt": "2030-01-01T00:10:00Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "wrong-result-kind",
+      "model": "PersistAgentResultRequest",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "userId": "10000000-0000-4000-8000-000000000001",
+        "tripId": "10000000-0000-4000-8000-000000000002",
+        "baseTripVersion": 3,
+        "eventCursor": 1,
+        "status": "completed",
+        "result": {
+          "kind": "proposal",
+          "message": "Review",
+          "proposal": {
+            "id": "10000000-0000-4000-8000-000000000006",
+            "purpose": "initial_estimate",
+            "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+            "baseTripVersion": 3,
+            "operations": [
+              {
+                "operation": "replace",
+                "target": "/preferences/pace",
+                "value": 60
+              }
+            ],
+            "affectedFacts": [
+              "pace"
+            ],
+            "rationale": "A relaxed pace",
+            "tradeoffs": [],
+            "warnings": [],
+            "expiresAt": "2030-01-01T00:10:00Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "failed-with-result",
+      "model": "PersistAgentResultRequest",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "userId": "10000000-0000-4000-8000-000000000001",
+        "tripId": "10000000-0000-4000-8000-000000000002",
+        "baseTripVersion": 3,
+        "eventCursor": 1,
+        "status": "failed",
+        "result": {
+          "kind": "proposal",
+          "message": "Review",
+          "proposal": {
+            "id": "10000000-0000-4000-8000-000000000006",
+            "purpose": "initial_estimate",
+            "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+            "baseTripVersion": 3,
+            "operations": [
+              {
+                "operation": "replace",
+                "target": "/preferences/pace",
+                "value": 60
+              }
+            ],
+            "affectedFacts": [
+              "pace"
+            ],
+            "rationale": "A relaxed pace",
+            "tradeoffs": [],
+            "warnings": [],
+            "expiresAt": "2030-01-01T00:10:00Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "failed-null-result",
+      "model": "PersistAgentResultRequest",
+      "valid": true,
+      "value": {
+        "version": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "userId": "10000000-0000-4000-8000-000000000001",
+        "tripId": "10000000-0000-4000-8000-000000000002",
+        "baseTripVersion": 3,
+        "eventCursor": 1,
+        "status": "failed",
+        "result": null
+      }
+    },
+    {
+      "name": "zero-cursor",
+      "model": "PersistAgentResultRequest",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "requestId": "10000000-0000-4000-8000-000000000003",
+        "userId": "10000000-0000-4000-8000-000000000001",
+        "tripId": "10000000-0000-4000-8000-000000000002",
+        "baseTripVersion": 3,
+        "eventCursor": 0,
+        "status": "proposed",
+        "result": {
+          "kind": "proposal",
+          "message": "Review",
+          "proposal": {
+            "id": "10000000-0000-4000-8000-000000000006",
+            "purpose": "initial_estimate",
+            "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+            "baseTripVersion": 3,
+            "operations": [
+              {
+                "operation": "replace",
+                "target": "/preferences/pace",
+                "value": 60
+              }
+            ],
+            "affectedFacts": [
+              "pace"
+            ],
+            "rationale": "A relaxed pace",
+            "tradeoffs": [],
+            "warnings": [],
+            "expiresAt": "2030-01-01T00:10:00Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "progress",
+      "model": "AgentEvent",
+      "valid": true,
+      "value": {
+        "version": "1",
+        "runId": "10000000-0000-4000-8000-000000000004",
+        "cursor": 1,
+        "occurredAt": "2030-01-01T00:00:00Z",
+        "type": "progress",
+        "stage": "researching",
+        "message": "Searching"
+      }
+    },
+    {
+      "name": "proposal",
+      "model": "AgentEvent",
+      "valid": true,
+      "value": {
+        "version": "1",
+        "runId": "10000000-0000-4000-8000-000000000004",
+        "cursor": 1,
+        "occurredAt": "2030-01-01T00:00:00Z",
+        "type": "proposal",
+        "proposal": {
+          "id": "10000000-0000-4000-8000-000000000006",
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3,
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/preferences/pace",
+              "value": 60
+            }
+          ],
+          "affectedFacts": [
+            "pace"
+          ],
+          "rationale": "A relaxed pace",
+          "tradeoffs": [],
+          "warnings": [],
+          "expiresAt": "2030-01-01T00:10:00Z"
+        }
+      }
+    },
+    {
+      "name": "clarification",
+      "model": "AgentEvent",
+      "valid": true,
+      "value": {
+        "version": "1",
+        "runId": "10000000-0000-4000-8000-000000000004",
+        "cursor": 1,
+        "occurredAt": "2030-01-01T00:00:00Z",
+        "type": "clarification",
+        "clarification": {
+          "id": "10000000-0000-4000-8000-000000000006",
+          "question": "Which city?",
+          "materialReason": "scope"
+        }
+      }
+    },
+    {
+      "name": "terminal",
+      "model": "AgentEvent",
+      "valid": true,
+      "value": {
+        "version": "1",
+        "runId": "10000000-0000-4000-8000-000000000004",
+        "cursor": 1,
+        "occurredAt": "2030-01-01T00:00:00Z",
+        "type": "completed",
+        "status": "completed"
+      }
+    },
+    {
+      "name": "contradictory-terminal",
+      "model": "AgentEvent",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "runId": "10000000-0000-4000-8000-000000000004",
+        "cursor": 1,
+        "occurredAt": "2030-01-01T00:00:00Z",
+        "type": "failed",
+        "status": "completed"
+      }
+    },
+    {
+      "name": "unknown-event",
+      "model": "AgentEvent",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "runId": "10000000-0000-4000-8000-000000000004",
+        "cursor": 1,
+        "occurredAt": "2030-01-01T00:00:00Z",
+        "type": "booking"
+      }
+    },
+    {
+      "name": "unversioned-event",
+      "model": "AgentEvent",
+      "valid": false,
+      "value": {
+        "version": "2",
+        "runId": "10000000-0000-4000-8000-000000000004",
+        "cursor": 1,
+        "occurredAt": "2030-01-01T00:00:00Z",
+        "type": "completed",
+        "status": "completed"
+      }
+    },
+    {
+      "name": "naive-timestamp",
+      "model": "AgentEvent",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "runId": "10000000-0000-4000-8000-000000000004",
+        "cursor": 1,
+        "occurredAt": "2030-01-01T00:00:00",
+        "type": "completed",
+        "status": "completed"
+      }
+    },
+    {
+      "name": "extra-event-field",
+      "model": "AgentEvent",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "runId": "10000000-0000-4000-8000-000000000004",
+        "cursor": 1,
+        "occurredAt": "2030-01-01T00:00:00Z",
+        "type": "completed",
+        "status": "completed",
+        "secret": "synthetic"
+      }
+    },
+    {
+      "name": "draft-tool",
+      "model": "ToolCall",
+      "valid": true,
+      "value": {
+        "version": "1",
+        "tool": "propose_trip_changes",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/preferences/pace",
+              "value": 60
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "mismatched-tool-request",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "propose_trip_changes",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000009",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/preferences/pace",
+              "value": 60
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "protected-/bookings",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "propose_trip_changes",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/bookings",
+              "value": null
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "protected-/price",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "propose_trip_changes",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/price",
+              "value": null
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "protected-/components/0/bookingStatus",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "propose_trip_changes",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/components/0/bookingStatus",
+              "value": null
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "protected-/preferences/__proto__",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "propose_trip_changes",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/preferences/__proto__",
+              "value": null
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "nested-internal-amount",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "propose_trip_changes",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/components",
+              "value": [
+                {
+                  "price": {
+                    "platformMargin": 77119
+                  }
+                }
+              ]
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "forbidden-book_trip",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "book_trip",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/preferences/pace",
+              "value": 60
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "forbidden-cancel_component",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "cancel_component",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/preferences/pace",
+              "value": 60
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "forbidden-reschedule_component",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "reschedule_component",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/preferences/pace",
+              "value": 60
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "forbidden-update_trip",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "update_trip",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "purpose": "initial_estimate",
+          "initiatingRequestId": "10000000-0000-4000-8000-000000000003",
+          "operations": [
+            {
+              "operation": "replace",
+              "target": "/preferences/pace",
+              "value": 60
+            }
+          ],
+          "rationale": "Review",
+          "affectedFacts": [
+            "pace"
+          ]
+        }
+      }
+    },
+    {
+      "name": "retrieval",
+      "model": "ToolCall",
+      "valid": true,
+      "value": {
+        "version": "1",
+        "tool": "retrieve_relevant_context",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "query": "Previous destination",
+          "reason": "Recall",
+          "limit": 20
+        }
+      }
+    },
+    {
+      "name": "retrieval-too-large",
+      "model": "ToolCall",
+      "valid": false,
+      "value": {
+        "version": "1",
+        "tool": "retrieve_relevant_context",
+        "context": {
+          "userId": "10000000-0000-4000-8000-000000000001",
+          "tripId": "10000000-0000-4000-8000-000000000002",
+          "requestId": "10000000-0000-4000-8000-000000000003",
+          "baseTripVersion": 3
+        },
+        "input": {
+          "query": "Previous destination",
+          "reason": "Recall",
+          "limit": 21
+        }
+      }
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const CORPUS_VERSION = "1.0.0";
+const CORPUS_VERSION = "1.1.0";
 const POLICY_VERSION = "1";
 const SEED = "onholidai-evaluation-v1-seed-20261011";
 const estimateCategories = [
@@ -38,32 +38,44 @@ const estimates = Array.from({ length: 100 }, (_, index) => {
   return {
     id: id("estimate", caseNumber),
     categories: [primaryCategory, secondaryCategory],
-    input: {
-      origin: caseNumber % 2 === 0 ? "GB-LON" : "GB-MAN",
-      destinations: caseNumber % 3 === 0 ? ["PT-LIS", "PT-OPO"] : ["PT-LIS"],
-      startDate: `2030-0${(caseNumber % 8) + 1}-10`,
-      flexibilityDays: caseNumber % 4,
-      durationDays: 5 + (caseNumber % 5),
-      adults: 1 + (caseNumber % 3),
-      childAges: caseNumber % 5 === 0 ? [10] : [],
-      style: [
-        20 + (caseNumber % 70),
-        30 + (caseNumber % 60),
-        40 + (caseNumber % 50),
-        50,
-        60,
-      ],
-      requiredConstraint: `synthetic-required-constraint-${(caseNumber % 10) + 1}`,
-    },
+    input: estimateInput(caseNumber),
     expected: {
       outcome: "proposal",
       originConfirmed: true,
-      requiredConstraintDisposition: "accounted_for",
+      requiredConstraintDisposition: "unverified_source_evidence_disclosed",
       durationDays: 5 + (caseNumber % 5),
-      timeLimitSeconds: 60,
+      timeLimitSeconds: 30,
+      operationTargets: ["/destinations", "/components", "/itineraryDays"],
+      availabilityUnchanged: true,
+      automaticallyApplied: false,
     },
   };
 });
+
+function estimateInput(caseNumber) {
+  const uuid = (offset) => `a0000000-a000-4000-8000-a${String(caseNumber * 10 + offset).padStart(11, "0")}`;
+  const currency = "EUR", zero = { currency, minorUnits: 0 };
+  const names = caseNumber % 3 === 0 ? ["Lisbon", "Porto"] : ["Lisbon"];
+  return { version: 1, snapshot: {
+    departureOrigin: { kind: "city", placeId: caseNumber % 2 ? "synthetic-manchester" : "synthetic-london",
+      name: caseNumber % 2 ? "Manchester" : "London", countryCode: "GB", timezone: "Europe/London",
+      airportCode: null, confirmedByUser: true },
+    availabilityWindows: [
+      { id: uuid(1), startDate: "2030-05-10", endDate: "2030-05-30", preference: "preferred", timezone: "Europe/London" },
+      { id: uuid(2), startDate: "2030-06-10", endDate: "2030-06-30", preference: "flexible", timezone: "Europe/London" }],
+    duration: { minimumDays: 5, idealDays: 5 + caseNumber % 5, maximumDays: 10 },
+    travellerParty: { adults: 1 + caseNumber % 3, children: caseNumber % 5 === 0 ? [{ id: uuid(3), ageAtTripStart: 10 }] : [] },
+    preferences: { pace: 20 + caseNumber % 70, spend: 30 + caseNumber % 60, discovery: 40 + caseNumber % 50, independence: 50, setting: 60 },
+    constraints: [{ id: uuid(4), category: "schedule", statement: "No activities before 10:00", priority: "required",
+      source: { kind: "setup_text", referenceId: null }, status: "unverified", confirmedByUser: true }],
+    destinations: names.map((name, index) => ({ id: uuid(5 + index), kind: "city", name, countryCode: "PT",
+      providerPlaceIds: { synthetic: `synthetic-${name.toLowerCase()}` }, location: null, routePosition: index,
+      arrivalDate: null, departureDate: null, plannedNights: 0 })),
+    itineraryDays: [], components: [], warnings: [],
+    price: { currency, supplierTotal: zero, platformMarginTotal: zero, customerPayableTaxesTotal: zero,
+      customerPayableFeesTotal: zero, finalCustomerTotal: zero, status: "estimated", checkedAt: "2029-01-01T00:00:00Z", conversionDisclosures: [] }
+  } };
+}
 
 const unambiguousRequests = refinementGroups.flatMap((group) =>
   Array.from({ length: 20 }, (_, index) => ({
@@ -165,7 +177,7 @@ const corpus = {
     },
     changeControl: {
       reviewedReasonRequired: true,
-      reviewedReason: "Initial T018 evaluation policy v1 corpus freeze.",
+      reviewedReason: "US1 revision: replace non-executable estimate shorthand with complete synthetic trip snapshots, source-evidence expectations and the required 30-second deadline. Refinement/itinerary placeholder repair remains pending T128; these are not scored as evidence.",
       policy:
         "Every revision must record a reviewed reason and run a fresh complete evaluation.",
     },

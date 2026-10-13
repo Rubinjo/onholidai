@@ -6,6 +6,7 @@ import { z } from "zod";
 import { draftOperationSchema, tripSnapshotSchema, tripVersionSchema } from "@/domain/trip/schema";
 import { ProblemError } from "@/server/errors";
 import type { Database } from "@/server/db/database";
+import { inTransaction } from "@/server/db/transaction";
 import {
   IdempotencyRepository,
   type IdempotencyRepositoryPort,
@@ -138,7 +139,7 @@ export async function commitTripMutation(
     nonReversibleReason: input.nonReversibleReason, createdAt: now.toISOString(),
   });
 
-  return database.transaction().execute(async (transaction) => {
+  return inTransaction(database, async (transaction) => {
     const repositories = repositoryFactory(transaction);
     const trip = input.creation ? undefined : await repositories.trips.lockTrip(input.tripId);
     if (!input.creation) {

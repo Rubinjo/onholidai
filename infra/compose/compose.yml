@@ -142,9 +142,18 @@ services:
       context: ../..
       dockerfile: agent/Dockerfile
     profiles: [applications]
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export SERVICE_TOKEN_SECRET="$$(cat /run/secrets/service_token_secret)"
+        exec uvicorn onholidai_agent.api.main:app --host 0.0.0.0 --port 8000
     environment:
       PROVIDER_MODE: deterministic
+      ENVIRONMENT: production
+      WEB_BASE_URL: http://web:3000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    secrets:
+      - service_token_secret
     ports:
       - "8000:8000"
     depends_on:

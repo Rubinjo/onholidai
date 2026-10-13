@@ -58,7 +58,12 @@ export async function searchPlanningOffers(providers: readonly SupplyReadProvide
   providers.forEach((provider) => readCapabilitiesSchema.parse(provider.capabilities));
   const selected = providers.filter((provider) => provider.capabilities.search.some((type) => query.componentTypes.includes(type)));
   const results = await Promise.all(selected.map((provider) => boundedSearch(provider, query, now)));
-  const offers = results.flatMap((result) => result.offers);
+  // Share the bounded context across suppliers, rather than letting flight alternatives
+  // consume every slot and hide available stays/activities/rail quotes.
+  const offers: PlanningOffer[] = [];
+  for (let index = 0; index < 32 && offers.length < 32; index += 1) {
+    for (const result of results) if (result.offers[index] && offers.length < 32) offers.push(result.offers[index]);
+  }
   const unique = [...new Map(offers.map((offer) => [`${offer.component.provider}:${offer.component.supplierOfferId}`, offer])).values()];
   return { offers: unique.slice(0, 32), outcomes: results.map((result) => result.outcome) };
 }

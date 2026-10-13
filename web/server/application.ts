@@ -6,10 +6,15 @@ import { createAuth } from "@/server/auth/auth";
 import { loadServerConfig } from "@/server/config";
 import { createDatabase } from "@/server/db/database";
 import { createPlaceLookupProvider } from "@/server/supply/places";
+import { createPlanningProviders } from "@/server/supply/providers";
+import type { SupplyReadProvider } from "@/server/supply/read";
+import type { PlaceLookupProvider } from "@/domain/trip/destination";
 
 // This is the process composition root. Domain services receive its dependencies
 // explicitly; only Next.js entry points read the registered application.
-export function createApplication(environment: Record<string, string | undefined>) {
+export function createApplication(environment: Record<string, string | undefined>, dependencies: {
+  planningProviders?: readonly SupplyReadProvider[]; places?: PlaceLookupProvider;
+} = {}) {
   const config = loadServerConfig(environment);
   const database = createDatabase({ connectionString: config.DATABASE_URL });
   const authPool = new Pool({
@@ -19,7 +24,8 @@ export function createApplication(environment: Record<string, string | undefined
   try {
     const auth = createAuth(config, authPool);
     return {
-      config, database, auth, places: createPlaceLookupProvider(config.PROVIDER_MODE),
+      config, database, auth, places: dependencies.places ?? createPlaceLookupProvider(config.PROVIDER_MODE),
+      planningProviders: dependencies.planningProviders ?? createPlanningProviders(config.PROVIDER_MODE),
       shutdown(): Promise<void> {
         shutdownPromise ??= Promise.allSettled([database.destroy(), authPool.end()]).then((results) => {
           const failures = results.filter((result) => result.status === "rejected");

@@ -94,7 +94,7 @@ jobs:
         env:
           PGPASSWORD: synthetic-admin
         run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f infra/postgres/test-roles.sql
-      - name: Verify foundation and initial trip transactions and migration compatibility
+      - name: Verify foundation, durable estimate callbacks and explicit acceptance transactions
         run: pnpm --dir web test:foundation
 
   agent:
@@ -116,7 +116,7 @@ jobs:
       - name: Lint agent
         run: uv run --project agent ruff check agent
       - name: Type-check agent
-        run: uv run --project agent pyright agent/src agent/tests
+        run: uv run --project agent pyright --project agent
       - name: Test agent
         run: uv run --project agent pytest agent/tests
 
@@ -153,7 +153,9 @@ jobs:
       - name: Install locked Node.js dependencies
         run: pnpm install --frozen-lockfile
       - name: Validate contract references and drift
-        run: node scripts/validate-contracts.mjs
+        run: |
+          pnpm --dir web agent:contracts:check
+          node scripts/validate-contracts.mjs
       - name: Test web contracts
         if: steps.suites.outputs.web == 'true'
         run: pnpm --filter @onholidai/web test:contracts
@@ -172,7 +174,9 @@ jobs:
         run: uv sync --project agent --frozen
       - name: Test agent contracts
         if: steps.suites.outputs.agent == 'true'
-        run: uv run --project agent pytest agent/tests/contract
+        run: |
+          uv run --project agent python agent/scripts/export_contracts.py --check
+          uv run --project agent pytest agent/tests/contract
 
   later-suites:
     name: ${{ matrix.name }}

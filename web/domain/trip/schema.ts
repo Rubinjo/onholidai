@@ -29,7 +29,7 @@ function isIanaTimezone(value: string): boolean {
 function isIsoCurrency(value: string): boolean {
   try {
     new Intl.NumberFormat("en", { currency: value, style: "currency" }).format(0);
-    return true;
+    return Intl.supportedValuesOf("currency").includes(value);
   } catch {
     return false;
   }
@@ -631,7 +631,7 @@ export const tripSchema = z
 export const draftOperationSchema = z
   .object({
     operation: z.enum(["add", "replace", "remove", "reorder"]),
-    target: z.string().regex(/^\/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components|price|warnings)(\/.*)?$/),
+    target: z.string().regex(/^\/((departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components|price|warnings)(\/.*)?)?$/),
     value: z.unknown(),
   })
   .strict();

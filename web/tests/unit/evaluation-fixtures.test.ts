@@ -48,6 +48,14 @@ async function readCorpus(): Promise<EvaluationCorpus> {
 }
 
 describe("evaluation policy v1 fixtures", () => {
+  it("has executable US1 snapshots and a 30-second oracle, not arbitrary expected labels", async () => {
+    const raw: unknown = JSON.parse(await readFile(corpusPath, "utf8"));
+    const corpus = raw as { estimates: { input: { snapshot: unknown }; expected: { timeLimitSeconds: number } }[] };
+    for (const entry of corpus.estimates) {
+      expect(tripSnapshotSchema.safeParse(entry.input.snapshot).success).toBe(true);
+      expect(entry.expected.timeLimitSeconds).toBe(30);
+    }
+  });
   it("keeps byte-identical corpora with a reproducible payload hash", async () => {
     const webCorpus = await readFile(corpusPath, "utf8");
     const agentCorpus = await readFile(agentCorpusPath, "utf8");
@@ -59,7 +67,7 @@ describe("evaluation policy v1 fixtures", () => {
 
     expect(webCorpus).toBe(agentCorpus);
     expect(corpus.metadata).toMatchObject({
-      corpusVersion: "1.0.0",
+      corpusVersion: "1.1.0",
       policyVersion: "1",
       seed: "onholidai-evaluation-v1-seed-20261011",
       corpusHash: hash,

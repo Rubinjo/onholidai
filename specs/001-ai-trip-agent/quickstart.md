@@ -42,6 +42,8 @@ Each story runs its implemented suites and the applicable foundation/compatibili
 
 ## Scenario 1: Create an Initial Estimate
 
+US1 now runs without a booking worker. After provisioning secrets and applying migration 005, use infrastructure, migrations and applications profiles only. Agent receives the shared service secret and WEB_BASE_URL; the independent diagnostic key stays web-only. Keep browser origin equal to BETTER_AUTH_URL. For automated browser checks, provide US1_STORAGE_STATE for a synthetic account and optionally PLAYWRIGHT_BASE_URL (default http://localhost:3000). See [US1 evidence](./evidence/us1.md) for executed checks and open acceptance gates.
+
 1. Open the trip setup using only the keyboard.
 2. Confirm Amsterdam, Netherlands, Europe/Amsterdam as departure origin, with return to that origin; add Japan and South Korea through search, then Tokyo, Kyoto, and Seoul.
 3. Add two availability windows and mark one preferred and one flexible.
@@ -174,6 +176,8 @@ Expected:
 ## Scenario 9: Contract and Failure Compatibility
 
 Run contract and migration compatibility suites:
+
+To intentionally refresh agent contracts after model changes, run `uv run --project agent python agent/scripts/export_contracts.py` followed by `pnpm --dir web agent:contracts`, review the source/promoted schemas and TypeScript/Zod diff, then run `pnpm test:contracts`. Normal validation uses check mode and does not rewrite reviewed artifacts.
 
 ```bash
 pnpm test:contracts

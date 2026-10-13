@@ -1,0 +1,65 @@
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import cast
+
+import pytest
+from pydantic import BaseModel, ValidationError
+
+from onholidai_agent.models.api import AgentEvent, CreateAgentRunRequest, PersistAgentResultRequest
+from onholidai_agent.models.contracts import exported_files
+from onholidai_agent.models.tools import ToolCall
+
+ROOT = Path(__file__).resolve().parents[3]
+MODELS: dict[str, type[BaseModel]] = {
+    "AgentEvent": AgentEvent,
+    "CreateAgentRunRequest": CreateAgentRunRequest,
+    "PersistAgentResultRequest": PersistAgentResultRequest,
+    "ToolCall": ToolCall,
+}
+
+
+def test_shared_wire_cases_match_pydantic_acceptance() -> None:
+    document = json.loads(
+        (ROOT / "contracts/agent-api/validation-cases.json").read_text(encoding="utf-8")
+    )
+    for case in cast(list[dict[str, object]], document["cases"]):
+        model = MODELS[str(case["model"])]
+        if case["valid"]:
+            model.model_validate(case["value"])
+        else:
+            with pytest.raises(ValidationError):
+                model.model_validate(case["value"])
+
+
+def test_committed_contracts_match_authoritative_models() -> None:
+    for path, expected in exported_files(ROOT).items():
+        assert path.read_text(encoding="utf-8") == expected, f"Contract drift: {path.name}"
+
+
+def test_export_check_detects_reviewed_artifact_edits(tmp_path: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "agent/scripts/export_contracts.py"),
+        "--output-root",
+        str(tmp_path),
+    ]
+    environment = {**os.environ, "PYTHONPATH": str(ROOT / "agent/src")}
+    assert (
+        subprocess.run(command, env=environment, capture_output=True, check=False).returncode == 0
+    )
+    assert (
+        subprocess.run(
+            [*command, "--check"], env=environment, capture_output=True, check=False
+        ).returncode
+        == 0
+    )
+    artifact = tmp_path / "contracts/agent-api/openapi.yaml"
+    artifact.write_text(artifact.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    result = subprocess.run(
+        [*command, "--check"], env=environment, capture_output=True, check=False
+    )
+    assert result.returncode == 1
+    assert b"Agent contract drift" in result.stderr

@@ -15,6 +15,8 @@
     "test:e2e": "playwright test --pass-with-no-tests",
     "snapshot:contract": "node --experimental-strip-types scripts/generate-snapshot-contract.mjs",
     "snapshot:contract:check": "node --experimental-strip-types scripts/generate-snapshot-contract.mjs --check",
+    "agent:contracts": "node --experimental-strip-types scripts/generate-agent-contracts.ts",
+    "agent:contracts:check": "node --experimental-strip-types scripts/generate-agent-contracts.ts --check",
     "corpus:generate": "node scripts/generate-evaluation-corpus.mjs",
     "corpus:check": "node scripts/generate-evaluation-corpus.mjs --check",
     "db:migrate:test": "vitest run tests/integration/migration-compatibility.test.ts --passWithNoTests",

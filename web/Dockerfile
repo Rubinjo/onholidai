@@ -12,11 +12,12 @@ FROM base AS dependencies
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY web/package.json web/package.json
-RUN pnpm install --frozen-lockfile --filter @onholidai/web...
+RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build
 
 COPY web web
+COPY contracts contracts
 RUN DATABASE_URL=postgresql://build:build@localhost:5432/build \
     BETTER_AUTH_URL=http://localhost:3000 \
     BETTER_AUTH_SECRET=build-only-auth-secret-0000000000000000 \

@@ -1,0 +1,209 @@
+import { createHash, randomUUID } from "node:crypto";
+import type { Kysely, Transaction } from "kysely";
+import { z } from "zod";
+import { AgentEventSchema, AgentPersistenceReceiptSchema, AgentRunSchema,
+  AnswerClarificationRequestSchema, PersistAgentEventRequestSchema, PersistAgentResultRequestSchema } from "../../../contracts/agent-api/generated.zod";
+import type { AgentEvent, AgentRun } from "../../../contracts/agent-api/generated";
+import { canonicalJson } from "@/domain/trip/commit";
+import type { Database } from "@/server/db/database";
+import type { AgentRunTable } from "@/server/db/types";
+import type { Selectable } from "kysely";
+import { ProblemError } from "@/server/errors";
+import type { ServiceTokenContext } from "./credentials";
+
+export const reserveRunSchema = z.object({ userId: z.uuid(), tripId: z.uuid(), requestId: z.uuid(),
+  baseTripVersion: z.number().int().positive(), purpose: z.literal("initial_estimate"),
+  message: z.string().trim().min(1).max(12000) }).strict();
+export function runConflict(): never { throw new ProblemError({ title: "Run state conflict", status: 409, code: "run_conflict" }); }
+export function fingerprint(value: unknown): string { return createHash("sha256").update(canonicalJson(value)).digest("hex"); }
+const lease = (now: Date) => new Date(now.getTime() + 90_000);
+export function runContext(run: AgentRun & { ownerUserId: string }): ServiceTokenContext {
+  return { userId: run.ownerUserId, tripId: run.tripId, requestId: run.requestId, baseTripVersion: run.baseTripVersion };
+}
+function envelope(row: Selectable<AgentRunTable>): AgentRun & { ownerUserId: string } {
+  return { ...AgentRunSchema.parse({ id: row.id, requestId: row.requestId, tripId: row.tripId,
+    conversationId: row.conversationId, baseTripVersion: row.baseTripVersion, purpose: row.purpose,
+    status: row.status, result: row.result, nextEventCursor: row.eventCursor,
+    leaseExpiresAt: row.leaseExpiresAt?.toISOString() ?? null,
+    lastDurableProgressAt: row.lastDurableProgressAt?.toISOString() ?? null,
+    interruptionReason: row.errorCategory === "interrupted" ? "lease_expired" : null,
+    createdAt: row.startedAt.toISOString(), completedAt: row.completedAt?.toISOString() ?? null }), ownerUserId: row.ownerUserId };
+}
+export class RunRepository {
+  constructor(private readonly database: Kysely<Database>, private readonly now: () => Date = () => new Date()) {}
+  private async lock(transaction: Transaction<Database>, userId: string, runId: string) {
+    const run = await transaction.selectFrom("agentRuns").innerJoin("trips", "trips.id", "agentRuns.tripId")
+      .selectAll("agentRuns").where("agentRuns.id", "=", runId).where("trips.ownerUserId", "=", userId)
+      .where("agentRuns.ownerUserId", "=", userId).forUpdate("agentRuns").executeTakeFirst();
+    if (!run) throw new ProblemError({ title: "Run not found", status: 404, code: "run_not_found" });
+    return run;
+  }
+  private bind(run: Pick<Selectable<AgentRunTable>, "ownerUserId" | "tripId" | "requestId" | "baseTripVersion">, context: ServiceTokenContext) {
+    if (run.ownerUserId !== context.userId || run.tripId !== context.tripId || run.requestId !== context.requestId
+      || run.baseTripVersion !== context.baseTripVersion) runConflict();
+  }
+  private async interrupt(transaction: Transaction<Database>, row: Selectable<AgentRunTable>) {
+    if (["queued", "running"].includes(row.status) && row.leaseExpiresAt && row.leaseExpiresAt <= this.now()) {
+      const cursor = row.eventCursor + 1;
+      const event = AgentEventSchema.parse({ version: "1", runId: row.id, cursor, occurredAt: this.now().toISOString(),
+        type: "failed", status: "failed", safeErrorCode: "lease_expired" });
+      await transaction.insertInto("agentRunEvents").values({ runId: row.id, cursor, fingerprint: fingerprint(event),
+        event: { ...event }, receipt: { runId: row.id, requestId: row.requestId, acceptedCursor: cursor, resultRecorded: true } }).execute();
+      const updated = await transaction.updateTable("agentRuns").set({ status: "failed", errorCategory: "interrupted",
+        eventCursor: cursor, leaseExpiresAt: null, completedAt: this.now(), result: null }).where("id", "=", row.id).returningAll().executeTakeFirstOrThrow();
+      await transaction.insertInto("auditEvents").values({ id: randomUUID(), actorType: "system", actorId: "run-lease-monitor",
+        action: "estimate.run.result", targetType: "agent_run", targetId: row.id, requestId: row.requestId, traceId: null,
+        outcome: "failed", metadata: { durationMs: Number(row.activeElapsedMs) + Math.max(0, this.now().getTime() - row.phaseStartedAt.getTime()),
+          resultKind: "failed", errorCategory: "interrupted" } }).execute();
+      return updated;
+    }
+    return row;
+  }
+  async reserve(raw: unknown) {
+    const input = reserveRunSchema.parse(raw), hash = fingerprint(input), now = this.now();
+    return this.database.transaction().execute(async (transaction) => {
+      const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", input.tripId)
+        .where("ownerUserId", "=", input.userId).forUpdate().executeTakeFirst();
+      if (!trip) throw new ProblemError({ title: "Trip not found", status: 404, code: "trip_not_found" });
+      const previous = await transaction.selectFrom("agentRuns").selectAll().where("ownerUserId", "=", input.userId)
+        .where("requestId", "=", input.requestId).executeTakeFirst();
+      if (previous) {
+        if (previous.requestFingerprint !== hash) runConflict();
+        return envelope(await this.interrupt(transaction, await this.lock(transaction, input.userId, previous.id)));
+      }
+      if (trip.currentVersion !== input.baseTripVersion || trip.lifecycleState !== "draft") runConflict();
+      const conversationId = randomUUID(), id = randomUUID();
+      await transaction.insertInto("conversations").values({ id: conversationId, tripId: input.tripId,
+        ownerUserId: input.userId, retentionExpiresAt: new Date(now.getTime() + 90 * 86400000) }).execute();
+      const row = await transaction.insertInto("agentRuns").values({ id, tripId: input.tripId, conversationId,
+        ownerUserId: input.userId, requestId: input.requestId, baseTripVersion: input.baseTripVersion,
+        purpose: input.purpose, requestFingerprint: hash, leaseExpiresAt: lease(now), startedAt: now, phaseStartedAt: now,
+        completedAt: null, errorCategory: null, result: null, lastDurableProgressAt: null,
+        resultFingerprint: null, resultCursor: null }).returningAll().executeTakeFirstOrThrow();
+      // Persist typed metadata, not raw personal free text; the request remains bounded and ephemeral.
+      await transaction.insertInto("conversationMessages").values({ id: randomUUID(), conversationId, role: "user",
+        content: { kind: "research_request", purpose: input.purpose }, tripVersion: input.baseTripVersion,
+        agentRunId: id, retentionExpiresAt: new Date(now.getTime() + 90 * 86400000) }).execute();
+      return envelope(row);
+    });
+  }
+  async read(userId: string, runId: string) {
+    return this.database.transaction().execute(async (transaction) => envelope(await this.interrupt(transaction, await this.lock(transaction, userId, runId))));
+  }
+  async readScoped(context: ServiceTokenContext, runId: string) {
+    return this.database.transaction().execute(async (transaction) => {
+      const row = await this.lock(transaction, context.userId, runId); this.bind(row, context);
+      return envelope(await this.interrupt(transaction, row));
+    });
+  }
+  async validateDispatch(context: ServiceTokenContext, runId: string, raw: unknown) {
+    const { CreateAgentRunRequestSchema } = await import("../../../contracts/agent-api/generated.zod");
+    const input = CreateAgentRunRequestSchema.parse(raw);
+    return this.database.transaction().execute(async (transaction) => {
+      const row = await this.lock(transaction, context.userId, runId); this.bind(row, context);
+      if (row.conversationId !== input.conversationId || row.requestFingerprint !== fingerprint({
+        userId: input.actor.userId, tripId: input.actor.tripId, requestId: input.requestId,
+        baseTripVersion: input.actor.baseTripVersion, purpose: input.purpose, message: input.message })) runConflict();
+      const hash = fingerprint(input);
+      if (row.dispatchFingerprint && row.dispatchFingerprint !== hash) runConflict();
+      if (!row.dispatchFingerprint) await transaction.updateTable("agentRuns").set({ dispatchFingerprint: hash }).where("id", "=", runId).execute();
+      return { accepted: true };
+    });
+  }
+  async event(context: ServiceTokenContext, runId: string, cursor: number, raw: unknown) {
+    const input = PersistAgentEventRequestSchema.parse(raw);
+    this.bind({ ownerUserId: input.userId, tripId: input.tripId, requestId: input.requestId,
+      baseTripVersion: input.baseTripVersion }, context);
+    if (input.event.runId !== runId || input.event.cursor !== cursor) runConflict();
+    const hash = fingerprint(input);
+    return this.database.transaction().execute(async (transaction) => {
+      const row = await this.lock(transaction, context.userId, runId); this.bind(row, context);
+      const existing = await transaction.selectFrom("agentRunEvents").selectAll().where("runId", "=", runId).where("cursor", "=", cursor).executeTakeFirst();
+      if (existing) { if (existing.fingerprint !== hash) runConflict(); return AgentPersistenceReceiptSchema.parse(existing.receipt); }
+      if (!["queued", "running"].includes(row.status) || !row.leaseExpiresAt || row.leaseExpiresAt <= this.now()
+        || cursor !== row.eventCursor + 1) runConflict();
+      if (input.event.type === "proposal" && input.event.proposal.purpose !== row.purpose) runConflict();
+      const receipt = { runId, requestId: context.requestId, acceptedCursor: cursor, resultRecorded: false };
+      await transaction.insertInto("agentRunEvents").values({ runId, cursor, fingerprint: hash,
+        event: { ...input.event }, receipt }).execute();
+      if (input.event.type === "progress" && !row.lastDurableProgressAt) {
+        await transaction.insertInto("auditEvents").values({ id: randomUUID(), actorType: "service", actorId: context.userId,
+          action: "estimate.run.first_progress", targetType: "agent_run", targetId: runId, requestId: context.requestId,
+          traceId: null, outcome: "succeeded", metadata: { durationMs: Math.max(0, this.now().getTime() - row.startedAt.getTime()) } }).execute();
+      }
+      await transaction.updateTable("agentRuns").set({ eventCursor: cursor, status: "running",
+        leaseExpiresAt: lease(this.now()), lastDurableProgressAt: this.now() }).where("id", "=", runId).execute();
+      return receipt;
+    });
+  }
+  async result(context: ServiceTokenContext, runId: string, raw: unknown) {
+    const input = PersistAgentResultRequestSchema.parse(raw), hash = fingerprint(input);
+    if (input.userId !== context.userId || input.tripId !== context.tripId || input.requestId !== context.requestId
+      || input.baseTripVersion !== context.baseTripVersion) runConflict();
+    return this.database.transaction().execute(async (transaction) => {
+      const row = await this.lock(transaction, context.userId, runId); this.bind(row, context);
+      const receipt = { runId, requestId: context.requestId, acceptedCursor: input.eventCursor, resultRecorded: true };
+      if (row.resultFingerprint === hash && row.resultCursor === input.eventCursor) return receipt;
+      if (!["queued", "running"].includes(row.status) || !row.leaseExpiresAt || row.leaseExpiresAt <= this.now()
+        || row.eventCursor !== input.eventCursor) runConflict();
+      const stored = await transaction.selectFrom("agentRunEvents").select("event").where("runId", "=", runId)
+        .where("cursor", "=", input.eventCursor).executeTakeFirst();
+      if (!stored) runConflict();
+      const event = AgentEventSchema.parse(stored.event);
+      if (input.status === "proposed") {
+        if (event.type !== "proposal" || input.result?.kind !== "proposal"
+          || canonicalJson(event.proposal) !== canonicalJson(input.result.proposal) || event.proposal.purpose !== row.purpose) runConflict();
+        const proposal = await transaction.selectFrom("changeProposals").select("id").where("id", "=", event.proposal.id)
+          .where("agentRunId", "=", runId).executeTakeFirst();
+        if (!proposal) runConflict();
+      } else if (input.status === "awaiting_clarification") {
+        if (event.type !== "clarification" || input.result?.kind !== "clarification"
+          || canonicalJson(event.clarification) !== canonicalJson(input.result.clarification)) runConflict();
+      } else if (event.type !== input.status || (input.status === "completed" && row.purpose === "initial_estimate")) runConflict();
+      await transaction.updateTable("agentRuns").set({ status: input.status, result: input.result ? { ...input.result } : null,
+        activeElapsedMs: Number(row.activeElapsedMs) + Math.max(0, this.now().getTime() - row.phaseStartedAt.getTime()),
+        phaseStartedAt: this.now(),
+        resultFingerprint: hash, resultCursor: input.eventCursor, leaseExpiresAt: null,
+        completedAt: input.status === "awaiting_clarification" ? null : this.now(),
+        errorCategory: input.status === "failed" ? event.type === "failed" && event.safeErrorCode === "estimate_deadline"
+          ? "deadline" : event.type === "failed" && event.safeErrorCode === "source_unavailable"
+          ? "source_unavailable" : "invalid_result" : null }).where("id", "=", runId).execute();
+      await transaction.insertInto("conversationMessages").values({ id: randomUUID(), conversationId: row.conversationId,
+        role: "assistant", tripVersion: row.baseTripVersion, agentRunId: row.id, content: { kind: input.status },
+        retentionExpiresAt: new Date(this.now().getTime() + 90 * 86400000) }).execute();
+      const constraints = await transaction.selectFrom("tripVersions").select("snapshot").where("tripId", "=", row.tripId)
+        .where("version", "=", row.baseTripVersion).executeTakeFirstOrThrow();
+      const requiredCount = constraints.snapshot.constraints.filter((constraint) => constraint.priority === "required" && constraint.status !== "removed").length;
+      await transaction.insertInto("auditEvents").values({ id: randomUUID(), actorType: "service", actorId: context.userId,
+        action: "estimate.run.result", targetType: "agent_run", targetId: runId, requestId: context.requestId, traceId: null,
+        outcome: input.status === "failed" ? "failed" : "succeeded", metadata: {
+          durationMs: Number(row.activeElapsedMs) + Math.max(0, this.now().getTime() - row.phaseStartedAt.getTime()),
+          resultKind: input.status, requiredCount, accountedCount: input.status === "proposed" ? requiredCount : 0 } }).execute();
+      return receipt;
+    });
+  }
+  async events(userId: string, runId: string, after: number): Promise<AgentEvent[]> {
+    z.number().int().nonnegative().parse(after); await this.read(userId, runId);
+    const rows = await this.database.selectFrom("agentRunEvents").select("event").where("runId", "=", runId)
+      .where("cursor", ">", after).orderBy("cursor").limit(256).execute();
+    return rows.map((row) => AgentEventSchema.parse(row.event));
+  }
+  async resume(userId: string, runId: string, raw: unknown) {
+    const input = AnswerClarificationRequestSchema.parse(raw), hash = fingerprint(input);
+    return this.database.transaction().execute(async (transaction) => {
+      const row = await this.lock(transaction, userId, runId);
+      const previous = await transaction.selectFrom("agentRunResumes").selectAll().where("runId", "=", runId)
+        .where("questionId", "=", input.questionId).executeTakeFirst();
+      if (previous) { if (previous.fingerprint !== hash) runConflict(); return { run: envelope(row), replayed: true }; }
+      const result = row.result;
+      const trip = await transaction.selectFrom("trips").select("currentVersion").where("id", "=", row.tripId).executeTakeFirstOrThrow();
+      const clarification = result?.clarification as Record<string, unknown> | undefined;
+      if (row.status !== "awaiting_clarification" || clarification?.id !== input.questionId || trip.currentVersion !== row.baseTripVersion) runConflict();
+      await transaction.insertInto("agentRunResumes").values({ runId, questionId: input.questionId, requestId: input.requestId, fingerprint: hash, eventCursor: row.eventCursor }).execute();
+      const updated = await transaction.updateTable("agentRuns").set({ status: "running", result: null, resultFingerprint: null,
+        phaseStartedAt: this.now(),
+        resultCursor: null, leaseExpiresAt: lease(this.now()), completedAt: null }).where("id", "=", runId).returningAll().executeTakeFirstOrThrow();
+      return { run: envelope(updated), replayed: false };
+    });
+  }
+}

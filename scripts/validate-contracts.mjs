@@ -48,7 +48,7 @@ for (const [document, api] of [
   }
 }
 
-const read = (file) => readFile(file, "utf8");
+const read = async (file) => (await readFile(file, "utf8")).replaceAll("\r\n", "\n");
 const [sourceAgentText, promotedAgentText] = await Promise.all([
   read(sourceAgent),
   read(promotedAgent),
@@ -153,9 +153,11 @@ for (const field of [
   );
 }
 
-function checkClosedComposition(value, location = "contract") {
+function checkClosedComposition(value, location = "contract", visited = new WeakSet()) {
+  if (!value || typeof value !== "object" || visited.has(value)) return;
+  visited.add(value);
   if (Array.isArray(value)) {
-    value.forEach((item, index) => checkClosedComposition(item, `${location}[${index}]`));
+    value.forEach((item, index) => checkClosedComposition(item, `${location}[${index}]`, visited));
     return;
   }
   if (!value || typeof value !== "object") return;
@@ -174,7 +176,7 @@ function checkClosedComposition(value, location = "contract") {
   }
 
   for (const [key, child] of Object.entries(value)) {
-    checkClosedComposition(child, `${location}.${key}`);
+    checkClosedComposition(child, `${location}.${key}`, visited);
   }
 }
 

@@ -223,3 +223,12 @@ summary {
     transition-duration: 0.01ms !important;
   }
 }
+/* Planning controls remain readable at zoom and do not depend on colour or maps. */
+.planning-page { max-width: 64rem; margin: 2rem auto; padding: 1rem; }
+.planning-page fieldset { margin: 1rem 0; padding: 1rem; border: 1px solid currentColor; }
+.planning-page label { display: flex; flex-direction: column; gap: .4rem; margin: .8rem 0; }
+.planning-page input, .planning-page textarea, .planning-page select, .planning-page button { font: inherit; padding: .65rem; max-width: 100%; }
+.planning-page button { margin: .3rem; min-height: 44px; }
+.planning-page li { margin: .7rem 0; overflow-wrap: anywhere; }
+.planning-page input[type="range"] { min-height: 44px; }
+.map-label { background: white; color: #111; border: 1px solid #111; padding: .25rem; }

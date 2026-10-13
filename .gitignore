@@ -24,3 +24,6 @@ Thumbs.db
 .idea/
 
 .next/
+*.tsbuildinfo
+playwright-report/
+test-results/

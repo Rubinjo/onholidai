@@ -3,10 +3,11 @@ import { z } from "zod";
 import { decodeTripSnapshot, publicTripPriceSchema, tripSnapshotSchema, type TripSnapshot, type LegacyTripSnapshot } from "../trip/schema";
 
 type Component = TripSnapshot["components"][number];
+type PublicComponent<Value = Component> = Value extends Component ? Omit<Value, "price"> & { price: PublicPrice } : never;
 export type PublicPrice = z.infer<typeof publicTripPriceSchema>;
 export type CustomerSnapshot = Omit<TripSnapshot, "components" | "price" | "departureOrigin"> & {
   departureOrigin: TripSnapshot["departureOrigin"] | null;
-  components: (Omit<Component, "price"> & { price: PublicPrice })[];
+  components: PublicComponent[];
   price: PublicPrice;
 };
 
@@ -20,7 +21,7 @@ function projectValidatedSnapshot(snapshot: TripSnapshot | LegacyTripSnapshot, n
       status: component.price.status !== "confirmed" && component.price.expiresAt !== null
         && Date.parse(component.price.expiresAt) <= now.getTime() ? "expired" : component.price.status,
       checkedAt: component.price.checkedAt, expiresAt: component.price.expiresAt }),
-  }));
+  })) as PublicComponent[];
   const conversionWarnings = snapshot.price.conversionDisclosures.map((conversion) => ({
     code: "currency_conversion", severity: "info" as const, relatedIds: [],
     message: `Converted ${conversion.fromCurrency} to ${conversion.toCurrency} at ${conversion.rate} (${conversion.source}, ${conversion.quotedAt}).`,

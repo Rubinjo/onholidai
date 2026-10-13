@@ -6,6 +6,7 @@ import { changeProposalSchema, type ChangeProposal } from "@/domain/trip/proposa
 import { canonicalJson, TripVersionConflictError } from "@/domain/trip/commit";
 import type { ServiceTokenContext } from "@/server/agent-client/credentials";
 import type { Database } from "@/server/db/database";
+import { inTransaction } from "@/server/db/transaction";
 import { ProblemError } from "@/server/errors";
 
 function conflict(): never {
@@ -20,7 +21,7 @@ export class ProposalRepository {
     if (proposal.tripId !== context.tripId || proposal.initiatingRequestId !== context.requestId
       || proposal.baseTripVersion !== context.baseTripVersion || proposal.status !== "proposed") conflict();
     const fingerprint = createHash("sha256").update(canonicalJson(proposal)).digest("hex");
-    return this.database.transaction().execute(async (transaction) => {
+    return inTransaction(this.database, async (transaction) => {
       const trip = await transaction.selectFrom("trips").select(["ownerUserId", "currentVersion"])
         .where("id", "=", context.tripId).forUpdate().executeTakeFirst();
       if (!trip || trip.ownerUserId !== context.userId) {
