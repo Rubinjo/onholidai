@@ -10,9 +10,10 @@ import type { AgentRunTable } from "@/server/db/types";
 import type { Selectable } from "kysely";
 import { ProblemError } from "@/server/errors";
 import type { ServiceTokenContext } from "./credentials";
+import { redactConversation } from "@/server/db/conversation-repository";
 
 export const reserveRunSchema = z.object({ userId: z.uuid(), tripId: z.uuid(), requestId: z.uuid(),
-  baseTripVersion: z.number().int().positive(), purpose: z.literal("initial_estimate"),
+  baseTripVersion: z.number().int().positive(), purpose: z.enum(["initial_estimate", "refinement"]),
   message: z.string().trim().min(1).max(12000) }).strict();
 export function runConflict(): never { throw new ProblemError({ title: "Run state conflict", status: 409, code: "run_conflict" }); }
 export function fingerprint(value: unknown): string { return createHash("sha256").update(canonicalJson(value)).digest("hex"); }
@@ -72,8 +73,9 @@ export class RunRepository {
         return envelope(await this.interrupt(transaction, await this.lock(transaction, input.userId, previous.id)));
       }
       if (trip.currentVersion !== input.baseTripVersion || trip.lifecycleState !== "draft") runConflict();
-      const conversationId = randomUUID(), id = randomUUID();
-      await transaction.insertInto("conversations").values({ id: conversationId, tripId: input.tripId,
+      const conversation = await transaction.selectFrom("conversations").select("id").where("tripId", "=", input.tripId).where("ownerUserId", "=", input.userId).orderBy("createdAt", "desc").executeTakeFirst();
+      const conversationId = conversation?.id ?? randomUUID(), id = randomUUID();
+      if (!conversation) await transaction.insertInto("conversations").values({ id: conversationId, tripId: input.tripId,
         ownerUserId: input.userId, retentionExpiresAt: new Date(now.getTime() + 90 * 86400000) }).execute();
       const row = await transaction.insertInto("agentRuns").values({ id, tripId: input.tripId, conversationId,
         ownerUserId: input.userId, requestId: input.requestId, baseTripVersion: input.baseTripVersion,
@@ -82,7 +84,7 @@ export class RunRepository {
         resultFingerprint: null, resultCursor: null }).returningAll().executeTakeFirstOrThrow();
       // Persist typed metadata, not raw personal free text; the request remains bounded and ephemeral.
       await transaction.insertInto("conversationMessages").values({ id: randomUUID(), conversationId, role: "user",
-        content: { kind: "research_request", purpose: input.purpose }, tripVersion: input.baseTripVersion,
+        content: { kind: "research_request", purpose: input.purpose, text: redactConversation(input.message) }, tripVersion: input.baseTripVersion,
         agentRunId: id, retentionExpiresAt: new Date(now.getTime() + 90 * 86400000) }).execute();
       return envelope(row);
     });
@@ -106,7 +108,7 @@ export class RunRepository {
         baseTripVersion: input.actor.baseTripVersion, purpose: input.purpose, message: input.message })) runConflict();
       const hash = fingerprint(input);
       if (row.dispatchFingerprint && row.dispatchFingerprint !== hash) runConflict();
-      if (!row.dispatchFingerprint) await transaction.updateTable("agentRuns").set({ dispatchFingerprint: hash }).where("id", "=", runId).execute();
+      if (!row.dispatchFingerprint) await transaction.updateTable("agentRuns").set({ dispatchFingerprint: hash, dispatchRequest: { ...input, message: redactConversation(input.message) } }).where("id", "=", runId).execute();
       return { accepted: true };
     });
   }
@@ -169,7 +171,7 @@ export class RunRepository {
           ? "deadline" : event.type === "failed" && event.safeErrorCode === "source_unavailable"
           ? "source_unavailable" : "invalid_result" : null }).where("id", "=", runId).execute();
       await transaction.insertInto("conversationMessages").values({ id: randomUUID(), conversationId: row.conversationId,
-        role: "assistant", tripVersion: row.baseTripVersion, agentRunId: row.id, content: { kind: input.status },
+        role: "assistant", tripVersion: row.baseTripVersion, agentRunId: row.id, content: { kind: input.status, text: redactConversation(input.result?.kind === "proposal" ? input.result.proposal.rationale : input.result?.kind === "clarification" ? input.result.clarification.question : input.result?.message ?? input.status) },
         retentionExpiresAt: new Date(this.now().getTime() + 90 * 86400000) }).execute();
       const constraints = await transaction.selectFrom("tripVersions").select("snapshot").where("tripId", "=", row.tripId)
         .where("version", "=", row.baseTripVersion).executeTakeFirstOrThrow();

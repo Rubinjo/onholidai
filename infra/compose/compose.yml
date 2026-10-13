@@ -151,6 +151,14 @@ services:
       PROVIDER_MODE: deterministic
       ENVIRONMENT: production
       WEB_BASE_URL: http://web:3000
+      NEBIUS_BASE_URL: ${NEBIUS_BASE_URL:-https://api.tokenfactory.nebius.com/v1}
+      NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
+      NEBIUS_MODEL: ${NEBIUS_MODEL:-synthetic-model}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://eu.api.smith.langchain.com}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_AGENT_ID: ${LANGSMITH_AGENT_ID:-onholidai}
+      LANGSMITH_AGENT_ENVIRONMENT: ${LANGSMITH_AGENT_ENVIRONMENT:-local}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     secrets:
       - service_token_secret

@@ -16,8 +16,8 @@ test("@us1 research requires explicit acceptance and survives reload", async ({ 
   await expect(page.getByRole("heading", { name: "Proposed estimate" })).toBeVisible({ timeout: 35000 });
   await expect(page.getByText("Nothing has been applied yet.")).toBeVisible();
   await page.getByRole("button", { name: "Accept this estimated draft" }).click();
-  await expect(page.getByRole("heading", { name: "Accepted estimated draft" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Accepted estimated draft" })).toBeVisible();
-  await expect(page.getByText(/Booking is not available/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Booking unavailable" })).toBeDisabled();
 });

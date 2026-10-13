@@ -58,6 +58,27 @@ class WebRunStore:
             "x-base-trip-version": str(context.base_trip_version),
         }
 
+    async def dispatched_request(
+        self, request: CreateAgentRunRequest, run_id: str
+    ) -> CreateAgentRunRequest:
+        response = await self.client.get(
+            f"/api/v1/internal/agent-runs/{run_id}/dispatch",
+            headers=self.headers(request, "run:write"),
+        )
+        response.raise_for_status()
+        return CreateAgentRunRequest.model_validate(response.json())
+
+    async def retrieve_context(
+        self, request: CreateAgentRunRequest, query: dict[str, object]
+    ) -> dict[str, object]:
+        response = await self.client.post(
+            "/api/v1/internal/context/search",
+            json=query,
+            headers=self.headers(request, "context:read"),
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
     async def validate_dispatch(self, request: CreateAgentRunRequest, run_id: str) -> None:
         response = await self.client.post(
             f"/api/v1/internal/agent-runs/{run_id}/validate",

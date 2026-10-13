@@ -232,3 +232,8 @@ summary {
 .planning-page li { margin: .7rem 0; overflow-wrap: anywhere; }
 .planning-page input[type="range"] { min-height: 44px; }
 .map-label { background: white; color: #111; border: 1px solid #111; padding: .25rem; }
+.planning-workspace { max-width: 100%; }
+.trip-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+.trip-workspace > * { min-width: 0; overflow-wrap: anywhere; }
+.trip-price-bar { position: sticky; bottom: 0; padding: 1rem; background: var(--background, white); border: 2px solid currentColor; z-index: 2; }
+@media (max-width: 70rem) { .trip-workspace { grid-template-columns: minmax(0, 1fr); } .trip-price-bar { position: static; } }

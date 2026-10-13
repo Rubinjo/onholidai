@@ -60,11 +60,16 @@ export const changeProposalSchema = z.object({
   status: z.enum(["proposed", "needs_clarification", "accepted", "applied", "rejected", "stale"]),
   createdAt: z.iso.datetime(), expiresAt: z.iso.datetime(),
   previewSnapshot: customerSnapshotSchema.optional(),
+  priceImpact: z.object({ currency: z.string().regex(/^[A-Z]{3}$/), beforeMinor: z.number().int().nonnegative(), afterMinor: z.number().int().nonnegative(), deltaMinor: z.number().int() }).strict().optional(),
+  scheduleImpact: z.object({ before: z.array(z.object({ id: z.uuid(), nights: z.number().int().nonnegative(), arrivalDate: z.iso.date().nullable(), departureDate: z.iso.date().nullable() }).strict()).max(8), after: z.array(z.object({ id: z.uuid(), nights: z.number().int().nonnegative(), arrivalDate: z.iso.date().nullable(), departureDate: z.iso.date().nullable() }).strict()).max(8) }).strict().optional(),
   estimatedCostRange: z.object({ currency: z.string().regex(/^[A-Z]{3}$/),
     minimumMinor: z.number().int().nonnegative(), maximumMinor: z.number().int().nonnegative() }).strict().optional(),
   styleCompatibility: text(2000).optional(), constraintSummary: z.array(text(1000)).max(64).optional(),
   warnings: z.array(text(1000)).max(64).optional(),
 }).strict().superRefine((proposal, context) => {
+  if (proposal.purpose === "refinement" && (!proposal.previewSnapshot || !proposal.priceImpact || !proposal.scheduleImpact)) {
+    context.addIssue({ code: "custom", message: "Refinements require a trusted preview with price and schedule impacts" });
+  }
   if (Date.parse(proposal.expiresAt) <= Date.parse(proposal.createdAt)) {
     context.addIssue({ code: "custom", path: ["expiresAt"], message: "Expiry must follow creation" });
   }

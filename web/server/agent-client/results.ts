@@ -9,7 +9,7 @@ export async function publicRun(database: Kysely<Database>, userId: string, runI
   void _owner;
   if (run.result?.kind === "proposal") {
     const proposal = await new ProposalRepository(database).read(userId, run.tripId, run.result.proposal.id);
-    return { ...run, result: { kind: "proposal" as const, message: "Review this estimate before accepting.", proposal } };
+    return { ...run, result: { kind: "proposal" as const, message: "Review these draft changes before accepting.", proposal } };
   }
   return run;
 }

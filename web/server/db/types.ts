@@ -114,6 +114,7 @@ export interface AuditEventTable {
 }
 
 export interface TripCoreDatabase {
+  draftEditReviews: DraftEditReviewTable;
   agentRunEvents: AgentRunEventTable;
   agentRunResumes: AgentRunResumeTable;
   planningOfferRecords: PlanningOfferRecordTable;
@@ -131,6 +132,7 @@ export interface TripCoreDatabase {
 }
 
 export interface AgentRunTable {
+  dispatchRequest: Generated<Record<string, unknown> | null>;
   dispatchFingerprint: Generated<string | null>;
   activeElapsedMs: Generated<number>;
   phaseStartedAt: GeneratedTimestamp;
@@ -152,6 +154,12 @@ export interface AgentRunTable {
   completedAt: Timestamp | null;
   errorCategory: "interrupted" | "deadline" | "source_unavailable" | "invalid_result" | null;
   result: Json<Record<string, unknown> | null>;
+}
+
+export interface DraftEditReviewTable {
+  id: string; tripId: string; ownerUserId: string; baseTripVersion: number;
+  fingerprint: string; operations: Json<unknown[]>; review: Json<Record<string, unknown>>;
+  snapshot: Json<TripSnapshot>; expiresAt: Timestamp;
 }
 
 export interface AgentRunEventTable {

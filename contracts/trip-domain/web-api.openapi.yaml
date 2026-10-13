@@ -1591,6 +1591,21 @@ components:
           format: "uuid"
         previewSnapshot:
           $ref: "#/components/schemas/TripSnapshot"
+        priceImpact:
+          $ref: "#/components/schemas/PriceImpact"
+        scheduleImpact:
+          type: object
+          additionalProperties: false
+          required: [before, after]
+          properties:
+            before:
+              type: array
+              maxItems: 8
+              items: { $ref: "#/components/schemas/DestinationScheduleImpact" }
+            after:
+              type: array
+              maxItems: 8
+              items: { $ref: "#/components/schemas/DestinationScheduleImpact" }
         estimatedCostRange:
           $ref: "#/components/schemas/EstimatedCostRange"
         styleCompatibility:
@@ -1612,6 +1627,20 @@ components:
                 const: "initial_estimate"
           then:
             required: ["previewSnapshot","estimatedCostRange","styleCompatibility","constraintSummary","warnings"]
+        - if:
+            properties:
+              purpose: { const: refinement }
+          then:
+            required: [previewSnapshot, priceImpact, scheduleImpact]
+    DestinationScheduleImpact:
+      type: object
+      additionalProperties: false
+      required: [id, nights, arrivalDate, departureDate]
+      properties:
+        id: { type: string, format: uuid }
+        nights: { type: integer, minimum: 0 }
+        arrivalDate: { type: [string, 'null'], format: date }
+        departureDate: { type: [string, 'null'], format: date }
     AgentRun:
       type: "object"
       additionalProperties: false

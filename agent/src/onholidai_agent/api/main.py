@@ -19,6 +19,7 @@ from onholidai_agent.integrations.nebius import (
 )
 from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.integrations.tavily import TavilyClient, TavilyHttpTransport
+from onholidai_agent.telemetry.langsmith import AddressedTraceClient, SafeLangSmithSink
 
 
 def create_app(
@@ -57,7 +58,26 @@ def create_app(
                 if settings.provider_mode == "live"
                 else None
             )
-            application.state.runs = RunService(store, EstimateSources(store, model, maps, tavily))
+            sink = None
+            if (
+                settings.langsmith_tracing
+                and settings.langsmith_api_key
+                and not settings.langsmith_api_key.startswith("synthetic")
+            ):
+                from langsmith import Client
+
+                trace_client = Client(
+                    api_url=settings.langsmith_endpoint,
+                    api_key=settings.langsmith_api_key,
+                    timeout_ms=1000,
+                    auto_batch_tracing=False,
+                    omit_traced_runtime_info=True,
+                )
+                resources.callback(trace_client.close)
+                sink = SafeLangSmithSink(AddressedTraceClient(trace_client), settings)
+            application.state.runs = RunService(
+                store, EstimateSources(store, model, maps, tavily), sink
+            )
             try:
                 yield
             finally:

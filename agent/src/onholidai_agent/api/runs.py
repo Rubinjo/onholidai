@@ -1,6 +1,8 @@
 import asyncio
 import hashlib
 import json
+import time
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -12,8 +14,8 @@ from onholidai_agent.api.security import (
     ServiceTokenError,
     verify_service_token,
 )
-from onholidai_agent.api.store import RunStore
-from onholidai_agent.graph.estimate import estimate
+from onholidai_agent.api.store import RunStore, WebRunStore
+from onholidai_agent.graph.router import dispatch
 from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import (
     AgentEvent,
@@ -22,6 +24,7 @@ from onholidai_agent.models.api import (
     CreateAgentRunRequest,
     PersistAgentResultRequest,
 )
+from onholidai_agent.telemetry.langsmith import SafeLangSmithSink
 
 router = APIRouter(prefix="/internal/v1")
 
@@ -79,11 +82,17 @@ def scoped_request(http: Request) -> CreateAgentRunRequest:
 
 
 class RunService:
-    def __init__(self, store: RunStore, sources: EstimateSources | None = None):
+    def __init__(
+        self,
+        store: RunStore,
+        sources: EstimateSources | None = None,
+        telemetry: SafeLangSmithSink | None = None,
+    ):
         self.store = store
         self.sources = sources or store
         self.tasks: dict[str, asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
+        self.telemetry = telemetry
 
     async def emit(
         self, request: CreateAgentRunRequest, run_id: str, fields: dict[str, object]
@@ -149,6 +158,8 @@ class RunService:
             )
 
     async def work(self, request: CreateAgentRunRequest, run_id: str) -> None:
+        started = time.monotonic()
+        outcome = "failed"
         renewal = asyncio.create_task(self.renew(request, run_id))
         try:
             await self.emit(
@@ -160,7 +171,7 @@ class RunService:
                     "message": "Searching planning sources",
                 },
             )
-            result = await estimate(request, self.sources)
+            result = await dispatch(request, self.sources)
             renewal.cancel()
             await asyncio.gather(renewal, return_exceptions=True)
             if result.root.kind == "proposal":
@@ -186,7 +197,10 @@ class RunService:
                 )
                 status = "awaiting_clarification"
             else:
-                raise ValueError("invalid_initial_estimate_result")
+                cursor = await self.emit(
+                    request, run_id, {"type": "completed", "status": "completed"}
+                )
+                status = "completed"
             body = PersistAgentResultRequest.model_validate(
                 {
                     "version": "1",
@@ -200,6 +214,7 @@ class RunService:
                 }
             )
             await self.store.result(request, run_id, body)
+            outcome = result.root.kind
         except asyncio.CancelledError:
             raise
         except Exception as error:
@@ -242,6 +257,14 @@ class RunService:
         finally:
             renewal.cancel()
             await asyncio.gather(renewal, return_exceptions=True)
+            if self.telemetry:
+                with suppress(Exception):
+                    await asyncio.to_thread(
+                        self.telemetry.emit,
+                        request.purpose,
+                        outcome,
+                        (time.monotonic() - started) * 1000,
+                    )
 
     async def shutdown(self) -> None:
         tasks = list(self.tasks.values())
@@ -279,7 +302,15 @@ class RunService:
                         "message": "Reviewing your clarification",
                     },
                 )
-                updated = request.model_copy(update={"message": answer.answer})
+                if isinstance(self.store, WebRunStore):
+                    request = await self.store.dispatched_request(request, run_id)
+                updated = request.model_copy(
+                    update={
+                        "message": answer.answer
+                        if request.purpose == "initial_estimate"
+                        else request.message + "\nClarification: " + answer.answer
+                    }
+                )
                 task = asyncio.create_task(self.work(updated, run_id))
                 self.tasks[run_id] = task
                 task.add_done_callback(lambda _: self.tasks.pop(run_id, None))

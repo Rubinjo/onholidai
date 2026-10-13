@@ -2,6 +2,7 @@ import json
 from collections.abc import Mapping
 from typing import cast
 
+from onholidai_agent.context.compact import compact_context
 from onholidai_agent.models.api import CreateAgentRunRequest
 from onholidai_agent.telemetry.redaction import redact_for_langsmith
 
@@ -12,7 +13,7 @@ STABLE_INSTRUCTIONS = (
     "Confirm disambiguated departure origin before flight search. "
     "Mark unknown requirements unverified."
 )
-READ_ONLY_TOOLS = ("get_trip", "research", "propose_trip_changes")
+READ_ONLY_TOOLS = ("get_trip", "research", "propose_trip_changes", "retrieve_relevant_context")
 
 
 def minimized_model_data(value: object) -> object:
@@ -37,6 +38,11 @@ def build_context(request: CreateAgentRunRequest, trip: dict[str, object]) -> li
     if trip.get("version") != request.actor.base_trip_version:
         raise ValueError("trip_version_conflict")
     snapshot = cast(dict[str, object], trip.get("snapshot", {}))
+    summary, recent, _compacted = compact_context(
+        request.context.resolved_summary(request.actor.base_trip_version),
+        request.context.recent_messages,
+        request.context.context_budget.maximum_tokens,
+    )
     constraints = cast(list[dict[str, object]], snapshot.get("constraints", []))
     compact = {
         **trip,
@@ -56,12 +62,8 @@ def build_context(request: CreateAgentRunRequest, trip: dict[str, object]) -> li
         minimized_model_data(
             {
                 "trip": compact,
-                "summary": request.context.resolved_summary(
-                    request.actor.base_trip_version
-                ).model_dump(by_alias=True),
-                "recent": [
-                    message.model_dump(by_alias=True) for message in request.context.recent_messages
-                ],
+                "summary": summary.model_dump(by_alias=True),
+                "recent": [message.model_dump(by_alias=True) for message in recent],
                 "request": request.message,
             }
         ),

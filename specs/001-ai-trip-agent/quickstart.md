@@ -62,6 +62,12 @@ Expected:
 
 ## Scenario 2: Proposal, Acceptance, Conflict, and Undo
 
+US2 adds migration 007 and the living-trip workspace. Apply migrations with the controlled migration command before starting updated services. The agent keeps the Nebius Token Factory base URL from `.env.example`; set a real `NEBIUS_MODEL` and non-placeholder research credentials for live agent operation. Deterministic planning supply remains the default.
+
+LangSmith settings are `LANGSMITH_TRACING=true`, `LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com`, a real `LANGSMITH_API_KEY`, `LANGSMITH_AGENT_ID=onholidai`, and `LANGSMITH_AGENT_ENVIRONMENT=local`. Compose forwards them to agent; local agent startup reads the root `.env`. Only allowlisted outcome metadata is exported. Graph state and raw prompts/responses are excluded before ingestion. LangSmith must have agent addressing enabled for the selected workspace.
+
+For authenticated browser scenarios, provide `US1_STORAGE_STATE` and `US2_TRIP_ID` for a seeded Tokyo/Kyoto estimated draft whose date/duration limits allow two more nights. Run `pnpm --dir web test:e2e -- tests/e2e/refinement.spec.ts`. For database regressions, provide `TEST_DATABASE_ADMIN_URL`, `TEST_DATABASE_MIGRATION_URL`, `TEST_DATABASE_APP_URL`, and `TEST_DATABASE_WORKER_URL`. See [US2 evidence](./evidence/us2.md) for automated results and open acceptance gates.
+
 1. Ask: `Add two days in Kyoto and keep mornings free.`
 2. Review the structured proposal and its schedule, route, accommodation, activity, and price impacts.
 3. Before accepting, submit a direct trip edit from a second browser session.

@@ -43,6 +43,9 @@ describe("initial trip contracts", () => {
       initiatingRequestId: randomUUID(), purpose: "refinement", baseTripVersion: 1,
       operations: [{ operation: "replace", target: "/preferences/pace", value: 60 }],
       affectedFacts: ["pace"], rationale: "A slower pace", status: "proposed",
+      previewSnapshot: projectCustomerSnapshot(createSyntheticTripSnapshot()),
+      priceImpact: { currency: "GBP", beforeMinor: 0, afterMinor: 0, deltaMinor: 0 },
+      scheduleImpact: { before: [], after: [] },
       createdAt: "2030-01-01T00:00:00Z", expiresAt: "2030-01-01T00:10:00Z" };
     expect(changeProposalSchema.safeParse(proposal).success).toBe(true);
     for (const target of ["/bookings", "/price", "/components/0/bookingStatus", "/preferences/__proto__"]) {

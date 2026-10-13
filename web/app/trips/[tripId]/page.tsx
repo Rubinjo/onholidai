@@ -6,6 +6,7 @@ import { getSession } from "@/server/auth/auth";
 import { readTrip } from "@/domain/trip/read";
 import { ProposalRepository } from "@/server/db/proposal-repository";
 import { EstimateSummary } from "@/components/trip-workspace/estimate-summary";
+import { Workspace } from "@/components/trip-workspace/workspace";
 export const dynamic = "force-dynamic";
 export default async function TripPage({ params, searchParams }: { params: Promise<{ tripId: string }>; searchParams: Promise<{ runId?: string }> }) {
   const application = getApplication(), session = await getSession(application.auth, await headers());
@@ -17,6 +18,7 @@ export default async function TripPage({ params, searchParams }: { params: Promi
   const run = await application.database.selectFrom("agentRuns").select("id").where("tripId", "=", tripId)
     .where("ownerUserId", "=", session.user.id).orderBy("startedAt", "desc").limit(1).executeTakeFirst();
   const selected = z.uuid().safeParse((await searchParams).runId);
+  if (trip.snapshot.components.length) return <main className="planning-page planning-workspace"><Workspace initialTrip={trip} initialRunId={selected.success ? selected.data : run?.id ?? null} /></main>;
   return <main className="planning-page"><EstimateSummary initialTrip={trip} initialProposal={proposal}
     initialRunId={selected.success ? selected.data : proposal ? null : run?.id ?? null} /></main>;
 }

@@ -17,10 +17,22 @@ class Settings(BaseSettings):
     maps_grounding_api_key: str | None = None
     tavily_api_key: str | None = None
     langsmith_api_key: str | None = None
+    langsmith_tracing: bool = False
+    langsmith_endpoint: str = "https://eu.api.smith.langchain.com"
+    langsmith_agent_id: str = "onholidai"
+    langsmith_agent_environment: str = "local"
     otel_exporter_otlp_endpoint: str | None = None
 
     @model_validator(mode="after")
     def require_live_credentials(self) -> Self:
+        if (
+            self.langsmith_tracing
+            and (not self.langsmith_api_key or self.langsmith_api_key.startswith("synthetic"))
+            and (self.environment == "production" or self.provider_mode == "live")
+        ):
+            raise ValueError("LangSmith tracing requires an explicit API key")
+        if not self.langsmith_endpoint.startswith("https://"):
+            raise ValueError("LangSmith endpoint must use HTTPS")
         if len(self.service_token_secret.encode()) < 32:
             raise ValueError("Service token secret must contain at least 32 bytes")
         if self.environment == "production" and self.service_token_secret.startswith("synthetic"):
@@ -28,10 +40,15 @@ class Settings(BaseSettings):
         if self.provider_mode == "live":
             required = {
                 "nebius_api_key": self.nebius_api_key,
+                "nebius_model": self.nebius_model,
                 "maps_grounding_api_key": self.maps_grounding_api_key,
                 "tavily_api_key": self.tavily_api_key,
             }
-            missing = [name for name, value in required.items() if not value]
+            missing = [
+                name
+                for name, value in required.items()
+                if not value or value.startswith("synthetic")
+            ]
             if missing:
                 raise ValueError(f"Missing live-provider settings: {', '.join(missing)}")
         return self

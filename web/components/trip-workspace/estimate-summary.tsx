@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { Workspace } from "./workspace";
 import { z } from "zod";
 import { type ChangeProposal, changeProposalSchema, customerSnapshotSchema } from "@/domain/trip/proposal";
 import { EstimateMap } from "@/components/map/estimate-map";
@@ -63,6 +64,7 @@ export function EstimateSummary({ initialTrip, initialProposal, initialRunId }: 
     } catch (failure) { setError(planningError(failure)); } finally { setBusy(false); }
   }
   const pending = proposal && proposal.status !== "applied", snapshot = pending ? proposal.previewSnapshot ?? trip.snapshot : trip.snapshot;
+  if (!pending && trip.snapshot.components.length) return <Workspace initialTrip={trip} initialRunId={null} />;
   const formatter = new Intl.NumberFormat("en", { style: "currency", currency: snapshot.price.currency });
   const total = formatter.format(snapshot.price.finalCustomerMinor / (10 ** (formatter.resolvedOptions().maximumFractionDigits ?? 2)));
   return <section><h1>{pending ? "Proposed estimate" : proposal?.status === "applied" ? "Accepted estimated draft" : "Your saved trip setup"}</h1>
