@@ -113,6 +113,17 @@ export interface AuditEventTable {
   occurredAt: GeneratedTimestamp;
 }
 
+export interface PrivacyLegalHoldTable {
+  id: string;
+  tripId: string;
+  ownerUserId: string;
+  reasonCode: string;
+  createdBy: string;
+  createdAt: GeneratedTimestamp;
+  releasedBy: string | null;
+  releasedAt: Timestamp | null;
+}
+
 export interface TripCoreDatabase {
   bookingRevalidations: BookingRevalidationTable;
   bookingAuthorizations: BookingAuthorizationTable;
@@ -137,6 +148,7 @@ export interface TripCoreDatabase {
   outboxEvents: OutboxEventTable;
   idempotencyRecords: IdempotencyRecordTable;
   auditEvents: AuditEventTable;
+  privacyLegalHolds: PrivacyLegalHoldTable;
 }
 
 export interface BookingRevalidationTable {

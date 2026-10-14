@@ -4,6 +4,7 @@ import type { Kysely } from "kysely";
 import type { Database } from "./database";
 import { readTrip } from "@/domain/trip/read";
 import { ConversationSummarySchema, RetrieveRelevantContextInputSchema } from "@contracts/agent-api/generated.zod";
+import { expireRawConversationMessages } from "@/server/privacy/retention";
 
 export function redactConversation(text: string): string {
   return text.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")
@@ -17,6 +18,7 @@ export class ConversationRepository {
   constructor(private readonly database: Kysely<Database>) {}
   async messages(userId: string, tripId: string, limit = 200) {
     await readTrip(this.database, userId, tripId);
+    await expireRawConversationMessages(this.database);
     const rows = await this.database.selectFrom("conversationMessages").innerJoin("conversations", "conversations.id", "conversationMessages.conversationId")
       .selectAll("conversationMessages").where("conversations.ownerUserId", "=", userId).where("conversations.tripId", "=", tripId)
       .where("conversationMessages.retentionExpiresAt", ">", new Date()).orderBy("conversationMessages.createdAt", "desc").orderBy("conversationMessages.id", "desc").limit(limit).execute();

@@ -7,6 +7,8 @@ import { Pool, type PoolClient } from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { loadMigrationFiles, migrate } from "../../server/db/migrate";
+import { decodeTripSnapshot } from "../../domain/trip/schema";
+import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { createIsolatedTestDatabase, hasIsolatedDatabaseConfiguration,
   type IsolatedTestDatabase } from "../helpers/database";
 
@@ -19,6 +21,24 @@ describe("migration discovery", () => {
     } finally {
       await rm(directory, { force: true, recursive: true });
     }
+  });
+
+  it("keeps legacy snapshots readable while requiring explicit origin before new flight estimates", () => {
+    const legacy = createSyntheticTripSnapshot();
+    delete (legacy as Partial<typeof legacy>).departureOrigin;
+    const decoded = decodeTripSnapshot(0, legacy);
+    expect(decoded.compatibility).toBe("legacy");
+    expect(decoded.requiresDepartureOrigin).toBe(true);
+    expect(decoded.snapshot.destinations[0]?.name).toBe("Lisbon");
+  });
+
+  it("retains proposal and transaction basis migrations as additive schema history", async () => {
+    const migrations = await loadMigrationFiles();
+    expect(migrations.map((entry) => entry.version)).toEqual(migrations.map((_entry, index) => index + 1));
+    expect(migrations.find((entry) => entry.version === 7)?.sql).toContain("change_proposals");
+    expect(migrations.find((entry) => entry.version === 8)?.sql).toContain("execution_basis jsonb NOT NULL");
+    expect(migrations.find((entry) => entry.version === 8)?.sql).toContain("booking_provider_callbacks");
+    expect(migrations.find((entry) => entry.version === 9)?.sql).toContain("privacy_legal_holds");
   });
 });
 

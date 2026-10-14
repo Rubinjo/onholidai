@@ -11,6 +11,7 @@ import type { Selectable } from "kysely";
 import { ProblemError } from "@/server/errors";
 import type { ServiceTokenContext } from "./credentials";
 import { redactConversation } from "@/server/db/conversation-repository";
+import { rawConversationExpiry } from "@/server/privacy/retention";
 
 export const reserveRunSchema = z.object({ userId: z.uuid(), tripId: z.uuid(), requestId: z.uuid(),
   baseTripVersion: z.number().int().positive(), purpose: z.enum(["initial_estimate", "refinement", "finalization"]),
@@ -76,7 +77,7 @@ export class RunRepository {
       const conversation = await transaction.selectFrom("conversations").select("id").where("tripId", "=", input.tripId).where("ownerUserId", "=", input.userId).orderBy("createdAt", "desc").executeTakeFirst();
       const conversationId = conversation?.id ?? randomUUID(), id = randomUUID();
       if (!conversation) await transaction.insertInto("conversations").values({ id: conversationId, tripId: input.tripId,
-        ownerUserId: input.userId, retentionExpiresAt: new Date(now.getTime() + 90 * 86400000) }).execute();
+        ownerUserId: input.userId, retentionExpiresAt: rawConversationExpiry(now) }).execute();
       const row = await transaction.insertInto("agentRuns").values({ id, tripId: input.tripId, conversationId,
         ownerUserId: input.userId, requestId: input.requestId, baseTripVersion: input.baseTripVersion,
         purpose: input.purpose, requestFingerprint: hash, leaseExpiresAt: lease(now), startedAt: now, phaseStartedAt: now,
@@ -85,7 +86,7 @@ export class RunRepository {
       // Persist typed metadata, not raw personal free text; the request remains bounded and ephemeral.
       await transaction.insertInto("conversationMessages").values({ id: randomUUID(), conversationId, role: "user",
         content: { kind: "research_request", purpose: input.purpose, text: redactConversation(input.message) }, tripVersion: input.baseTripVersion,
-        agentRunId: id, retentionExpiresAt: new Date(now.getTime() + 90 * 86400000) }).execute();
+        agentRunId: id, retentionExpiresAt: rawConversationExpiry(now) }).execute();
       return envelope(row);
     });
   }
@@ -172,7 +173,7 @@ export class RunRepository {
           ? "source_unavailable" : "invalid_result" : null }).where("id", "=", runId).execute();
       await transaction.insertInto("conversationMessages").values({ id: randomUUID(), conversationId: row.conversationId,
         role: "assistant", tripVersion: row.baseTripVersion, agentRunId: row.id, content: { kind: input.status, text: redactConversation(input.result?.kind === "proposal" ? input.result.proposal.rationale : input.result?.kind === "clarification" ? input.result.clarification.question : input.result?.message ?? input.status) },
-        retentionExpiresAt: new Date(this.now().getTime() + 90 * 86400000) }).execute();
+        retentionExpiresAt: rawConversationExpiry(this.now()) }).execute();
       const constraints = await transaction.selectFrom("tripVersions").select("snapshot").where("tripId", "=", row.tripId)
         .where("version", "=", row.baseTripVersion).executeTakeFirstOrThrow();
       const requiredCount = constraints.snapshot.constraints.filter((constraint) => constraint.priority === "required" && constraint.status !== "removed").length;

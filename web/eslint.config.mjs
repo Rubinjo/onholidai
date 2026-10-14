@@ -5,7 +5,8 @@ import nextTypeScript from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTypeScript,
-  globalIgnores([".next/**", "coverage/**", "dist/**", "build/**", "playwright-report/**", "test-results/**",
+  globalIgnores(["node_modules/**", ".next/**", "coverage/**", "dist/**", "build/**", "**/*.min.js",
+    "playwright-report/**", "test-results/**",
     // Served verbatim from /public: includes the vendored, unmodified MapLibre worker bundle.
     "public/**"]),
 ]);

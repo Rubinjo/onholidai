@@ -13,7 +13,7 @@ This guide defines the runnable end-to-end evidence expected after implementatio
 
 ## Start the Local Stack
 
-The web application now requires independent `service_token_secret.txt` and `pricing_diagnostic_secret.txt` files in `infra/compose/secrets/`, alongside `web_auth_secret.txt`. Each contains at least 32 characters; use distinct values. The service key will be shared with the agent transport when run orchestration is enabled; the pricing key stays in web/authorized diagnostic callers. Local non-container development uses the synthetic defaults in `.env.example`. Production startup requires explicit database/auth/service/diagnostic configuration. Build-only credentials in CI and Dockerfile are placeholders for shell compilation and are not installed as runtime environment values.
+The web application requires independent `service_token_secret.txt` and `pricing_diagnostic_secret.txt` files in `infra/compose/secrets/`, alongside `web_auth_secret.txt`. Each contains at least 32 characters; use distinct values. The service key is shared with the agent transport; the pricing key stays in web/authorized diagnostic callers. Local non-container development uses synthetic defaults in `.env.example`. Production startup requires explicit database/auth/service/diagnostic configuration. Build-only credentials in CI and Dockerfile are placeholders for shell compilation and are not installed as runtime environment values. The current schema is migrations 001–009; always apply the full ordered migration set through the controlled migration command.
 
 Readiness is staged. After setup, install locked dependencies, start `--profile infrastructure` and run web/agent shell health checks with `pnpm dev`; no migration job, application container profile or booking worker is required. After foundation, run the `migrations` profile. The complete commands below require all story implementations through US4; `applications` runs containerized app services and `booking` runs the worker.
 
@@ -53,9 +53,20 @@ pnpm test:e2e
 
 Each story runs its implemented suites and the applicable foundation/compatibility/accessibility checks; setup verifies shells/tooling only. Run the complete command matrix and all scenarios after US4. Do not waive failures in implemented behavior, or require a later story's UI/workflow to pass an earlier checkpoint. Corpus and participant protocols are defined in spec.md; record versions, seeds and denominators before implementation.
 
+Cross-cutting acceptance also includes the privacy/compatibility, load, and browser suites. Run them only against isolated databases and synthetic deterministic fixtures:
+
+```bash
+pnpm --dir web test -- tests/integration/retention.test.ts tests/integration/migration-compatibility.test.ts
+pnpm --dir web exec playwright test --config=playwright.performance.config.ts
+pnpm --dir web exec playwright test -- tests/e2e/accessibility.spec.ts --grep @accessibility
+uv run --project agent pytest agent/tests/contract/test_schema_compatibility.py agent/tests/evaluation/test_context_budget.py
+```
+
+The performance scenarios require `PERF_STORAGE_STATE`, `PERF_TRIP_ID`, and 20 synthetic authorized trips for booking (`PERF_AUTHORIZED_TRIP_IDS`, plus one `PERF_AUTHORIZATION_<trip-id>` per trip). The planning scenario launches asynchronous synthetic refinement requests without accepting proposals. Its one-minute at-rate sample is a smoke test; T110 release acceptance requires a full 60-minute soak and recorded capacity/resource metrics. Keep `PROVIDER_MODE=deterministic`.
+
 ## Scenario 1: Create an Initial Estimate
 
-US1 now runs without a booking worker. After provisioning secrets and applying migration 005, use infrastructure, migrations and applications profiles only. Agent receives the shared service secret and WEB_BASE_URL; the independent diagnostic key stays web-only. Keep browser origin equal to BETTER_AUTH_URL. For automated browser checks, provide US1_STORAGE_STATE for a synthetic account and optionally PLAYWRIGHT_BASE_URL (default http://localhost:3000). See [US1 evidence](./evidence/us1.md) for executed checks and open acceptance gates.
+US1 runs without a booking worker. After provisioning secrets and applying the current ordered migrations, use infrastructure, migrations and applications profiles only. Agent receives the shared service secret and WEB_BASE_URL; the independent diagnostic key stays web-only. Keep browser origin equal to BETTER_AUTH_URL. For automated browser checks, provide US1_STORAGE_STATE for a synthetic account and optionally PLAYWRIGHT_BASE_URL (default http://localhost:3000). See [US1 evidence](./evidence/us1.md) for its recorded checks and open acceptance gates.
 
 1. Open the trip setup using only the keyboard.
 2. Confirm Amsterdam, Netherlands, Europe/Amsterdam as departure origin, with return to that origin; add Japan and South Korea through search, then Tokyo, Kyoto, and Seoul.
@@ -75,7 +86,7 @@ Expected:
 
 ## Scenario 2: Proposal, Acceptance, Conflict, and Undo
 
-US2 adds migration 007 and the living-trip workspace. Apply migrations with the controlled migration command before starting updated services. The agent keeps the Nebius Token Factory base URL from `.env.example`; set a real `NEBIUS_MODEL` and non-placeholder research credentials for live agent operation. Deterministic planning supply remains the default.
+US2 adds migration 007 and the living-trip workspace. Apply the current ordered migrations with the controlled migration command before starting updated services. The agent keeps the Nebius Token Factory base URL from `.env.example`; set a real `NEBIUS_MODEL` and non-placeholder research credentials for live agent operation. Deterministic planning supply remains the default.
 
 LangSmith settings are `LANGSMITH_TRACING=true`, `LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com`, a real `LANGSMITH_API_KEY`, `LANGSMITH_AGENT_ID=onholidai`, and `LANGSMITH_AGENT_ENVIRONMENT=local`. Compose forwards them to agent; local agent startup reads the root `.env`. Only allowlisted outcome metadata is exported. Graph state and raw prompts/responses are excluded before ingestion. LangSmith must have agent addressing enabled for the selected workspace.
 
