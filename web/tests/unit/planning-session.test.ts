@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { digestPlanningCredential, planningCookie, validPlanningSession } from "../../server/auth/planning-session";
+import {
+  digestPlanningCredential,
+  planningCookie,
+  planningCredential,
+  PLANNING_IDLE_MS,
+  validPlanningSession,
+} from "../../server/auth/planning-session";
 
 describe("opaque planning authority", () => {
   const now = new Date("2030-01-01T00:00:00Z");
@@ -17,5 +23,20 @@ describe("opaque planning authority", () => {
     for (const flag of ["HttpOnly", "SameSite=Lax", "Path=/", "Secure"]) expect(cookie).toContain(flag);
     expect(cookie).not.toContain("Domain=");
     expect(planningCookie("opaque", false)).toContain("onholidai-planning-dev=");
+  });
+
+  it("renews valid authority by the fixed 30-day idle window", () => {
+    expect(PLANNING_IDLE_MS).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(planningCookie("opaque", true)).toContain(`Max-Age=${PLANNING_IDLE_MS / 1000}`);
+  });
+
+  it("accepts only an opaque base64url credential from the named cookie", () => {
+    const credential = "A".repeat(43);
+    const headers = new Headers({ cookie: `theme=dark; onholidai-planning-dev=${credential}; other=x` });
+    expect(planningCredential(headers, false)).toBe(credential);
+    expect(planningCredential(new Headers({ cookie: "onholidai-planning-dev=plain text" }), false)).toBeNull();
+    expect(planningCredential(new Headers({ cookie: "onholidai-planning-dev=too-short" }), false)).toBeNull();
+    expect(planningCredential(new Headers({ cookie: `unrelated=${credential}` }), false)).toBeNull();
+    expect(planningCredential(new Headers({ cookie: `onholidai-planning-dev=${credential}` }), true)).toBeNull();
   });
 });

@@ -2,7 +2,9 @@ import { z } from "zod";
 
 import { type Application, getApplication } from "./application";
 import { getSession } from "./auth/auth";
+import { type PlanningActor, resolvePlanningActor } from "./auth/planning-actor";
 import { AuthorizationError, requireSession } from "./auth/authorize";
+import { planningCredential, readPlanningSession } from "./auth/planning-session";
 import { type ServiceScope, verifyServiceToken, ServiceTokenError } from "./agent-client/credentials";
 import { ProblemError, problemResponse } from "./errors";
 import { getOrCreateCorrelationId } from "./telemetry";
@@ -62,13 +64,50 @@ export async function apiResponse(request: Request, action: (application: Applic
   }
 }
 
-export async function browserUser(application: Application, request: Request, dependencies = defaultDependencies) {
-  // Mutating browser requests must come from the configured application origin.
+// Mutating browser requests must come from the configured application origin.
+export function assertSameOrigin(application: Application, request: Request): void {
   if (!["GET", "HEAD"].includes(request.method)
     && request.headers.get("origin") !== new URL(application.config.BETTER_AUTH_URL).origin) {
     throw new AuthorizationError("FORBIDDEN");
   }
+}
+
+export async function browserUser(application: Application, request: Request, dependencies = defaultDependencies) {
+  assertSameOrigin(application, request);
   return requireSession(await dependencies.session(application.auth, request.headers)).user;
+}
+
+export interface PlanningIdentity {
+  accountUserId: string | null;
+  guestSessionId: string | null;
+}
+
+export interface PlanningRequestContext {
+  credential: string | null;
+  identity: PlanningIdentity;
+  production: boolean;
+}
+
+// Resolves the caller's current proof without requiring an account: a registered
+// session and/or a live guest planning cookie. Identifiers in the request never
+// authorize; this context must be proven against the resource principal.
+export async function planningContext(application: Application, request: Request,
+  dependencies = defaultDependencies): Promise<PlanningRequestContext> {
+  const production = application.config.NODE_ENV === "production";
+  const credential = planningCredential(request.headers, production);
+  const [session, guestSession] = await Promise.all([
+    dependencies.session(application.auth, request.headers),
+    credential ? readPlanningSession(application.database, credential) : Promise.resolve(null),
+  ]);
+  return { credential, production,
+    identity: { accountUserId: session?.user.id ?? null, guestSessionId: guestSession?.id ?? null } };
+}
+
+export async function requirePlanningActor(application: Application, request: Request, planningOwnerId: string,
+  dependencies = defaultDependencies): Promise<PlanningActor> {
+  assertSameOrigin(application, request);
+  const { identity } = await planningContext(application, request, dependencies);
+  return resolvePlanningActor(application.database, planningOwnerId, identity);
 }
 
 export async function requestJson(request: Request): Promise<unknown> {

@@ -2,10 +2,11 @@
 import { z } from "zod";
 import { describe, expect, it, vi } from "vitest";
 
-import { apiResponse, browserUser, internalActor, requestJson } from "../../server/api";
+import { apiResponse, browserUser, internalActor, planningContext, requestJson, requirePlanningActor } from "../../server/api";
 import { createServiceToken } from "../../server/agent-client/credentials";
 import { createApplication } from "../../server/application";
 import type { getSession } from "../../server/auth/auth";
+import { planningProblems, problemResponse } from "../../server/errors";
 
 vi.mock("server-only", () => ({}));
 
@@ -53,6 +54,35 @@ describe("API boundary", () => {
       expect(driver.headers.get("Cache-Control")).toBe("private, no-store");
       expect(driver.headers.has("x-correlation-id")).toBe(true);
     } finally { await application.shutdown(); }
+  });
+
+  it("resolves planning proof without requiring an account session", async () => {
+    const application = createApplication({ NODE_ENV: "test" });
+    const anonymous = { application: () => application, session: vi.fn<typeof getSession>().mockResolvedValue(null) };
+    const signedIn = { application: () => application,
+      session: vi.fn<typeof getSession>().mockResolvedValue({ user: { id: "account-a" } } as never) };
+    try {
+      await expect(planningContext(application, new Request("http://localhost/api/v1/setup-drafts"), anonymous))
+        .resolves.toEqual({ credential: null, production: false, identity: { accountUserId: null, guestSessionId: null } });
+      await expect(planningContext(application, new Request("http://localhost/api/v1/setup-drafts"), signedIn))
+        .resolves.toMatchObject({ identity: { accountUserId: "account-a", guestSessionId: null } });
+      await expect(requirePlanningActor(application, new Request("http://localhost/api/v1/setup-drafts", {
+        method: "POST", headers: { origin: "https://unrelated.example" },
+      }), "principal-a", anonymous)).rejects.toMatchObject({ status: 403 });
+    } finally { await application.shutdown(); }
+  });
+
+  it("exposes safe planning problem codes and retry guidance", async () => {
+    expect(planningProblems.resourceNotFound()).toMatchObject({ status: 404, code: "resource_not_found" });
+    expect(planningProblems.guestSessionUnavailable()).toMatchObject({ status: 401, code: "guest_session_unavailable" });
+    expect(planningProblems.draftRevisionConflict()).toMatchObject({ status: 409, code: "draft_revision_conflict" });
+    expect(planningProblems.draftAlreadySubmitted()).toMatchObject({ status: 409, code: "draft_already_submitted" });
+    expect(planningProblems.bookingIntentExpired()).toMatchObject({ status: 410, code: "booking_intent_expired" });
+    expect(planningProblems.planningRunAccessRevoked()).toMatchObject({ status: 403, code: "planning_run_access_revoked" });
+    const limited = problemResponse(planningProblems.guestResearchLimited(90), "correlation");
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toBe("90");
+    expect((await limited.json() as { code: string }).code).toBe("guest_research_limited");
   });
 
   it("rejects missing, non-JSON and oversized bodies", async () => {

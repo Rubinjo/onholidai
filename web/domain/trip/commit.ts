@@ -17,6 +17,9 @@ import { assertBookingWritesEditable, invalidateBookingStateForTripVersion } fro
 const commitInputSchema = z
   .object({
     tripId: z.uuid(),
+    // Planning principal id: the account's default principal or a dedicated guest
+    // wizard principal. Kept as "ownerUserId" because it is part of the persisted
+    // receipt fingerprint and legacy account ids are unchanged.
     ownerUserId: z.string().trim().min(1),
     expectedVersion: z.number().int().nonnegative(),
     lifecycleState: z.enum(["draft", "finalized", "partially_booked", "booked", "cancelled"]).optional(),

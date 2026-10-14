@@ -7,6 +7,8 @@ import type { Database } from "@/server/db/database";
 import { TripVersionConflictError } from "./commit";
 import { decodeTripSnapshot } from "./schema";
 
+// ownerUserId is the current planning principal id (account default or guest wizard
+// principal); callers must prove the actor against it before reading private history.
 export async function readOwnedTripVersion(database: Kysely<Database>, ownerUserId: string,
   tripId: string, version?: number) {
   z.uuid().parse(tripId);

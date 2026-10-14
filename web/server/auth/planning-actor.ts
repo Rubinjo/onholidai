@@ -1,6 +1,6 @@
 import type { Kysely } from "kysely";
 import type { Database } from "@/server/db/database";
-import { ProblemError } from "@/server/errors";
+import { planningProblems } from "@/server/errors";
 
 export type PlanningIdentity = { accountUserId: string | null; guestSessionId: string | null };
 export type PlanningActor = { kind: "account"; accountUserId: string; planningOwnerId: string }
@@ -11,7 +11,7 @@ export function principalAllows(principal: PlanningIdentity, proof: PlanningIden
     : principal.guestSessionId !== null && principal.guestSessionId === proof.guestSessionId;
 }
 export function planningNotFound(): never {
-  throw new ProblemError({ title: "Resource not found", status: 404, code: "resource_not_found" });
+  throw planningProblems.resourceNotFound();
 }
 export async function resolvePlanningActor(database: Kysely<Database>, planningOwnerId: string, identity: PlanningIdentity): Promise<PlanningActor> {
   const principal = await database.selectFrom("planningPrincipals").selectAll().where("id", "=", planningOwnerId).executeTakeFirst();
