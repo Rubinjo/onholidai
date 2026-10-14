@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import { z } from "zod";
 import type { Database } from "@/server/db/database";
 import { ProblemError } from "@/server/errors";
@@ -30,7 +30,7 @@ export async function startBookingRevalidation(database: Kysely<Database>, userI
     const snapshot = tripSnapshotSchema.parse((await readOwnedTripVersion(transaction, userId, tripId)).snapshot);
     if (!snapshot.components.length) throw new ProblemError({ title: "No bookable components", status: 409, code: "booking_components_missing" });
     await transaction.insertInto("bookingRevalidations").values({ workflowId, tripId, ownerUserId: userId,
-      requestId: input.requestId, requestFingerprint, tripVersion: input.expectedVersion, status: "accepted", outcomes: [],
+      requestId: input.requestId, requestFingerprint, tripVersion: input.expectedVersion, status: "accepted", outcomes: sql<unknown[]>`${JSON.stringify([])}::jsonb`,
       terms: null, termsHash: null, expiresAt: null, createdAt: new Date(), updatedAt: new Date() }).execute();
     await transaction.insertInto("outboxEvents").values({ id: randomUUID(), eventType: "booking.revalidation.requested",
       eventVersion: 1, aggregateType: "trip", aggregateId: tripId, aggregateVersion: input.expectedVersion,

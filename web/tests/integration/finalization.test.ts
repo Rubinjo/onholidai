@@ -78,16 +78,19 @@ describe("feasibility policy v1", () => {
     day.items[1].transitionFromPrevious = undefined;
     expect(evaluateFeasibility(snapshot).unverified.some((issue) => issue.code === "unknown_transit")).toBe(true);
   });
-  it("requires overnight rest, meals and free time and leaves unknown dietary checks disclosed", () => {
+  it("requires nine hours overnight rest, meals and free time and leaves unknown dietary checks disclosed", () => {
     const snapshot = createSyntheticTripSnapshot(), day = snapshot.itineraryDays[0];
     day.items[1].start = day.date + "T20:00"; day.items[1].end = day.date + "T23:00";
     day.items.sort((a, b) => a.start.localeCompare(b.start));
-    snapshot.itineraryDays.push({ ...day, date: "2030-05-03", items: day.items.map((item) => ({ ...item,
-      id: randomUUID(), start: item.start.replace(day.date, "2030-05-03"), end: item.end.replace(day.date, "2030-05-03") })) });
+    const nextDay = { ...day, date: "2030-05-03", items: day.items.map((item) => ({ ...item,
+      id: randomUUID(), start: item.start.replace(day.date, "2030-05-03"), end: item.end.replace(day.date, "2030-05-03") })) };
+    snapshot.itineraryDays.push(nextDay);
     const report = evaluateFeasibility(snapshot);
-    expect(report.blocking.some((issue) => issue.code === "overnight_rest")).toBe(true);
+    expect(report.blocking.some((issue) => issue.code === "overnight_rest")).toBe(false);
     expect(report.blocking.some((issue) => issue.code === "daily_rest")).toBe(true);
     expect(report.unverified.some((issue) => issue.code === "constraint_unverified")).toBe(true);
+    nextDay.items[0].start = "2030-05-03T07:00";
+    expect(evaluateFeasibility(snapshot).blocking.some((issue) => issue.code === "overnight_rest")).toBe(true);
   });
   it.each([[20, 5, true], [50, 5, false], [80, 7, false], [80, 9, true]] as const)(
     "applies pace %i to %i discretionary hours", (pace, hours, blocked) => {

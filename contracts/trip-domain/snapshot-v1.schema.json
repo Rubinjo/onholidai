@@ -430,13 +430,13 @@
         "type": "object",
         "properties": {
           "practicalNotes": {
+            "maxItems": 16,
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1,
               "maxLength": 1000
-            },
-            "maxItems": 16
+            }
           },
           "mandatoryTravelException": {
             "type": "string",
@@ -474,13 +474,13 @@
                   "maxLength": 200
                 },
                 "practicalNotes": {
+                  "maxItems": 16,
                   "type": "array",
                   "items": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 1000
-                  },
-                  "maxItems": 16
+                  }
                 },
                 "startOffset": {
                   "type": "string",
@@ -511,13 +511,13 @@
                   ]
                 },
                 "timingEvidence": {
+                  "maxItems": 32,
                   "type": "array",
                   "items": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 500
-                  },
-                  "maxItems": 32
+                  }
                 },
                 "verificationStatus": {
                   "type": "string",
@@ -532,6 +532,7 @@
                   "const": "1"
                 },
                 "constraintEvidence": {
+                  "maxItems": 64,
                   "type": "array",
                   "items": {
                     "type": "object",
@@ -566,8 +567,7 @@
                       "checkedAt"
                     ],
                     "additionalProperties": false
-                  },
-                  "maxItems": 64
+                  }
                 },
                 "transitionFromPrevious": {
                   "type": "object",
@@ -1028,22 +1028,22 @@
                     ]
                   },
                   "airportNames": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "airlines": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "flightDirection": {
                     "anyOf": [
@@ -1073,13 +1073,13 @@
                     ]
                   },
                   "layovers": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 500
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "fareConditions": {
                     "anyOf": [
@@ -1142,6 +1142,7 @@
                     ]
                   },
                   "constraintEvidence": {
+                    "maxItems": 64,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -1176,8 +1177,7 @@
                         "checkedAt"
                       ],
                       "additionalProperties": false
-                    },
-                    "maxItems": 64
+                    }
                   },
                   "source": {
                     "type": "string",
@@ -1189,13 +1189,13 @@
                     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
                   },
                   "unavailableFacts": {
+                    "maxItems": 32,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 32
+                    }
                   }
                 },
                 "required": [
@@ -1539,22 +1539,22 @@
                     ]
                   },
                   "airportNames": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "airlines": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "flightDirection": {
                     "anyOf": [
@@ -1584,13 +1584,13 @@
                     ]
                   },
                   "layovers": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 500
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "fareConditions": {
                     "anyOf": [
@@ -1653,6 +1653,7 @@
                     ]
                   },
                   "constraintEvidence": {
+                    "maxItems": 64,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -1687,8 +1688,7 @@
                         "checkedAt"
                       ],
                       "additionalProperties": false
-                    },
-                    "maxItems": 64
+                    }
                   },
                   "source": {
                     "type": "string",
@@ -1700,13 +1700,13 @@
                     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
                   },
                   "unavailableFacts": {
+                    "maxItems": 32,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 32
+                    }
                   }
                 },
                 "required": [
@@ -2045,22 +2045,22 @@
                     ]
                   },
                   "airportNames": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "airlines": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "flightDirection": {
                     "anyOf": [
@@ -2090,13 +2090,13 @@
                     ]
                   },
                   "layovers": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 500
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "fareConditions": {
                     "anyOf": [
@@ -2159,6 +2159,7 @@
                     ]
                   },
                   "constraintEvidence": {
+                    "maxItems": 64,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -2193,8 +2194,7 @@
                         "checkedAt"
                       ],
                       "additionalProperties": false
-                    },
-                    "maxItems": 64
+                    }
                   },
                   "source": {
                     "type": "string",
@@ -2206,13 +2206,13 @@
                     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
                   },
                   "unavailableFacts": {
+                    "maxItems": 32,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 32
+                    }
                   }
                 },
                 "required": [
@@ -2547,22 +2547,22 @@
                     ]
                   },
                   "airportNames": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "airlines": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "flightDirection": {
                     "anyOf": [
@@ -2592,13 +2592,13 @@
                     ]
                   },
                   "layovers": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 500
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "fareConditions": {
                     "anyOf": [
@@ -2661,6 +2661,7 @@
                     ]
                   },
                   "constraintEvidence": {
+                    "maxItems": 64,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -2695,8 +2696,7 @@
                         "checkedAt"
                       ],
                       "additionalProperties": false
-                    },
-                    "maxItems": 64
+                    }
                   },
                   "source": {
                     "type": "string",
@@ -2708,13 +2708,13 @@
                     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
                   },
                   "unavailableFacts": {
+                    "maxItems": 32,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 32
+                    }
                   }
                 },
                 "required": [
@@ -3055,22 +3055,22 @@
                     ]
                   },
                   "airportNames": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "airlines": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "flightDirection": {
                     "anyOf": [
@@ -3100,13 +3100,13 @@
                     ]
                   },
                   "layovers": {
+                    "maxItems": 8,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 500
-                    },
-                    "maxItems": 8
+                    }
                   },
                   "fareConditions": {
                     "anyOf": [
@@ -3169,6 +3169,7 @@
                     ]
                   },
                   "constraintEvidence": {
+                    "maxItems": 64,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -3203,8 +3204,7 @@
                         "checkedAt"
                       ],
                       "additionalProperties": false
-                    },
-                    "maxItems": 64
+                    }
                   },
                   "source": {
                     "type": "string",
@@ -3216,13 +3216,13 @@
                     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
                   },
                   "unavailableFacts": {
+                    "maxItems": 32,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 200
-                    },
-                    "maxItems": 32
+                    }
                   }
                 },
                 "required": [

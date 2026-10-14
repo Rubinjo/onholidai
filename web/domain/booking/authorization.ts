@@ -81,8 +81,12 @@ export function hashBookingTerms(terms: BookingTerms): string {
 
 export function projectBookingTerms(terms: BookingTerms): PublicBookingTerms {
   const { components, ...summary } = terms;
-  return { ...summary, components: components.map(({ supplierOfferId: _supplierOfferId,
-    inventoryId: _inventoryId, nonReversible: _nonReversible, ...component }) => component) };
+  return { ...summary, components: components.map((component) => ({
+    componentId: component.componentId, serviceStart: component.serviceStart, serviceEnd: component.serviceEnd,
+    travellerIds: component.travellerIds, finalCustomerMinor: component.finalCustomerMinor,
+    taxesMinor: component.taxesMinor, feesMinor: component.feesMinor, currency: component.currency,
+    cancellationTerms: component.cancellationTerms, expiresAt: component.expiresAt,
+  })) };
 }
 
 export function assertAuthorizationTerms(input: {

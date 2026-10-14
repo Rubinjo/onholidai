@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Transaction } from "kysely";
+import { sql, type Transaction } from "kysely";
 import type { Database } from "@/server/db/database";
 import type { BookingAuthorization } from "@/domain/booking/authorization";
 import type { BookingTransaction } from "@/domain/booking/schema";
@@ -13,7 +13,7 @@ export class BookingRepository {
       id: authorization.id, tripId: authorization.tripId, ownerUserId: authorization.userId,
       tripVersion: authorization.tripVersion, operation: authorization.operation, componentId: authorization.componentId,
       terms: authorization.terms, termsHash: authorization.termsHash,
-      acknowledgedNonReversibleActions: authorization.acknowledgedNonReversibleActions,
+      acknowledgedNonReversibleActions: sql<string[]>`${JSON.stringify(authorization.acknowledgedNonReversibleActions)}::jsonb`,
       status: authorization.status, reason: authorization.reason,
       authorizedAt: new Date(authorization.authorizedAt), expiresAt: new Date(authorization.expiresAt),
     }).execute();
@@ -45,7 +45,7 @@ export class BookingRepository {
       id: transaction.id, tripId: transaction.tripId, ownerUserId,
       authorizationId: transaction.authorizationId, operation: transaction.operation,
       workflowId: transaction.workflowId, requestId: transaction.requestId,
-      status: transaction.status, components: transaction.components,
+      status: transaction.status, components: sql<unknown[]>`${JSON.stringify(transaction.components)}::jsonb`,
       executionBasis: transaction.executionBasis, lastObservedTripVersion: transaction.lastObservedTripVersion,
       executionStatus: transaction.executionStatus, startedAt: new Date(transaction.startedAt), completedAt: null,
     }).execute();

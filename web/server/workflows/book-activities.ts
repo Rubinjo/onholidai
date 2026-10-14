@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import { bookingTermsSchema, canonicalBookingJson, hashBookingTerms } from "@/domain/booking/authorization";
-import { bookingTransactionSchema, type BookingComponentState, type BookingTransaction } from "@/domain/booking/schema";
+import { projectBookingTransactionRow, type BookingComponentState, type BookingTransaction } from "@/domain/booking/schema";
 import type { Database } from "@/server/db/database";
 import { inTransaction } from "@/server/db/transaction";
 import { BookingRepository } from "@/server/db/booking-repository";
@@ -14,7 +14,7 @@ export function createBookingActivities(database: Kysely<Database>, providers: T
   async function load(transactionId: string): Promise<BookingTransaction> {
     const row = await database.selectFrom("bookingTransactions").selectAll().where("id", "=", transactionId).executeTakeFirst();
     if (!row) throw new Error("Booking transaction not found");
-    return bookingTransactionSchema.parse({ ...row, startedAt: row.startedAt.toISOString(), completedAt: row.completedAt?.toISOString() ?? null });
+    return projectBookingTransactionRow(row);
   }
 
   return {
@@ -155,6 +155,11 @@ export function createBookingActivities(database: Kysely<Database>, providers: T
     },
 
     async recordBookingOutcome(transactionId: string, outcome: BookingComponentState) {
+      // An invalidated or expired basis keeps its durable action-required state; the
+      // trip version it was authorized against no longer accepts booking outcomes.
+      const row = await database.selectFrom("bookingTransactions").select("executionStatus")
+        .where("id", "=", transactionId).executeTakeFirst();
+      if (!row || row.executionStatus !== "active") return;
       await applyBookingOutcome(database, transactionId, outcome);
     },
 

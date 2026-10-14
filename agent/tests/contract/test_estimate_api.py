@@ -90,7 +90,9 @@ def test_api_denies_scope_amplification_and_never_echoes_invalid_input():
     }
     context = ServiceTokenContext(ids[2], ids[3], ids[0], 1)
     secret = "synthetic-local-service-secret-000000000"
-    with TestClient(create_app(lambda: Settings(), factory)) as client:
+    # Explicit settings keep the contract test independent of a developer's local .env.
+    configured = lambda: Settings(_env_file=None, service_token_secret=secret)
+    with TestClient(create_app(configured, factory)) as client:
         response = client.post(
             "/internal/v1/agent-runs", json=body, headers={"x-agent-run-id": ids[4]}
         )

@@ -95,9 +95,8 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
         [tripId, randomUUID()]);
       });
       const before = await prior.database.selectFrom("tripVersions").selectAll().execute();
-      await expect(migrate(prior.migrationConnectionString))
-        .resolves.toEqual(["003_reversibility_evidence.sql", "004_agent_runs.sql", "005_run_receipts.sql",
-          "006_foundation_corrections.sql", "007_refinement.sql"]);
+      const pending = (await loadMigrationFiles()).filter((item) => item.version >= 3).map((item) => item.filename);
+      await expect(migrate(prior.migrationConnectionString)).resolves.toEqual(pending);
       expect(await prior.database.selectFrom("tripVersions").selectAll().execute()).toEqual(before);
     } finally {
       await prior?.cleanup();

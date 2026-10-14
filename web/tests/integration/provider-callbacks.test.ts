@@ -3,6 +3,8 @@ import { createHmac } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyProviderCallback } from "../../server/supply/callbacks";
 
+vi.mock("server-only", () => ({}));
+
 describe("provider callback authentication", () => {
   afterEach(() => vi.unstubAllEnvs());
 

@@ -3,15 +3,17 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 import { sql, type Kysely } from "kysely";
 import { z } from "zod";
 import { bookingTermsSchema, canonicalBookingJson } from "@/domain/booking/authorization";
-import { bookingTransactionSchema, type BookingComponentState } from "@/domain/booking/schema";
+import { projectBookingTransactionRow } from "@/domain/booking/schema";
 import { applyBookingOutcome } from "@/domain/booking/apply-outcomes";
 import { providerForComponent } from "@/server/supply/transactions";
 import { BookingRepository } from "@/server/db/booking-repository";
 import type { Database } from "@/server/db/database";
 import { ProblemError } from "@/server/errors";
 
+const callbackStatuses = ["confirmed", "failed", "unknown", "action_required"] as const;
+type CallbackStatus = (typeof callbackStatuses)[number];
 const callbackSchema = z.object({ providerEventId: z.string().min(1).max(256), transactionId: z.uuid(),
-  componentId: z.uuid(), outcome: z.enum(["confirmed", "failed", "unknown", "action_required"]),
+  componentId: z.uuid(), outcome: z.enum(callbackStatuses),
   providerReference: z.string().min(1).max(512).nullable(), confirmedTerms: z.unknown().nullable(),
   safeReason: z.string().max(500).nullable() }).strict();
 type CallbackProvider = "duffel" | "booking" | "getyourguide" | "trainline";
@@ -48,7 +50,7 @@ export async function processProviderCallback(database: Kysely<Database>, provid
     const row = await transaction.selectFrom("bookingTransactions").selectAll()
       .where("id", "=", input.transactionId).forUpdate().executeTakeFirst();
     if (!row) throw new ProblemError({ title: "Booking transaction not found", status: 404, code: "booking_not_found" });
-    const booking = bookingTransactionSchema.parse({ ...row, startedAt: row.startedAt.toISOString(), completedAt: row.completedAt?.toISOString() ?? null });
+    const booking = projectBookingTransactionRow(row);
     const authorizedTerms = booking.executionBasis.terms.components.find((term) => term.componentId === input.componentId);
     const version = await transaction.selectFrom("tripVersions").select("snapshot")
       .where("tripId", "=", booking.tripId).where("version", "=", booking.executionBasis.startingTripVersion).executeTakeFirst();
@@ -58,7 +60,7 @@ export async function processProviderCallback(database: Kysely<Database>, provid
     }
     const existing = await transaction.selectFrom("bookingConfirmations").select(["providerReference", "terms"])
       .where("transactionId", "=", booking.id).where("componentId", "=", input.componentId).executeTakeFirst();
-    let outcome: BookingComponentState;
+    let outcome: { componentId: string; status: CallbackStatus; providerReference: string | null; safeReason: string | null };
     if (existing && (input.outcome !== "confirmed" || existing.providerReference !== input.providerReference
       || canonicalBookingJson(existing.terms) !== canonicalBookingJson(authorizedTerms))) {
       outcome = { componentId: input.componentId, status: "action_required", providerReference: existing.providerReference,

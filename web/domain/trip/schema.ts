@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { itemEvidenceFields, segmentGuidanceFields, planningDetailsSchema } from "./itinerary";
+import { itemEvidenceFields, segmentGuidanceFields, planningDetailsSchema } from "./itinerary.ts";
 
 export const CURRENT_TRIP_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 export const LEGACY_TRIP_SNAPSHOT_SCHEMA_VERSION = 0 as const;

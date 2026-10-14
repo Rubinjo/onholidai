@@ -1,14 +1,20 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import type { BookingTerms } from "@/domain/booking/authorization";
 import { bookingTermsSchema, hashBookingTerms } from "@/domain/booking/authorization";
-import { tripSnapshotSchema } from "@/domain/trip/schema";
+import { tripSnapshotSchema, type TripSnapshot } from "@/domain/trip/schema";
 import type { Database } from "@/server/db/database";
 import { providerForComponent, type TransactionProviderRegistry } from "@/server/supply/transactions";
 import type { BookingWorkflowActivities, ComponentRescheduleWorkflowInput, RevalidationWorkflowInput, RevalidationWorkflowResult } from "./booking-contract";
 
 export function createRevalidationActivities(database: Kysely<Database>, providers: TransactionProviderRegistry) {
+  // Booking terms carry only the origin facts a customer authorizes; the snapshot
+  // additionally records that the traveller confirmed it.
+  function bookingOrigin(origin: NonNullable<TripSnapshot["departureOrigin"]>): BookingTerms["departureOrigin"] {
+    return { kind: origin.kind, placeId: origin.placeId, name: origin.name, countryCode: origin.countryCode,
+      timezone: origin.timezone, airportCode: origin.airportCode };
+  }
   return {
     async revalidateBooking(input: RevalidationWorkflowInput): Promise<RevalidationWorkflowResult> {
       const record = await database.selectFrom("bookingRevalidations").selectAll()
@@ -58,7 +64,7 @@ export function createRevalidationActivities(database: Kysely<Database>, provide
         const normalized = componentTerms;
         const total = normalized.reduce((sum, term) => sum + term.finalCustomerMinor, 0);
         const expires = Math.min(...normalized.map((term) => Date.parse(term.expiresAt)));
-        terms = bookingTermsSchema.parse({ departureOrigin: snapshot.departureOrigin,
+        terms = bookingTermsSchema.parse({ departureOrigin: bookingOrigin(snapshot.departureOrigin),
           travellerParty: snapshot.travellerParty, components: normalized,
           totalPrice: { currency, minorUnits: total },
           nonReversibleActions: normalized.filter((term) => term.nonReversible).map((term) => term.componentId) });
@@ -66,11 +72,12 @@ export function createRevalidationActivities(database: Kysely<Database>, provide
         expiresAt = new Date(expires).toISOString();
       }
       const status = allHaveTerms && expiresAt && Date.parse(expiresAt) > checkedAt.getTime() ? "completed" : "failed";
-      const finalOutcomes = outcomes.map(({ terms: _terms, ...outcome }) => outcome);
+      const finalOutcomes = outcomes.map(({ componentId, outcome, safeReason }) => ({ componentId, outcome,
+      ...(safeReason ? { safeReason } : {}) }));
       const result: RevalidationWorkflowResult = { workflowId: input.workflowId, status, outcomes: finalOutcomes,
         terms: status === "completed" ? terms : null, termsHash: status === "completed" ? termsHash : null,
         expiresAt: status === "completed" ? expiresAt : null };
-      await database.updateTable("bookingRevalidations").set({ status: result.status, outcomes: result.outcomes,
+      await database.updateTable("bookingRevalidations").set({ status: result.status, outcomes: sql<unknown[]>`${JSON.stringify(result.outcomes)}::jsonb`,
         terms: result.terms, termsHash: result.termsHash, expiresAt: result.expiresAt ? new Date(result.expiresAt) : null,
         updatedAt: checkedAt }).where("workflowId", "=", input.workflowId).execute();
       await database.insertInto("auditEvents").values({ id: randomUUID(), actorType: "service", actorId: "booking-worker",
@@ -125,7 +132,8 @@ export function createRevalidationActivities(database: Kysely<Database>, provide
         outcome: valid ? result!.outcome : result?.outcome === "unavailable" ? "unavailable" as const : "unknown" as const,
         ...(result?.safeReason ? { safeReason: result.safeReason.slice(0, 500) } : {}) }];
       if (valid && requestedTerms) {
-        terms = bookingTermsSchema.parse({ departureOrigin: snapshot.departureOrigin, travellerParty: snapshot.travellerParty,
+        terms = bookingTermsSchema.parse({ departureOrigin: bookingOrigin(snapshot.departureOrigin),
+          travellerParty: snapshot.travellerParty,
           components: [requestedTerms], totalPrice: { currency: requestedTerms.currency, minorUnits: requestedTerms.finalCustomerMinor },
           nonReversibleActions: requestedTerms.nonReversible ? [requestedTerms.componentId] : [] });
         termsHash = hashBookingTerms(terms);
@@ -135,7 +143,7 @@ export function createRevalidationActivities(database: Kysely<Database>, provide
       const response: RevalidationWorkflowResult = { workflowId: input.workflowId, status, outcomes,
         terms: status === "completed" ? terms : null, termsHash: status === "completed" ? termsHash : null,
         expiresAt: status === "completed" ? expiresAt : null };
-      await database.updateTable("bookingRevalidations").set({ status: response.status, outcomes: response.outcomes,
+      await database.updateTable("bookingRevalidations").set({ status: response.status, outcomes: sql<unknown[]>`${JSON.stringify(response.outcomes)}::jsonb`,
         terms: response.terms, termsHash: response.termsHash,
         expiresAt: response.expiresAt ? new Date(response.expiresAt) : null, updatedAt: checkedAt })
         .where("workflowId", "=", input.workflowId).execute();

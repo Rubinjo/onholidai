@@ -1,9 +1,9 @@
-import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { z } from "zod";
 
+import { assertGeneratedArtifact } from "./generated-artifact.mjs";
 import {
   CURRENT_TRIP_SNAPSHOT_SCHEMA_VERSION,
   tripSnapshotSchema,
@@ -24,7 +24,7 @@ const generated = `${JSON.stringify(
 
 if (process.argv.includes("--check")) {
   const committed = await readFile(outputPath, "utf8");
-  assert.equal(committed, generated, "snapshot-v1.schema.json has drifted; run pnpm snapshot:contract");
+  assertGeneratedArtifact(committed, generated, "snapshot-v1.schema.json has drifted; run pnpm snapshot:contract");
   console.log("Validated TripSnapshot v1 contract drift.");
 } else {
   await writeFile(outputPath, generated, "utf8");
@@ -39,5 +39,5 @@ const itinerary = `${JSON.stringify({
   ...z.toJSONSchema(z.array(itineraryDaySchema).max(366), { target: "draft-2020-12" }),
 }, null, 2)}\n`;
 if (process.argv.includes("--check")) {
-  assert.equal(await readFile(itineraryPath, "utf8"), itinerary, "itinerary-v1.schema.json has drifted");
+  assertGeneratedArtifact(await readFile(itineraryPath, "utf8"), itinerary, "itinerary-v1.schema.json has drifted");
 } else { await writeFile(itineraryPath, itinerary, "utf8"); }

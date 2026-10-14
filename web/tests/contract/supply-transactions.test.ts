@@ -1,10 +1,12 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { normalizeTransactionOutcome } from "../../server/supply/transactions";
 import { createDuffelTransactionAdapter } from "../../server/supply/providers/duffel-transactions";
 import { createBookingTransactionAdapter } from "../../server/supply/providers/booking-transactions";
 import { createGetYourGuideTransactionAdapter } from "../../server/supply/providers/getyourguide-transactions";
 import { createTrainlineTransactionAdapter } from "../../server/supply/providers/trainline-transactions";
+
+vi.mock("server-only", () => ({}));
 
 describe("transaction supply contracts", () => {
   it.each([

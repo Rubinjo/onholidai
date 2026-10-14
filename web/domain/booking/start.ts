@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import { z } from "zod";
 import { bookingTermsSchema, type BookingAuthorization } from "@/domain/booking/authorization";
-import { bookingTransactionSchema, type BookingTransaction } from "@/domain/booking/schema";
+import { bookingTransactionSchema, projectBookingTransactionRow, type BookingTransaction } from "@/domain/booking/schema";
 import type { Database } from "@/server/db/database";
 import { inTransaction } from "@/server/db/transaction";
 import { BookingRepository } from "@/server/db/booking-repository";
@@ -21,8 +21,7 @@ export async function startBooking(database: Kysely<Database>, userId: string, t
     if (!trip) throw new ProblemError({ title: "Trip not found", status: 404, code: "trip_not_found" });
     const existing = await transaction.selectFrom("bookingTransactions").selectAll()
       .where("authorizationId", "=", input.authorizationId).where("ownerUserId", "=", userId).executeTakeFirst();
-    if (existing) return bookingTransactionSchema.parse({ ...existing, startedAt: existing.startedAt.toISOString(),
-      completedAt: existing.completedAt?.toISOString() ?? null });
+    if (existing) return projectBookingTransactionRow(existing);
     const row = await new BookingRepository(transaction).getAuthorizationForUpdate(input.authorizationId, tripId, userId);
     if (!row) throw new ProblemError({ title: "Booking authorization not found", status: 404, code: "booking_authorization_not_found" });
     const authorization: BookingAuthorization = {

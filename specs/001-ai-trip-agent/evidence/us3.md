@@ -12,22 +12,53 @@ Date: 2026-10-14. Scope: T070–T080 and convergence T139–T142. The implementa
 
 ## Validation actually performed
 
-- `agent/.venv/Scripts/python.exe -m pytest agent/tests -q`: **63 passed** after installing pinned `tzdata==2025.2`, including proposal preservation, missing-timezone clarification, reviewed activity moves/removals with supplier protection, frozen corpus integrity, and all existing agent regressions.
-- Targeted Ruff check/format for the changed Python generation/dispatch/read code, enrichment and itinerary tests: passed. Existing unrelated Python type-check errors are not claimed resolved.
+- `agent/.venv/Scripts/python.exe -m pytest agent/tests -q`: **63 passed** (Windows requires `--basetemp` because the ambient pytest temp directory is not writable in this profile).
+- `pnpm --dir web lint`: passed. `pnpm --dir web typecheck`: passed.
+- `pnpm --dir web test` against isolated PostgreSQL 18/PostGIS databases: **40 files, 214 tests passed**, including the US3 contract, integration and browser-gated specs, the frozen corpus evaluation and the booking suites.
+- `pnpm --dir web test -- tests/evaluation/evaluation-corpus.test.ts`: scores the frozen 100-day/500-item corpus against the real feasibility policy and records **480/500 items passing with exact agreement to the frozen per-item labels**, and all 20 hard-conflict cases reported as blocking with their frozen expected code.
+- `pnpm --dir web snapshot:contract:check` and `pnpm --dir web corpus:check`: passed after the generated `snapshot-v1`/`itinerary-v1` contracts were regenerated (semantically identical to the committed schemas, key order only) and the check comparison was made line-ending tolerant for Windows checkouts.
+- Python lock resolution was attempted offline but could not resolve the pre-existing FastAPI pin from local cache. `uv sync --project agent --frozen` installed the pinned `tzdata==2025.2` from the lock; `Europe/Lisbon`-dependent finalization then resolved correctly.
 - `git diff --check`: passed. Repository ignore configuration already covers detected Node/Python/Docker build outputs, caches, secrets and test artifacts; no publishing ignores are required for the private workspace.
-- Python lock resolution was attempted offline but could not resolve the pre-existing FastAPI pin from local cache. The new tzdata entry was added using the exact PyPI 2025.2 wheel/sdist URLs, sizes and SHA-256 digests; unrelated locked versions were retained. A later locked install/drift check is required.
+
+### Repairs required to run the US3 suites
+
+- Operation values parsed by `proposalOperationSchema` used `z.json()`, which rejects own keys whose value is `undefined`.
+  Parsed component objects carry `planningDetails: undefined`, so refinement repricing and frozen-refinement validation
+  failed. The value schema now tolerates undefined-valued keys, which JSON serialization drops.
+- `tests/integration/finalization.test.ts` asserted that exactly nine hours of overnight rest is a violation; policy v1
+  requires "at least 9 hours", so the test now verifies the boundary is preserved and constructs a genuine 8-hour violation.
+- `web/domain/trip/schema.ts` imported `./itinerary` without an extension, which `node --experimental-strip-types`
+  cannot resolve, so the snapshot-contract generator could not run at all.
 
 ## Frozen evaluation revision
 
 Corpus 1.3.0, policy 1; seed `onholidai-evaluation-v1-seed-20261011`; hash `sha256:797b8a4f4d20a32b5c5863a5e2b093f12bde056a99b2ac7828b51327839fb176`.
 
-Both corpus copies replace arbitrary itinerary labels and hard-conflict strings with executable timezone-qualified snapshot inputs. Twenty of the 500 items have a concrete duration-upper-bound violation; expected scoring is 480/500. The 20 hard cases contain actual impossible connections, failed required accessibility, ineligibility, date-window violations or conflicting required constraints. These are expected outcomes, **not measured web-policy results**. Estimate/refinement cases, seed and denominators are preserved. The recorded revision reason requires a fresh complete evaluation. T128 remains open until the complete corpus evaluates successfully.
+Both corpus copies replace arbitrary itinerary labels and hard-conflict strings with executable timezone-qualified snapshot inputs. Twenty of the 500 items carry a concrete duration-upper-bound violation. The 20 hard cases contain actual impossible connections, failed required accessibility, ineligibility, date-window violations or conflicting required constraints. Estimate/refinement cases, seed and denominators are preserved.
+
+Measured with `tests/evaluation/evaluation-corpus.test.ts` (SC-007 gate):
+
+- **480/500 items pass** the feasibility policy, exactly matching the frozen per-item labels (threshold 475/500).
+- **20/20 hard-conflict cases are blocked and disclosed** with their frozen expected code (`impossible_connection`,
+  `required_constraint`, `component_unavailable`, `date_duration`, `constraint_conflict`). `finalizeTrip` refuses to
+  commit while any blocking issue exists, so every case leaves the trip a draft.
+- The four `date_window_violation` inputs are rejected by the authoritative v1 snapshot contract (availability window
+  start after end) that finalization itself applies, so they can never be persisted and never reach policy review. The
+  policy still reports `date_duration` when such state is evaluated defensively. Recording a *schema-valid* date/duration
+  hard conflict needs a corpus revision and stays with T128.
 
 ## Deferred validation and commands
 
-The user explicitly requested skipping checks requiring Node.js, pnpm or Docker in this environment. Web tests, TypeScript/lint/build, PostgreSQL-backed finalization tests, contract/corpus generator drift checks and browser runs were therefore not executed. No 475/500 web-policy result, successful browser journey, live-provider performance, manual screen-reader result or participant rating is claimed.
+Executed in this environment: lint, typecheck, the full web suite with isolated PostgreSQL databases, the corpus and
+snapshot drift checks, the contract suites and the agent suite (see results above). Still outstanding and not claimed:
 
-Run in the intended environment from the repository root (with an isolated test database for integration tests):
+- `pnpm --dir web build` was not run.
+- Browser journeys (`@us3`, `@us4`) remain gated on a seeded authenticated fixture and were skipped; no browser,
+  screen-reader or zoom result is claimed.
+- No participant cohort was run, so the SC-007 pace/destination-mix ratings and every SC-012 manual outcome remain open
+  (T081, T107, T112, T114).
+
+Run from the repository root (with isolated test-database credentials set):
 
 ```powershell
 pnpm lint
@@ -36,9 +67,8 @@ pnpm --dir web build
 pnpm --dir web snapshot:contract:check
 pnpm --dir web corpus:check
 pnpm test:contracts
-pnpm --dir web test -- tests/integration/finalization.test.ts
-pnpm test
-uv sync --project agent --frozen
+pnpm --dir web test
+pnpm --dir web exec vitest run tests/evaluation/evaluation-corpus.test.ts
 uv run --project agent pytest
 ```
 
@@ -46,4 +76,4 @@ For browser tests, create a fresh synthetic fixture using `node scripts/seed-us2
 
 Deterministic supplier doubles now use separate outbound/return flights and finite activity/rail intervals rather than whole-query transport/activity spans; the combined synthetic flight cost is preserved. These are explicitly fictional schedules and unknown supplier/location facts remain unverified. Previously accepted fixtures retain their original immutable placeholder intervals: finalization deliberately discloses/blocks conflicts from those inputs. Reseed for the revised synthetic schedules, and use genuinely sourced component times for live-provider acceptance.
 
-T081 remains unchecked: run US3 suites, confirm at least 475/500 scored items and all 20 hard conflicts, complete keyboard/screen-reader review including map failure, and collect actual fixed-cohort ratings (at least 18/20 scoring pace and destination mix ≥4/5). None of those manual/participant outcomes are inferred from Python tests.
+T081 remains unchecked: the US3 suites and the frozen corpus now pass as recorded above, but the manual keyboard/screen-reader review including map failure and the actual fixed-cohort pace/destination-mix ratings (at least 18/20 scoring ≥4/5) have still not been collected. None of those manual or participant outcomes are inferred from automated tests.

@@ -3,18 +3,19 @@
   "title": "Itinerary v1",
   "description": "Timezone-qualified daily planning and reproducible feasibility policy v1 evidence.",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "maxItems": 366,
   "type": "array",
   "items": {
     "type": "object",
     "properties": {
       "practicalNotes": {
+        "maxItems": 16,
         "type": "array",
         "items": {
           "type": "string",
           "minLength": 1,
           "maxLength": 1000
-        },
-        "maxItems": 16
+        }
       },
       "mandatoryTravelException": {
         "type": "string",
@@ -52,13 +53,13 @@
               "maxLength": 200
             },
             "practicalNotes": {
+              "maxItems": 16,
               "type": "array",
               "items": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 1000
-              },
-              "maxItems": 16
+              }
             },
             "startOffset": {
               "type": "string",
@@ -89,13 +90,13 @@
               ]
             },
             "timingEvidence": {
+              "maxItems": 32,
               "type": "array",
               "items": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 500
-              },
-              "maxItems": 32
+              }
             },
             "verificationStatus": {
               "type": "string",
@@ -110,6 +111,7 @@
               "const": "1"
             },
             "constraintEvidence": {
+              "maxItems": 64,
               "type": "array",
               "items": {
                 "type": "object",
@@ -144,8 +146,7 @@
                   "checkedAt"
                 ],
                 "additionalProperties": false
-              },
-              "maxItems": 64
+              }
             },
             "transitionFromPrevious": {
               "type": "object",
@@ -568,6 +569,5 @@
       "items"
     ],
     "additionalProperties": false
-  },
-  "maxItems": 366
+  }
 }

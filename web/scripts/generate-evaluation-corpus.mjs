@@ -1,8 +1,8 @@
-import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createItineraryCases } from "./itinerary-corpus.mjs";
+import { assertGeneratedArtifact } from "./generated-artifact.mjs";
 
 const CORPUS_VERSION = "1.3.0";
 const POLICY_VERSION = "1";
@@ -194,7 +194,7 @@ const outputs = [
 
 if (process.argv.includes("--check")) {
   for (const output of outputs) {
-    assert.equal(
+    assertGeneratedArtifact(
       await readFile(output, "utf8"),
       generated,
       `${output} has drifted; run the corpus generator`,

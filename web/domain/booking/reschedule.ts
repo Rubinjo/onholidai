@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import { z } from "zod";
 import type { Database } from "@/server/db/database";
 import { ProblemError } from "@/server/errors";
@@ -37,7 +37,7 @@ export async function startComponentRescheduleRevalidation(database: Kysely<Data
       return { ...prior, bookingId, componentId, requestedChange: input.requestedChange };
     }
     await transaction.insertInto("bookingRevalidations").values({ workflowId, tripId: booking.tripId, ownerUserId: userId,
-      requestId: input.requestId, requestFingerprint, tripVersion: trip.currentVersion, status: "accepted", outcomes: [], terms: null,
+      requestId: input.requestId, requestFingerprint, tripVersion: trip.currentVersion, status: "accepted", outcomes: sql<unknown[]>`${JSON.stringify([])}::jsonb`, terms: null,
       termsHash: null, expiresAt: null, createdAt: new Date(), updatedAt: new Date() }).execute();
     await transaction.insertInto("outboxEvents").values({ id: randomUUID(), eventType: "booking.reschedule.revalidation.requested",
       eventVersion: 1, aggregateType: "trip", aggregateId: booking.tripId, aggregateVersion: trip.currentVersion,

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import { z } from "zod";
-import { bookingTermsSchema, hashBookingTerms, type BookingOperation } from "@/domain/booking/authorization";
+import { bookingTermsSchema, hashBookingTerms, type BookingAuthorization, type BookingOperation } from "@/domain/booking/authorization";
 import { ProblemError } from "@/server/errors";
 import type { Database } from "@/server/db/database";
 import { BookingRepository } from "@/server/db/booking-repository";

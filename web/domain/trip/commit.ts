@@ -19,7 +19,7 @@ const commitInputSchema = z
     tripId: z.uuid(),
     ownerUserId: z.string().trim().min(1),
     expectedVersion: z.number().int().nonnegative(),
-    lifecycleState: z.enum(["draft", "finalized"]).optional(),
+    lifecycleState: z.enum(["draft", "finalized", "partially_booked", "booked", "cancelled"]).optional(),
     creation: z.object({ title: z.string().trim().min(1).max(120) }).strict().optional(),
     requestId: z.uuid(),
     idempotencyKey: z.string().trim().min(1).max(256),

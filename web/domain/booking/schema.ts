@@ -29,6 +29,21 @@ export type BookingTransaction = z.infer<typeof bookingTransactionSchema>;
 export type BookingComponentState = z.infer<typeof bookingComponentStateSchema>;
 export type BookingComponentStatus = BookingComponentState["status"];
 
+// Stored booking rows keep the owner beside the transaction; the transaction
+// contract carries it inside the immutable execution basis instead.
+export function projectBookingTransactionRow(row: {
+  id: string; tripId: string; authorizationId: string; operation: BookingTransaction["operation"];
+  workflowId: string; requestId: string; status: BookingTransaction["status"]; components: unknown;
+  executionBasis: unknown; lastObservedTripVersion: number; executionStatus: BookingTransaction["executionStatus"];
+  startedAt: Date; completedAt: Date | null;
+}): BookingTransaction {
+  return bookingTransactionSchema.parse({ id: row.id, tripId: row.tripId, authorizationId: row.authorizationId,
+    operation: row.operation, workflowId: row.workflowId, requestId: row.requestId, status: row.status,
+    components: row.components, executionBasis: row.executionBasis,
+    lastObservedTripVersion: row.lastObservedTripVersion, executionStatus: row.executionStatus,
+    startedAt: row.startedAt.toISOString(), completedAt: row.completedAt?.toISOString() ?? null });
+}
+
 export const bookingAttemptSchema = z.object({
   id: z.uuid(), transactionId: z.uuid(), componentId: z.uuid(), operation: z.enum(["book_trip", "reschedule_component", "cancel_component"]),
   idempotencyKey: z.string().min(1).max(256), requestFingerprint: z.string().regex(/^[a-f0-9]{64}$/),

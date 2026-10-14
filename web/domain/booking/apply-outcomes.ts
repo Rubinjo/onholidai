@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import type { Database } from "@/server/db/database";
 import { ProblemError } from "@/server/errors";
 import { commitTripMutation } from "@/domain/trip/commit";
 import { readOwnedTripVersion } from "@/domain/trip/read";
 import { tripSnapshotSchema } from "@/domain/trip/schema";
-import { bookingTransactionSchema, type BookingComponentState } from "@/domain/booking/schema";
+import { projectBookingTransactionRow, type BookingComponentState } from "@/domain/booking/schema";
 import { canonicalBookingJson } from "@/domain/booking/authorization";
 import { inTransaction } from "@/server/db/transaction";
 
@@ -31,8 +31,7 @@ export async function applyBookingOutcome(database: Kysely<Database>, transactio
     const lockedBookingRow = await transaction.selectFrom("bookingTransactions").selectAll()
       .where("id", "=", transactionId).forUpdate().executeTakeFirst();
     if (!trip || !lockedBookingRow) throw new ProblemError({ title: "Trip not found", status: 404, code: "trip_not_found" });
-    const booking = bookingTransactionSchema.parse({ ...lockedBookingRow, startedAt: lockedBookingRow.startedAt.toISOString(),
-      completedAt: lockedBookingRow.completedAt?.toISOString() ?? null });
+    const booking = projectBookingTransactionRow(lockedBookingRow);
     if (trip.ownerUserId !== booking.executionBasis.ownerUserId) throw new ProblemError({ title: "Trip not found", status: 404, code: "trip_not_found" });
     if (trip.currentVersion !== booking.lastObservedTripVersion) {
       await transaction.updateTable("bookingTransactions").set({ executionStatus: "invalidated", status: "action_required" })
@@ -81,7 +80,7 @@ export async function applyBookingOutcome(database: Kysely<Database>, transactio
     const unresolved = updatedComponents.some((item) => ["unknown", "action_required"].includes(item.status));
     const confirmedCount = updatedComponents.filter((item) => item.status === "confirmed").length;
     const complete = updatedComponents.every((item) => ["confirmed", "failed", "cancelled"].includes(item.status));
-    await transaction.updateTable("bookingTransactions").set({ components: updatedComponents,
+    await transaction.updateTable("bookingTransactions").set({ components: sql<unknown[]>`${JSON.stringify(updatedComponents)}::jsonb`,
       lastObservedTripVersion: receipt.version,
       status: unresolved ? "action_required" : complete && updatedComponents.every((item) => item.status === "confirmed")
         ? "confirmed" : complete && updatedComponents.every((item) => item.status === "cancelled") ? "cancelled"

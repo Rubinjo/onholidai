@@ -42,11 +42,16 @@ function containsProtectedValue(value: unknown, depth = 0): boolean {
   return false;
 }
 
+// Persisted as JSONB. Parsed domain objects can carry own keys whose value is
+// undefined; JSON serialization drops those keys, so they are tolerated here.
+const jsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([z.string(), z.number(), z.boolean(),
+  z.null(), z.undefined(), z.array(jsonValueSchema), z.record(z.string(), jsonValueSchema)]));
+
 export const proposalOperationSchema = z.object({
   operation: z.enum(["add", "replace", "remove", "reorder"]),
   target: text(500).regex(/^\/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(\/[^/]+)*$/)
     .refine((target) => !target.split("/").some((part) => protectedKeys.has(part)), "Protected operation target"),
-  value: z.json(),
+  value: jsonValueSchema,
 }).strict().superRefine((operation, context) => {
   if (containsProtectedValue(operation.value)) context.addIssue({ code: "custom", path: ["value"], message: "Proposal values contain protected state" });
 });
