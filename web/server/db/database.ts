@@ -7,7 +7,7 @@ import {
   Kysely,
   PostgresDialect,
 } from "kysely";
-import { Pool, type PoolConfig } from "pg";
+import { Pool } from "pg";
 
 import type { TripCoreDatabase } from "@/server/db/types";
 
@@ -54,18 +54,21 @@ export function createDatabase({
   applicationName = "onholidai-web",
   maxConnections = 10,
 }: DatabaseConnectionOptions): Kysely<Database> {
-  const poolConfig: PoolConfig = {
+  const pool = new Pool({
     application_name: applicationName,
     connectionString,
     max: maxConnections,
-  };
-
-  const connection = new Kysely<Database>({
-    dialect: new PostgresDialect({
-      pool: new Pool(poolConfig),
-    }),
-    plugins: [new CamelCasePlugin()],
   });
 
-  return connection.withSchema("app");
+  const connection = new Kysely<Database>({
+    dialect: new PostgresDialect({ pool }),
+    plugins: [new CamelCasePlugin()],
+  }).withSchema("app");
+
+  let closing: Promise<void> | undefined;
+  // Kysely initializes its driver lazily, so destroying an instance that has not
+  // run a query would leave the owned pool open. Release the pool explicitly.
+  connection.destroy = () => (closing ??= pool.end());
+
+  return connection;
 }

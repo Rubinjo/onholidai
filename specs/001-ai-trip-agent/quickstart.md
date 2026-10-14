@@ -27,6 +27,19 @@ docker compose -f infra/compose/compose.yml --profile infrastructure --profile a
 
 Expected full-stack services: Next.js web/BFF, FastAPI agent, PostgreSQL 18 with PostGIS, Temporal development server and UI, TypeScript booking worker, and local observability collectors. Migration runs once through the controlled job before application/worker startup; do not rerun it concurrently with a separate local migration command. Redis is not required.
 
+### Running on the host instead of containers
+
+To run the applications on the host while PostgreSQL stays in Docker, start the infrastructure profile and apply migrations with the local migration runner:
+
+```bash
+docker compose -f infra/compose/compose.yml --profile infrastructure up -d postgres
+pnpm --dir web db:migrate                 # uses MIGRATION_DATABASE_URL from .env
+uv run --project agent uvicorn onholidai_agent.api.main:app --host 127.0.0.1 --port 8000
+pnpm dev                                  # or: pnpm --dir web build && pnpm --dir web start
+```
+
+`docker compose ... --profile infrastructure up -d postgres` creates the least-privileged roles, the `onholidai` database and PostGIS from `infra/postgres/` on first start, using `infra/compose/secrets/*.txt`. Those secrets are git-ignored; recreate them from `.env` (see `.env.example`) if the compose command reports a missing secret file. `infra/postgres/init/10-create-local-databases.sh` must keep LF line endings — `.gitattributes` enforces that, because a CRLF shebang makes the container's init step fail silently and leaves no database to sign in against.
+
 Run baseline checks in separate commands:
 
 ```bash
@@ -67,6 +80,26 @@ US2 adds migration 007 and the living-trip workspace. Apply migrations with the 
 LangSmith settings are `LANGSMITH_TRACING=true`, `LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com`, a real `LANGSMITH_API_KEY`, `LANGSMITH_AGENT_ID=onholidai`, and `LANGSMITH_AGENT_ENVIRONMENT=local`. Compose forwards them to agent; local agent startup reads the root `.env`. Only allowlisted outcome metadata is exported. Graph state and raw prompts/responses are excluded before ingestion. LangSmith must have agent addressing enabled for the selected workspace.
 
 For authenticated browser scenarios, provide `US1_STORAGE_STATE` and `US2_TRIP_ID` for a seeded Tokyo/Kyoto estimated draft whose date/duration limits allow two more nights. Run `pnpm --dir web test:e2e -- tests/e2e/refinement.spec.ts`. For database regressions, provide `TEST_DATABASE_ADMIN_URL`, `TEST_DATABASE_MIGRATION_URL`, `TEST_DATABASE_APP_URL`, and `TEST_DATABASE_WORKER_URL`. See [US2 evidence](./evidence/us2.md) for automated results and open acceptance gates.
+
+### Seeding the authenticated US2 fixture
+
+There is no browser sign-up UI; accounts are created through the Better Auth API. Use the seeding helper instead of creating one by hand:
+
+```bash
+pnpm seed:us2-fixture
+```
+
+It creates or signs in the synthetic account `synthetic-us2@example.invalid`, writes a Playwright storage state, creates the Tokyo/Kyoto draft from the US1 setup inputs, runs one `initial_estimate` request, explicitly accepts the proposal, and prints the two variables the refinement suites need:
+
+```bash
+export US1_STORAGE_STATE=.playwright/us2-storage-state.json
+export US2_TRIP_ID=<printed trip id>
+pnpm --dir web test:e2e -- tests/e2e/refinement.spec.ts --project=chromium
+```
+
+Both refinement scenarios mutate the same trip, so `US2_TRIP_ID` must be re-seeded per run: the second scenario intends `Add two nights there` to be ambiguous, and a trip that already received those nights correctly answers with a feasibility question instead of a proposal. Run the scenarios one at a time rather than relying on the parallel default.
+
+Measure the two-second convergence budget against a production build (`pnpm --dir web build && pnpm --dir web start`). Under `next dev` the compile/refresh latency can push staleness discovery past two seconds, which is a development-server artifact and not the measured result.
 
 1. Ask: `Add two days in Kyoto and keep mornings free.`
 2. Review the structured proposal and its schedule, route, accommodation, activity, and price impacts.

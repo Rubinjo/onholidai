@@ -231,9 +231,58 @@ summary {
 .planning-page button { margin: .3rem; min-height: 44px; }
 .planning-page li { margin: .7rem 0; overflow-wrap: anywhere; }
 .planning-page input[type="range"] { min-height: 44px; }
-.map-label { background: white; color: #111; border: 1px solid #111; padding: .25rem; }
-.planning-workspace { max-width: 100%; }
-.trip-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
-.trip-workspace > * { min-width: 0; overflow-wrap: anywhere; }
-.trip-price-bar { position: sticky; bottom: 0; padding: 1rem; background: var(--background, white); border: 2px solid currentColor; z-index: 2; }
-@media (max-width: 70rem) { .trip-workspace { grid-template-columns: minmax(0, 1fr); } .trip-price-bar { position: static; } }
+.map-label { background: white; color: #111; border: 1px solid #111; padding: .25rem; white-space: nowrap; }
+.map-section { display: flex; flex-direction: column; gap: .5rem; margin: 0; }
+.map-section__canvas { height: 300px; border: 1px solid var(--border); }
+.map-section p { margin: 0; font-size: .82rem; line-height: 1.35; color: var(--text-muted); }
+/* In the workspace the map absorbs the middle panel's spare height. min-height keeps it
+   from being squeezed below its own content, so the map and its attribution stay whole. */
+.map-section--fill { flex: 1 1 auto; min-height: min-content; }
+.map-section--fill .map-section__canvas { flex: 1 1 auto; height: auto; min-height: 8rem; }
+
+/* Final workspace: the outer panels scroll independently, the middle column owns the
+   route, map, price and booking, and the price bar is placed there by grid area so it
+   can stay last in the DOM for the documented focus order. */
+.planning-workspace { display: flex; flex-direction: column; gap: .75rem; max-width: none; height: 100dvh; margin: 0; padding: clamp(0.75rem, 2vw, 1.5rem); overflow: hidden; }
+.planning-workspace > h1 { margin: 0; font-size: clamp(1.3rem, 2.4vw, 1.8rem); line-height: 1.2; }
+.planning-workspace > [role="alert"] { margin: 0; }
+.trip-workspace {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1rem 1.5rem;
+  /* The outer panels span both rows so they run to the bottom of the page; the middle
+     column stacks route+map above the price/booking row. */
+  grid-template-areas: "details route conversation" "details price conversation";
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+}
+.trip-workspace__pane { display: flex; flex-direction: column; gap: 1rem; min-height: 0; min-width: 0; overflow-y: auto; overscroll-behavior: contain; }
+.trip-workspace__pane > * { min-width: 0; overflow-wrap: anywhere; }
+.trip-workspace__pane--details { grid-area: details; }
+.trip-workspace__pane--route { grid-area: route; gap: .75rem; overflow: hidden; }
+.trip-workspace__pane--conversation { grid-area: conversation; }
+/* Sizing contract for the middle panel: the map keeps its content size, the route list
+   absorbs any deficit by scrolling internally, so nothing is clipped and price/booking
+   stays visible without the panel itself ever scrolling. */
+.trip-workspace__route-list { flex: 0 1 auto; min-height: 6rem; overflow-y: auto; overscroll-behavior: contain; }
+.trip-workspace__pane--route .trip-workspace__map { display: flex; flex: 1 1 auto; flex-direction: column; min-height: min-content; }
+/* Compact summary sizing: the middle panel shows the route, map and price together. */
+.trip-workspace__pane--route { font-size: .9rem; line-height: 1.3; }
+.trip-workspace__pane--route h2 { margin: 0 0 .25rem; font-size: 1.1rem; line-height: 1.2; }
+.trip-workspace__pane--route h3 { margin: .45rem 0 .2rem; font-size: .95rem; line-height: 1.2; }
+.trip-workspace__pane--route p { margin: 0; }
+.trip-workspace__pane--route ol, .trip-workspace__pane--route ul { margin: 0; padding-inline-start: 1.25rem; }
+.trip-workspace__pane--route li { margin: .2rem 0; }
+.trip-price-bar { grid-area: price; margin: 0; padding: .75rem 1rem; border: 2px solid currentColor; background: var(--surface); }
+.trip-price-bar h2 { margin: 0 0 .25rem; font-size: clamp(1.05rem, 1.7vw, 1.35rem); line-height: 1.2; }
+.trip-price-bar p { margin: 0 0 .5rem; font-size: .78rem; line-height: 1.3; color: var(--text-muted); }
+.trip-price-bar button { min-height: 2.5rem; padding: .5rem .9rem; }
+@media (max-width: 70rem) {
+  .planning-workspace { height: auto; min-height: 100dvh; overflow: visible; }
+  .trip-workspace { grid-template-areas: "details" "route" "conversation" "price"; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
+  .trip-workspace__pane, .trip-workspace__pane--route { overflow: visible; }
+  .trip-workspace__pane--route > section:first-child { overflow: visible; }
+  .map-section--fill .map-section__canvas { min-height: 16rem; }
+  .trip-price-bar { position: sticky; bottom: 0; z-index: 2; }
+}

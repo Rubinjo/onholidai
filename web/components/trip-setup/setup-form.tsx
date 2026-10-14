@@ -29,7 +29,8 @@ export function SetupForm() {
       if (!origin) throw new Error("Confirm a departure city or airport before requesting an estimate.");
       const snapshot = customerSnapshotSchema.parse({ departureOrigin: origin, destinations, availabilityWindows: windows,
         duration, travellerParty: party, preferences, constraints, itineraryDays: [], components: [], warnings: [],
-        price: { currency, finalCustomerMinor: 0, taxesMinor: 0, feesMinor: 0, status: "estimated", checkedAt: null } });
+        // A new draft has no accepted estimate yet; the server records the empty estimate's check time.
+        price: { currency, finalCustomerMinor: 0, taxesMinor: 0, feesMinor: 0, status: "estimated", checkedAt: new Date().toISOString() } });
       const trip = z.object({ tripId: z.uuid(), version: z.number().int().positive() }).passthrough().parse(
         await planningJson("/api/v1/trips", { requestId, title, currency, snapshot }));
       const result = await planningJson(`/api/v1/trips/${trip.tripId}/agent-runs`, {

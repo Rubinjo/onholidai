@@ -13,9 +13,13 @@ async function setup(page: Page) {
 }
 test.beforeEach(() => test.skip(!process.env.US1_STORAGE_STATE, "Requires migrated deterministic services and authenticated synthetic storage state"));
 test("@us1 outage status preserves the saved setup without acceptance", async ({ page }) => {
+  // Answer every status poll with a failed run. Deriving the envelope from the URLs avoids
+  // re-reading an intercepted body, which the page can abandon while it navigates.
   await page.route("**/api/v1/agent-runs/*", async (route) => {
-    const response = await route.fetch(), body = await response.json() as Record<string, unknown>;
-    await route.fulfill({ response, json: { ...body, status: "failed", result: null } });
+    const runId = new URL(route.request().url()).pathname.split("/").pop();
+    const tripId = new URL(page.url()).pathname.split("/")[2];
+    await route.fulfill({ status: 200, contentType: "application/json",
+      body: JSON.stringify({ id: runId, tripId, status: "failed", result: null, interruptionReason: "deadline" }) });
   });
   await setup(page);
   await expect(page.getByText(/Research status: failed/)).toBeVisible({ timeout: 35000 });

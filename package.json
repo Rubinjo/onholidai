@@ -16,7 +16,8 @@
     "test:contracts": "uv run --project agent python agent/scripts/export_contracts.py --check && pnpm --dir web agent:contracts:check && node scripts/validate-contracts.mjs && pnpm --dir web snapshot:contract:check && pnpm --filter @onholidai/web test:contracts && node scripts/run-agent-contract-tests.mjs",
     "test:e2e": "pnpm --filter @onholidai/web test:e2e",
     "test:migrations": "pnpm --dir web db:migrate:test",
-    "test:temporal": "pnpm --dir web test:temporal"
+    "test:temporal": "pnpm --dir web test:temporal",
+    "seed:us2-fixture": "node scripts/seed-us2-fixture.mjs"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "10.1.1",

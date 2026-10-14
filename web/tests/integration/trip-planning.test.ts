@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createTrip } from "../../domain/trip/create";
 import { readAgentTrip, readTrip } from "../../domain/trip/read";
+import { researchDraftImpact } from "../../domain/trip/edit";
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import { readPricingDiagnostic } from "../../domain/pricing/diagnostics";
 import { ProposalRepository } from "../../server/db/proposal-repository";
+import { createPlanningProviders } from "../../server/supply/providers";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { createIsolatedTestDatabase, hasIsolatedDatabaseConfiguration, type IsolatedTestDatabase } from "../helpers/database";
 
@@ -97,11 +99,14 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("initial trip persistence",
       conversationId, ownerUserId: owner, requestId, baseTripVersion: 1, purpose: "refinement",
       requestFingerprint: "a".repeat(64), leaseExpiresAt: new Date(now.getTime() + 90_000),
       completedAt: null, errorCategory: null, result: null }).execute();
+    const operations = [{ operation: "replace" as const, target: "/preferences/pace", value: 60 }];
+    const review = await researchDraftImpact(createSyntheticTripSnapshot(), 1, operations,
+      createPlanningProviders("deterministic"));
     const proposal = { id: randomUUID(), tripId: created.tripId, agentRunId: runId,
       initiatingRequestId: requestId, purpose: "refinement", baseTripVersion: 1,
-      operations: [{ operation: "replace", target: "/preferences/pace", value: 60 }],
-      affectedFacts: ["pace"], rationale: "Synthetic rationale", status: "proposed",
-      createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + 600_000).toISOString() };
+      operations, affectedFacts: review.affectedFacts, rationale: "Synthetic rationale", status: "proposed",
+      createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + 600_000).toISOString(),
+      previewSnapshot: review.previewSnapshot, priceImpact: review.priceImpact, scheduleImpact: review.scheduleImpact };
     const context = { userId: owner, tripId: created.tripId, requestId, baseTripVersion: 1 };
     const repository = new ProposalRepository(fixture.database);
     expect(await repository.record(context, proposal)).toEqual(proposal);

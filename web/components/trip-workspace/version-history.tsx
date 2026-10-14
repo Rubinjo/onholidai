@@ -1,5 +1,5 @@
 "use client";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 import { planningJson, planningError } from "@/components/trip-setup/http";
@@ -7,7 +7,10 @@ import type { TripEnvelope } from "./use-trip";
 import { customerSnapshotSchema } from "@/domain/trip/proposal";
 const historySchema = z.object({ items: z.array(z.object({ version: z.number(), initiatingRequestId: z.string(), affectedFacts: z.array(z.string()), reversible: z.boolean(), snapshot: customerSnapshotSchema }).passthrough()) });
 export function VersionHistory({ trip, onCommit }: { trip: TripEnvelope; onCommit: (raw: unknown) => void }) {
-  const query = useQuery({ queryKey: ["history", trip.tripId, trip.version], queryFn: async () => historySchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}/versions`)) });
+  // Keep the previous history visible while the newly committed version loads, so the
+  // list does not blank out and detach its controls mid-interaction.
+  const query = useQuery({ queryKey: ["history", trip.tripId, trip.version], placeholderData: keepPreviousData,
+    queryFn: async () => historySchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}/versions`)) });
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   async function undo(targetVersion: number) {
     setError(""); setBusy(true);

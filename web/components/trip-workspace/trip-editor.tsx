@@ -14,14 +14,14 @@ export function TripEditor({ trip, onCommit }: { trip: TripEnvelope; onCommit: (
   const [command, setCommand] = useState<{ requestId: string; expectedVersion: number; operations: { operation: string; target: string; value: unknown }[] } | null>(null);
   const [draft, setDraft] = useState(trip.snapshot);
   const [editingBase, setEditingBase] = useState(trip);
+  // Only changed settings become operations; the review contract rejects an empty request.
+  const operations = (["departureOrigin", "destinations", "availabilityWindows", "duration", "travellerParty", "preferences", "constraints"] as const)
+    .flatMap((key) => JSON.stringify(draft[key]) === JSON.stringify(editingBase.snapshot[key])
+      ? [] : [{ operation: "replace", target: `/${key}`, value: draft[key] }]);
   async function preview() {
     setBusy(true); setError(""); setReview(null);
     try {
-      const keys = ["departureOrigin", "destinations", "availabilityWindows", "duration", "travellerParty", "preferences", "constraints"] as const;
-      const operations = keys.flatMap((key) => {
-        const value = draft[key];
-        return JSON.stringify(value) === JSON.stringify(editingBase.snapshot[key]) ? [] : [{ operation: "replace", target: `/${key}`, value }];
-      });
+      if (operations.length === 0) { setError("No settings have changed. Change a setting to review its impact."); return; }
       const input = { requestId: crypto.randomUUID(), expectedVersion: editingBase.version, operations };
       setCommand(input); setReview(reviewSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}/commands/edit-preview`, input)));
     } catch (failure) { setError(planningError(failure)); } finally { setBusy(false); }

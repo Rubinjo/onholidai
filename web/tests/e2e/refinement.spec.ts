@@ -1,35 +1,67 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+// WebKit discards values set before React hydrates a controlled field, so retry
+// until the application accepts the value (and enables its submit control).
+async function enterValue(field: Locator, value: string): Promise<void> {
+  await expect(async () => {
+    await field.fill(value);
+    await expect(field).toHaveValue(value, { timeout: 1000 });
+  }).toPass({ timeout: 15000 });
+}
+
+async function enterMessage(field: Locator, submit: Locator, message: string): Promise<void> {
+  await expect(async () => {
+    await field.fill(message);
+    await expect(submit).toBeEnabled({ timeout: 1000 });
+  }).toPass({ timeout: 15000 });
+}
+
+async function requestProposal(page: Page, message: string): Promise<void> {
+  await enterMessage(page.getByLabel("Discuss a trip change"),
+    page.getByRole("button", { name: "Request a proposal" }), message);
+  await page.getByRole("button", { name: "Request a proposal" }).click();
+}
 
 test("@us2 @accessibility review, conflict, history and undo keep the committed panes coherent", async ({ page, browser }) => {
   test.skip(!process.env.US2_TRIP_ID || !process.env.US1_STORAGE_STATE, "Requires a seeded accepted synthetic estimate and authenticated storage state");
   await page.goto(`/trips/${process.env.US2_TRIP_ID}`);
   await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Booking unavailable" })).toBeDisabled();
-  await page.getByLabel("Discuss a trip change").fill("Add two nights in Kyoto and keep mornings free");
-  await page.getByRole("button", { name: "Request a proposal" }).click();
+  await requestProposal(page, "Add two nights in Kyoto and keep mornings free");
   await expect(page.getByRole("heading", { name: "Review proposed changes" })).toBeVisible({ timeout: 35000 });
   const competitor = await browser.newContext({ storageState: process.env.US1_STORAGE_STATE });
   try {
     const other = await competitor.newPage();
     await other.goto(`/trips/${process.env.US2_TRIP_ID}`);
-    const adults = Number(await other.getByLabel("Adults", { exact: true }).inputValue());
-    await other.getByLabel("Adults", { exact: true }).fill(String(adults < 9 ? adults + 1 : adults - 1));
-    await other.getByRole("button", { name: "Review edit impacts" }).click();
-    await expect(other.getByRole("button", { name: "Accept reviewed edit" })).toBeVisible();
+    const adultsField = other.getByLabel("Adults", { exact: true });
+    await expect(adultsField).toHaveValue(/\d+/);
+    const adults = Number(await adultsField.inputValue());
+    // Retry the whole direct edit until the reviewed impact exists: a value set
+    // before hydration can leave the draft state behind the rendered input.
+    await expect(async () => {
+      await enterValue(adultsField, String(adults < 9 ? adults + 1 : adults - 1));
+      await other.getByRole("button", { name: "Review edit impacts" }).click();
+      await expect(other.getByRole("button", { name: "Accept reviewed edit" })).toBeVisible({ timeout: 3000 });
+    }).toPass({ timeout: 20000 });
     await other.getByRole("button", { name: "Accept reviewed edit" }).click();
     await expect(page.getByRole("button", { name: "Accept proposal" })).toBeDisabled({ timeout: 2000 });
     await expect(page.getByText(/This proposal is stale/)).toBeVisible();
   } finally { await competitor.close(); }
-  await page.getByLabel("Discuss a trip change").fill("Add two nights in Kyoto and keep mornings free");
-  await page.getByRole("button", { name: "Request a proposal" }).click();
+  await requestProposal(page, "Add two nights in Kyoto and keep mornings free");
   await expect(page.getByRole("button", { name: "Accept proposal" })).toBeEnabled({ timeout: 35000 });
   await page.getByRole("button", { name: "Accept proposal" }).click();
   await expect(async () => {
     const versions = await page.locator("[data-trip-version]").evaluateAll((elements) => elements.map((element) => element.getAttribute("data-trip-version")));
     expect(new Set(versions).size).toBe(1);
   }).toPass({ timeout: 2000 });
-  await page.getByText(/^Version \d+:/).first().click();
-  await page.getByRole("button", { name: "Undo latest draft change" }).click();
+  // History reloads for the newly committed version; retry the whole interaction, since
+  // a refetch can replace the list node between locating and clicking it.
+  await expect(async () => {
+    const version = await page.locator("[data-trip-version]").first().getAttribute("data-trip-version");
+    await page.locator("summary", { hasText: `Version ${version}:` }).click({ timeout: 3000 });
+    await page.getByRole("button", { name: "Undo latest draft change" }).click({ timeout: 3000 });
+  }).toPass({ timeout: 25000 });
+  await expect(page.getByText(/^Version \d+:/).first()).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Version history" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Agent conversation" })).toBeVisible();
@@ -42,8 +74,7 @@ test("@us2 @accessibility focused clarification resumes with original intent and
   await page.goto(`/trips/${process.env.US2_TRIP_ID}`);
   await page.getByRole("button", { name: "Show optional route map" }).click();
   await expect(page.getByRole("region", { name: "Accessible route" })).toBeVisible();
-  await page.getByLabel("Discuss a trip change").fill("Add two nights there");
-  await page.getByRole("button", { name: "Request a proposal" }).click();
+  await requestProposal(page, "Add two nights there");
   const answer = page.getByLabel("Which destination should receive the extra nights?");
   await expect(answer).toBeVisible({ timeout: 35000 });
   await answer.fill("Kyoto");

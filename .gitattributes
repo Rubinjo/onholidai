@@ -1,0 +1,5 @@
+# Shell scripts run inside Linux containers, where a CRLF shebang fails to execute.
+# Postgres init scripts are mounted into the image and are especially sensitive.
+*.sh text eol=lf
+*.sql text eol=lf
+Dockerfile* text eol=lf

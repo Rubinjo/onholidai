@@ -2,7 +2,7 @@ import "server-only";
 
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { PostgresDialect } from "kysely";
+import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
 import type { Pool } from "pg";
 
 import type { ServerConfig } from "@/server/config";
@@ -14,14 +14,20 @@ export function createAuth(config: ServerConfig, pool: Pool) {
     secret: config.BETTER_AUTH_SECRET,
     trustedOrigins: [config.BETTER_AUTH_URL],
     database: {
-      casing: "snake",
-      dialect: new PostgresDialect({ pool }),
+      // The auth tables use snake_case columns; the plugin must rename the
+      // identifiers the adapter sends so its schema check and queries match.
+      db: new Kysely({
+        dialect: new PostgresDialect({ pool }),
+        plugins: [new CamelCasePlugin()],
+      }),
       schemaName: "app",
       type: "postgres",
     },
     advanced: {
       database: {
-        generateId: "uuid",
+        // The auth id columns are plain text without a database default, so the
+        // application must generate the identifier. Ask for UUIDs explicitly.
+        generateId: () => crypto.randomUUID(),
       },
     },
     emailAndPassword: {

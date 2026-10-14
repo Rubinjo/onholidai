@@ -4,7 +4,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { changeProposalSchema } from "@/domain/trip/proposal";
 import { planningJson, planningError } from "@/components/trip-setup/http";
-import type { TripEnvelope } from "@/components/trip-workspace/use-trip";
+import { tripEnvelopeSchema, type TripEnvelope } from "@/components/trip-workspace/use-trip";
 import { ProposalCard } from "./proposal-card";
 import { Clarification } from "./clarification";
 const runSchema = z.object({ id: z.uuid(), status: z.string(), result: z.object({ kind: z.string(), message: z.string().optional(), proposal: changeProposalSchema.optional(), clarification: z.object({ id: z.uuid(), question: z.string() }).passthrough().optional() }).passthrough().nullable().optional() }).passthrough();
@@ -16,7 +16,11 @@ export function Conversation({ trip, initialRunId, onCommit }: { trip: TripEnvel
   async function submit() {
     setError(""); setBusy(true);
     try {
-      const value = runSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}/agent-runs`, { requestId: crypto.randomUUID(), baseTripVersion: trip.version, conversationId: null, purpose: trip.snapshot.components.length ? "refinement" : "initial_estimate", message }));
+      // Another actor may have committed since this pane cached the trip, and a run must
+      // reserve against the current version. Fall back to the cached envelope if the read fails.
+      const latest = await planningJson(`/api/v1/trips/${trip.tripId}`)
+        .then((raw) => tripEnvelopeSchema.parse(raw)).catch(() => trip);
+      const value = runSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}/agent-runs`, { requestId: crypto.randomUUID(), baseTripVersion: latest.version, conversationId: null, purpose: latest.snapshot.components.length ? "refinement" : "initial_estimate", message }));
       setRunId(value.id); setMessage(""); setDismissed(null); void history.refetch();
     } catch (failure) { setError(planningError(failure)); } finally { setBusy(false); }
   }

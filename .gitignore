@@ -27,3 +27,5 @@ Thumbs.db
 *.tsbuildinfo
 playwright-report/
 test-results/
+# Seeded Playwright storage state contains a live session cookie.
+.playwright/
