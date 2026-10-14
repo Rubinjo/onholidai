@@ -39,6 +39,8 @@ describe("migration discovery", () => {
     expect(migrations.find((entry) => entry.version === 8)?.sql).toContain("execution_basis jsonb NOT NULL");
     expect(migrations.find((entry) => entry.version === 8)?.sql).toContain("booking_provider_callbacks");
     expect(migrations.find((entry) => entry.version === 9)?.sql).toContain("privacy_legal_holds");
+    expect(migrations.find((entry) => entry.version === 11)?.sql).toContain("planning_principals");
+    expect(migrations.find((entry) => entry.version === 12)?.sql).toContain("planning_access_revoked_at");
   });
 });
 
@@ -79,6 +81,23 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
     [tripId, version, version === 1 ? null : version - 1, randomUUID(),
       inverse === null ? null : JSON.stringify(inverse), reason]));
   }
+
+  it("preserves legacy account IDs and enforces opaque guest ownership constraints", async () => {
+    await query(fixture.connectionString, async (client) => {
+      const principal = await client.query("SELECT id, account_user_id FROM app.planning_principals WHERE id = 'synthetic-owner'");
+      expect(principal.rows).toEqual([{ id: "synthetic-owner", account_user_id: "synthetic-owner" }]);
+      const sessionId = randomUUID();
+      await expect(client.query(`INSERT INTO app.guest_planning_sessions
+        (id, credential_digest, created_at, last_activity_at, expires_at)
+        VALUES ($1, 'plaintext', now(), now(), now() + interval '30 days')`, [sessionId])).rejects.toThrow();
+      await client.query(`INSERT INTO app.guest_planning_sessions
+        (id, credential_digest, created_at, last_activity_at, expires_at)
+        VALUES ($1, $2, now(), now(), now() + interval '30 days')`, [sessionId, "a".repeat(64)]);
+      await expect(client.query(`INSERT INTO app.planning_principals
+        (id, account_user_id, guest_session_id, origin_kind, is_default)
+        VALUES ($1, 'synthetic-owner', $2, 'guest', false)`, [randomUUID(), sessionId])).rejects.toThrow();
+    });
+  });
 
   it("reruns safely and rejects changed applied migration checksums", async () => {
     await expect(migrate(fixture.migrationConnectionString)).resolves.toEqual([]);

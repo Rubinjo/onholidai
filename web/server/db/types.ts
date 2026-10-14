@@ -2,6 +2,7 @@ import type { ColumnType, Generated, JSONColumnType } from "kysely";
 
 import type { DraftOperation, TripSnapshot } from "@/domain/trip/schema";
 import type { ChangeProposal } from "@/domain/trip/proposal";
+import type { SetupDraftPayload, SetupStep } from "@/components/trip-setup/draft-schema";
 
 export type TripLifecycleState = "draft" | "finalized" | "partially_booked" | "booked" | "cancelled";
 export type TripInitiatingActor = "user" | "agent_proposal" | "system_revalidation" | "booking_workflow";
@@ -133,6 +134,13 @@ export interface PrivacyLegalHoldTable {
 }
 
 export interface TripCoreDatabase {
+  guestPlanningSessions: GuestPlanningSessionTable;
+  planningPrincipals: PlanningPrincipalTable;
+  setupDrafts: SetupDraftTable;
+  bookingIntents: BookingIntentTable;
+  planningAccountLinks: PlanningAccountLinkTable;
+  guestResearchRequests: GuestResearchRequestTable;
+  guestBootstrapBuckets: GuestBootstrapBucketTable;
   bookingRevalidations: BookingRevalidationTable;
   bookingAuthorizations: BookingAuthorizationTable;
   bookingTransactions: BookingTransactionTable;
@@ -206,6 +214,7 @@ export interface BookingProviderCallbackTable {
 }
 
 export interface AgentRunTable {
+  planningAccessRevokedAt: Generated<Date | null>;
   dispatchRequest: Generated<Record<string, unknown> | null>;
   dispatchFingerprint: Generated<string | null>;
   activeElapsedMs: Generated<number>;
@@ -228,6 +237,35 @@ export interface AgentRunTable {
   completedAt: Timestamp | null;
   errorCategory: "interrupted" | "deadline" | "source_unavailable" | "invalid_result" | null;
   result: Json<Record<string, unknown> | null>;
+}
+
+export interface GuestPlanningSessionTable {
+  id: string; credentialDigest: string; createdAt: Timestamp; lastActivityAt: Timestamp;
+  expiresAt: Timestamp; revokedAt: Timestamp | null;
+}
+export interface PlanningPrincipalTable {
+  id: string; accountUserId: string | null; guestSessionId: string | null;
+  originKind: "account" | "guest"; isDefault: boolean; createdAt: GeneratedTimestamp; linkedAt: Timestamp | null;
+}
+export interface SetupDraftTable {
+  id: string; planningOwnerId: string; revision: number; currentStep: SetupStep; payload: Json<SetupDraftPayload>;
+  schemaVersion: number; creationRequestId: string; researchRequestId: string; submittedTripId: string | null;
+  createdAt: Timestamp; updatedAt: Timestamp;
+}
+export interface BookingIntentTable {
+  id: string; tripId: string; planningOwnerId: string; guestSessionId: string; requestId: string;
+  fingerprint: string; action: "review_booking"; state: "pending" | "consumed" | "expired";
+  createdAt: Timestamp; expiresAt: Timestamp; consumedByUserId: string | null; consumedAt: Timestamp | null;
+}
+export interface PlanningAccountLinkTable {
+  planningOwnerId: string; tripId: string; guestSessionId: string; accountUserId: string; intentId: string;
+  requestId: string; fingerprint: string; linkedAt: Timestamp; tripVersionAtLink: number;
+}
+export interface GuestResearchRequestTable {
+  guestSessionId: string; requestId: string; runId: string; acceptedAt: Timestamp;
+}
+export interface GuestBootstrapBucketTable {
+  networkDigest: string; startedAt: Timestamp; sessionCount: number;
 }
 
 export interface DraftEditReviewTable {

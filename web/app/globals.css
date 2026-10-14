@@ -1,9 +1,37 @@
 @import "tailwindcss";
 
+@theme inline {
+  --color-background: var(--canvas);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-muted);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--surface-muted);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--surface-hover);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--focus-ring);
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
 :root {
   color-scheme: light;
   --canvas: #f7f8f6;
   --surface: #ffffff;
+  --surface-muted: #eaf0ec;
+  --surface-hover: #dbe9e1;
   --text: #19211e;
   --text-muted: #4f5c56;
   --border: #708078;
@@ -226,9 +254,9 @@ summary {
 /* Planning controls remain readable at zoom and do not depend on colour or maps. */
 .planning-page { max-width: 64rem; margin: 2rem auto; padding: 1rem; }
 .planning-page fieldset { margin: 1rem 0; padding: 1rem; border: 1px solid currentColor; }
-.planning-page label { display: flex; flex-direction: column; gap: .4rem; margin: .8rem 0; }
-.planning-page input, .planning-page textarea, .planning-page select, .planning-page button { font: inherit; padding: .65rem; max-width: 100%; }
-.planning-page button { margin: .3rem; min-height: 44px; }
+.planning-page label:not([data-slot]) { display: flex; flex-direction: column; gap: .4rem; margin: .8rem 0; }
+.planning-page input:not([data-slot]), .planning-page textarea:not([data-slot]), .planning-page select:not([data-slot]), .planning-page button:not([data-slot]) { font: inherit; padding: .65rem; max-width: 100%; }
+.planning-page button:not([data-slot]) { margin: .3rem; min-height: 44px; }
 .planning-page li { margin: .7rem 0; overflow-wrap: anywhere; }
 .planning-page input[type="range"] { min-height: 44px; }
 .map-label { background: white; color: #111; border: 1px solid #111; padding: .25rem; white-space: nowrap; }
