@@ -1,3 +1,4 @@
+import { inTransaction } from "@/server/db/transaction";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Kysely } from "kysely";
@@ -50,7 +51,7 @@ export class ConversationRepository {
       const conversation = await this.database.selectFrom("conversations").select("id").where("ownerUserId", "=", userId).where("tripId", "=", tripId).orderBy("createdAt", "desc").executeTakeFirst();
       if (conversation) {
         const own = await this.database.selectFrom("conversationMessages").select("id").where("conversationId", "=", conversation.id).orderBy("createdAt").execute();
-        if (own.length) await this.database.transaction().execute(async (transaction) => {
+        if (own.length) await inTransaction(this.database, async (transaction) => {
           await transaction.selectFrom("conversations").select("id").where("id", "=", conversation.id).forUpdate().execute();
           const latest = await transaction.selectFrom("conversationSummaries").select("summaryVersion").where("conversationId", "=", conversation.id).orderBy("summaryVersion", "desc").executeTakeFirst();
           await transaction.insertInto("conversationSummaries").values({ id: randomUUID(), conversationId: conversation.id, summaryVersion: (latest?.summaryVersion ?? 0) + 1, content: { ...summary },

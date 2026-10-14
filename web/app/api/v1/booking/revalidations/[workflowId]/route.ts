@@ -1,9 +1,9 @@
-import { apiResponse, browserUser } from "@/server/api";
+import { bookingApiResponse, browserUser } from "@/server/api";
 import { ProblemError } from "@/server/errors";
 import { bookingTermsSchema, projectBookingTerms } from "@/domain/booking/authorization";
 
 export async function GET(request: Request, context: { params: Promise<{ workflowId: string }> }): Promise<Response> {
-  return apiResponse(request, async (application) => {
+  return bookingApiResponse(request, async (application) => {
     const user = await browserUser(application, request);
     const { workflowId } = await context.params;
     const record = await application.database.selectFrom("bookingRevalidations").selectAll()

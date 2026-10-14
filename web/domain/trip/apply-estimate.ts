@@ -1,3 +1,4 @@
+import { inTransaction } from "@/server/db/transaction";
 import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import { z } from "zod";
@@ -82,7 +83,7 @@ export async function recordEstimate(database: Kysely<Database>, context: Servic
       `${constraint.priority}: ${constraint.statement.slice(0, 850)} — ${constraint.status === "conflicting" ? "conflicting" : "unverified; confirm with sources before booking"}`),
   });
   // Candidate and public review evidence must appear together, never a partially reviewable proposal.
-  await database.transaction().execute(async (transaction) => {
+  await inTransaction(database, async (transaction) => {
     await new ProposalRepository(transaction, () => now).record(context, publicProposal);
     await transaction.insertInto("estimateCandidates").values({ proposalId: proposal.id, snapshot: candidate })
       .onConflict((conflict) => conflict.column("proposalId").doNothing()).execute();
@@ -93,7 +94,7 @@ export async function recordEstimate(database: Kysely<Database>, context: Servic
 export const acceptEstimateSchema = z.object({ requestId: z.uuid(), expectedVersion: z.number().int().positive() }).strict();
 export async function acceptEstimate(database: Kysely<Database>, userId: string, tripId: string, proposalId: string, raw: unknown) {
   const input = acceptEstimateSchema.parse(raw);
-  return database.transaction().execute(async (transaction) => {
+  return inTransaction(database, async (transaction) => {
     // Same lock order as proposal recording: trip, proposal, then the sole commit boundary.
     const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
     if (!trip) throw new ProblemError({ title: "Trip not found", status: 404, code: "trip_not_found" });

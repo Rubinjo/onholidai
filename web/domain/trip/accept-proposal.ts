@@ -1,3 +1,4 @@
+import { inTransaction } from "@/server/db/transaction";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Kysely } from "kysely";
@@ -14,7 +15,7 @@ export async function acceptProposal(database: Kysely<Database>, userId: string,
   const proposal = await new ProposalRepository(database).read(userId, tripId, proposalId);
   if (proposal.purpose === "initial_estimate") return acceptEstimate(database, userId, tripId, proposalId, raw);
   const input = acceptEstimateSchema.parse(raw);
-  return database.transaction().execute(async (transaction) => {
+  return inTransaction(database, async (transaction) => {
     const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
     const row = await transaction.selectFrom("changeProposals").selectAll().where("id", "=", proposalId).where("tripId", "=", tripId).forUpdate().executeTakeFirst();
     const candidate = await transaction.selectFrom("estimateCandidates").select("snapshot").where("proposalId", "=", proposalId).executeTakeFirst();
@@ -40,7 +41,7 @@ export async function acceptProposal(database: Kysely<Database>, userId: string,
 export async function rejectProposal(database: Kysely<Database>, userId: string, tripId: string, proposalId: string, raw: unknown) {
   const input = acceptEstimateSchema.extend({ reason: z.string().trim().max(500).optional() }).parse(raw);
   await new ProposalRepository(database).read(userId, tripId, proposalId);
-  return database.transaction().execute(async (transaction) => {
+  return inTransaction(database, async (transaction) => {
     const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
     const row = await transaction.selectFrom("changeProposals").selectAll().where("id", "=", proposalId).where("tripId", "=", tripId).forUpdate().executeTakeFirst();
     if (!trip || !row || row.baseTripVersion !== input.expectedVersion || !["proposed", "rejected", "needs_clarification"].includes(row.status)) runConflict();

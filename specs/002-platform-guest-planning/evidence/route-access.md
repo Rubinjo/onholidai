@@ -83,3 +83,15 @@ Git whitespace check passed for tracked edits at inspection. Node.js/pnpm/Docker
 skipped by user direction. No fresh/upgrade database or behavioral contract result is available;
 no migration or guest access gate is recorded as passed. Historical migrations 001–010 are intact.
 
+# Implementation route audit — 2026-10-15
+
+Planning trip read/history/events/conversations/edit-preview/edit/undo/finalize/proposal accept/reject/run reserve and run read/events/clarification use current PlanningActor guards. Resource owners are derived server-side; successful private actions hold principal/session/trip locks through reads or mutations. Event responses are finite and reconnects recheck authority.
+
+Internal context/trip/run routes use signed service tokens plus live principal/run grants; original audience/scope/header/body checks remain in handlers. Pricing diagnostics and provider callbacks retain their independent registered-team/service-secret guards.
+
+All trip booking revalidate/authorize/start and booking status/revalidation/component recover/cancel/reschedule route families use registered browserUser plus BookingActor/account-principal relation. Domain and worker checks retain actual account execution identity and stable trip principal. Guests remain denied direct booking API calls.
+
+New bootstrap/draft endpoints require same-origin mutation and server-derived authority. Intent creation requires selected guest-trip proof; explicit POST linking requires account plus original guest proof or same-account consumed receipt. Auth continuation GET is read-only. Free registration collects identity, not financial consent.
+
+Privacy helpers accept proven PlanningActor or registered owner/team roles. Static route audit is not runtime access-matrix evidence; deployment and exhaustive tests remain open.
+

@@ -74,3 +74,7 @@ export async function signInWithEmail(auth: ApplicationAuth, email: string, pass
 export async function signOut(auth: ApplicationAuth, requestHeaders: Headers) {
   return auth.api.signOut({ headers: requestHeaders });
 }
+
+export async function signUpWithEmail(auth: ApplicationAuth, name: string, email: string, password: string, requestHeaders: Headers) {
+  return auth.api.signUpEmail({ body: { name, email, password, locale: "en-GB", defaultCurrency: "GBP" }, headers: requestHeaders });
+}

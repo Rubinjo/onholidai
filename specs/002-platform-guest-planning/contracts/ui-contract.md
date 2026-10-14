@@ -47,3 +47,4 @@ CSS entrance/selection/step transitions never delay input/navigation. No auto-ro
 Focus new heading on step change, first invalid field on error, suitable neighboring action after row removal and trigger after dialog close. Announce outcomes without re-reading whole summary. Semantic lists/labels/description/error/landmarks/skip link and full keyboard/screen-reader equivalent globe operations are required.
 
 Verify 320/390/768/1440 CSS pixels and 200% zoom, browser mobile projects, contrast/forced colors/reduced motion. No page-wide overflow, clipped actions or summary/sticky-price overlays; targets at least 44×44 CSS pixels. No information only through color/map/movement.
+> Implementation handoff (2026-10-15): wizard, globe/list fallback, auth boundary and marketing source are implemented. Browser/manual/cohort checks remain open; no screenshot, accessibility or timing pass is claimed.

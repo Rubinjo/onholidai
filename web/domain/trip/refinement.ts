@@ -1,3 +1,4 @@
+import { inTransaction } from "@/server/db/transaction";
 import type { ChangeProposal as AgentProposal } from "@contracts/agent-api/generated";
 import type { Kysely } from "kysely";
 import type { Database } from "@/server/db/database";
@@ -26,7 +27,7 @@ export async function recordRefinement(database: Kysely<Database>, context: Serv
   const value = changeProposalSchema.parse({ ...proposal, tripId: context.tripId, agentRunId: runId, status: "proposed", createdAt: new Date().toISOString(),
     previewSnapshot: review.previewSnapshot, priceImpact: review.priceImpact, scheduleImpact: review.scheduleImpact, affectedFacts: review.affectedFacts,
     warnings: [...proposal.warnings, ...review.warnings].slice(0, 64) });
-  return database.transaction().execute(async (transaction) => {
+  return inTransaction(database, async (transaction) => {
     const trip = await transaction.selectFrom("trips").select("id").where("id", "=", context.tripId).where("ownerUserId", "=", context.userId).forUpdate().executeTakeFirst();
     if (!trip) runConflict();
     const prior = await transaction.selectFrom("estimateCandidates").select("proposalId").where("proposalId", "=", proposal.id).executeTakeFirst();

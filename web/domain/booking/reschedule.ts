@@ -1,3 +1,5 @@
+import type { BookingActor } from "@/server/auth/planning-actor";
+import { bookingActor, lockBookingTrip } from "@/server/auth/booking-access";
 import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import { sql, type Kysely } from "kysely";
@@ -14,19 +16,22 @@ const rescheduleSchema = z.object({ requestId: z.uuid(), requestedChange: z.obje
   note: z.string().max(500).optional(),
 }).strict().refine((change) => Object.keys(change).length > 0, "At least one requested change is required") }).strict();
 
-export async function startComponentRescheduleRevalidation(database: Kysely<Database>, userId: string,
+export async function startComponentRescheduleRevalidation(database: Kysely<Database>, proof: string | BookingActor,
   bookingId: string, componentId: string, raw: unknown) {
   const input = rescheduleSchema.parse(raw), workflowId = randomUUID();
+  const accountUserId = typeof proof === "string" ? proof : proof.accountUserId;
+  const reference = await database.selectFrom("bookingTransactions").select("tripId").where("id", "=", bookingId).where("ownerUserId", "=", accountUserId).executeTakeFirst();
+  if (!reference) throw new ProblemError({ title: "Booking not found", status: 404, code: "booking_not_found" });
+  const actor = await bookingActor(database, proof, reference.tripId), userId = actor.accountUserId;
   const requestFingerprint = createHash("sha256").update(canonicalBookingJson({ userId, bookingId, componentId, input })).digest("hex");
   const revalidation = await inTransaction(database, async (transaction) => {
+    const trip = await lockBookingTrip(transaction, actor, reference.tripId);
     const booking = await transaction.selectFrom("bookingTransactions").selectAll()
       .where("id", "=", bookingId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
     if (!booking) throw new ProblemError({ title: "Booking not found", status: 404, code: "booking_not_found" });
     if (!(booking.components as Array<{ componentId: string; status: string }>).some((item) => item.componentId === componentId && item.status === "confirmed")) {
       throw new ProblemError({ title: "Only a confirmed component can be rescheduled", status: 409, code: "booking_component_not_confirmed" });
     }
-    const trip = await transaction.selectFrom("trips").select(["currentVersion", "lifecycleState"])
-      .where("id", "=", booking.tripId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
     if (!trip || !["booked", "partially_booked"].includes(trip.lifecycleState)) {
       throw new ProblemError({ title: "Trip is not available for rescheduling", status: 409, code: "reschedule_trip_unavailable" });
     }

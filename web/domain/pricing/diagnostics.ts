@@ -4,6 +4,7 @@ import { readOwnedTripVersion } from "@/domain/trip/read";
 import { decodeTripSnapshot } from "@/domain/trip/schema";
 import { AuthorizationError } from "@/server/auth/authorize";
 import type { Database } from "@/server/db/database";
+import { resolveBookingActor } from "@/server/auth/planning-actor";
 
 export async function readPricingDiagnostic(database: Kysely<Database>, userId: string, tripId: string, version: number) {
   const role = await sql<{ internalTeamRole: string | null }>`SELECT internal_team_role AS "internalTeamRole"
@@ -11,7 +12,8 @@ export async function readPricingDiagnostic(database: Kysely<Database>, userId: 
   if (!["pricing_auditor", "administrator"].includes(role.rows[0]?.internalTeamRole ?? "")) {
     throw new AuthorizationError("FORBIDDEN");
   }
-  const stored = await readOwnedTripVersion(database, userId, tripId, version);
+  const actor = await resolveBookingActor(database, tripId, userId);
+  const stored = await readOwnedTripVersion(database, actor.planningOwnerId, tripId, version);
   const snapshot = decodeTripSnapshot(stored.schemaVersion, stored.snapshot).snapshot;
   return { tripId, tripVersion: version, currency: snapshot.price.currency,
     components: snapshot.components.map((component) => ({ componentId: component.id,

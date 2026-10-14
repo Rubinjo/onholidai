@@ -11,14 +11,15 @@ const tripSchema = z.object({ tripId: z.uuid(), version: z.number().int().positi
 const runSchema = z.object({ id: z.uuid(), tripId: z.uuid(), status: z.enum(["queued", "running", "awaiting_clarification", "proposed", "completed", "failed", "cancelled"]),
   result: z.object({ kind: z.string(), proposal: changeProposalSchema.optional(), clarification: z.object({ id: z.uuid(), question: z.string() }).passthrough().optional() }).passthrough().nullable().optional() }).passthrough();
 type Trip = z.infer<typeof tripSchema>;
-export function EstimateSummary({ initialTrip, initialProposal, initialRunId }: {
-  initialTrip: Trip; initialProposal: ChangeProposal | null; initialRunId: string | null;
+export function EstimateSummary({ initialTrip, initialProposal, initialRunId, initialResearchRequestId }: {
+  initialTrip: Trip; initialProposal: ChangeProposal | null; initialRunId: string | null; initialResearchRequestId?: string;
 }) {
   const [trip, setTrip] = useState(initialTrip), [proposal, setProposal] = useState(initialProposal);
   const [runId, setRunId] = useState(initialRunId), [status, setStatus] = useState(""), [error, setError] = useState("");
   const [clarification, setClarification] = useState<{ id: string; question: string } | null>(null), [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false), [pollRetry, setPollRetry] = useState(0);
   const acceptanceRequest = useRef<string | null>(null), answerRequest = useRef<string | null>(null);
+  const researchRequest = useRef<string | null>(initialRunId ? null : initialResearchRequestId ?? null);
   useEffect(() => {
     if (!runId) return;
     let stopped = false, timer: ReturnType<typeof setTimeout> | undefined;
@@ -51,9 +52,11 @@ export function EstimateSummary({ initialTrip, initialProposal, initialRunId }: 
     setError(""); setBusy(true);
     try {
       const latest = tripSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}`)); setTrip(latest);
-      const run = runSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}/agent-runs`, { requestId: crypto.randomUUID(),
+      researchRequest.current ??= crypto.randomUUID();
+      const run = runSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}/agent-runs`, { requestId: researchRequest.current,
         baseTripVersion: latest.version, conversationId: null, purpose: "initial_estimate", message: "Research a new estimate for my current reviewed settings; do not apply it." }));
       setProposal(null); setRunId(run.id); setClarification(null); acceptanceRequest.current = null; setStatus(run.status);
+      researchRequest.current = null;
     } catch (failure) { setError(planningError(failure)); } finally { setBusy(false); }
   }
   async function resume() {
@@ -89,6 +92,6 @@ export function EstimateSummary({ initialTrip, initialProposal, initialRunId }: 
       <button type="button" disabled={busy || proposal.baseTripVersion !== trip.version} onClick={() => void accept()}>Accept this estimated draft</button></>}
     {clarification && <fieldset disabled={busy}><legend>Clarification needed</legend><label>{clarification.question}<textarea value={answer} maxLength={4000} onChange={(event) => setAnswer(event.target.value)} /></label><button type="button" disabled={!answer.trim()} onClick={() => void resume()}>Send clarification</button></fieldset>}
     <button type="button" disabled={busy || ["queued", "running"].includes(status)} onClick={() => void retry()}>Research a new estimate</button>
-    <p>Booking is not available in this planning increment.</p>
+    <p>Research and acceptance do not book anything. Finalize a supported trip before reviewing live booking terms.</p>
   </section></main>;
 }

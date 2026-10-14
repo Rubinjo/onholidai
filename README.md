@@ -14,6 +14,10 @@ Deterministic provider doubles are the default. Live mode requires credentials a
 
 Map/research credentials and agent-model credentials are configured separately. Missing or unavailable sources must remain visible as unverified; the application does not infer favorable terms. Read [the operations guide](docs/operations.md) for migrations, recovery, retention policy, and pricing controls.
 
+## Guest planning
+
+Guest setup, private planning, free registration and selected-trip linking are implemented. See the [guest quickstart](specs/002-platform-guest-planning/quickstart.md) and [handoff](specs/002-platform-guest-planning/evidence/implementation-status.md). Story tests are unrun, scenario coverage is partial, and manual/participant gates remain open. Schema migrations extend through 012; deploy compatible web/booking workers together.
+
 ## Validation
 
 Run the workspace commands from the quickstart after the stack is available. Release evidence and gates are tracked in `specs/001-ai-trip-agent/evidence/acceptance.md`.

@@ -1,3 +1,4 @@
+import { resolveBookingActor } from "@/server/auth/planning-actor";
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
@@ -36,9 +37,10 @@ export function createBookingActivities(database: Kysely<Database>, providers: T
         throw new Error("Execution terms no longer match the authorization hash");
       }
       if (!transaction.components.some((component) => component.componentId === componentId)) throw new Error("Component is outside authorization");
+      const actor = await resolveBookingActor(database, transaction.tripId, transaction.executionBasis.ownerUserId);
       const trip = await database.selectFrom("trips").select(["currentVersion", "ownerUserId"])
         .where("id", "=", transaction.tripId).executeTakeFirst();
-      if (!trip || trip.ownerUserId !== transaction.executionBasis.ownerUserId) throw new Error("Trip ownership changed");
+      if (!trip || trip.ownerUserId !== actor.planningOwnerId) throw new Error("Trip ownership changed");
       if (trip.currentVersion === transaction.lastObservedTripVersion) return;
       const advanced = await database.selectFrom("tripVersions").select(["version", "initiatingActor", "initiatingRequestId"])
         .where("tripId", "=", transaction.tripId).where("version", ">", transaction.lastObservedTripVersion)

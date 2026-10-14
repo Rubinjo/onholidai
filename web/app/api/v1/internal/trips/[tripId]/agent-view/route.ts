@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 import { agentViewDetailSchema, readAgentTrip } from "@/domain/trip/read";
-import { apiResponse, internalActor } from "@/server/api";
+import { internalPlanningApiResponse, internalActor } from "@/server/api";
 
 export async function GET(request: Request, context: { params: Promise<{ tripId: string }> }): Promise<Response> {
-  return apiResponse(request, async (application) => {
+  return internalPlanningApiResponse(request, async (application) => {
     const tripId = (await context.params).tripId;
     const query = new URL(request.url).searchParams;
     const baseTripVersion = z.coerce.number().int().positive().parse(query.get("baseTripVersion"));

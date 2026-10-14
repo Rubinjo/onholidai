@@ -24,6 +24,14 @@ export const setupDraftPayloadSchema = z.object({
   for (const entries of [payload.destinations, payload.availabilityWindows, payload.travellerParty.children, payload.constraints]) {
     if (new Set(entries.map((entry) => entry.id)).size !== entries.length) context.addIssue({ code: "custom", message: "Repeated entry ID" });
   }
+  const places = new Set<string>();
+  for (const destination of payload.destinations) {
+    for (const [provider, placeId] of Object.entries(destination.providerPlaceIds)) {
+      const key = `${provider}:${placeId}`;
+      if (places.has(key)) context.addIssue({ code: "custom", path: ["destinations"], message: "A destination is already on your route" });
+      places.add(key);
+    }
+  }
 });
 export type SetupDraftPayload = z.infer<typeof setupDraftPayloadSchema>;
 export type SetupStep = z.infer<typeof setupStepSchema>;

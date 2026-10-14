@@ -6,11 +6,14 @@ import { ProblemError } from "@/server/errors";
 import { createServiceToken } from "./credentials";
 import { runContext } from "./run-repository";
 import { ConversationRepository } from "@/server/db/conversation-repository";
+import { lockServiceGrant } from "@/server/auth/planning-resource";
+import { inTransaction } from "@/server/db/transaction";
 
 export async function dispatchEstimate(application: Application, run: AgentRun & { ownerUserId: string }, message: string,
   transport: typeof fetch = fetch): Promise<void> {
   if (run.status !== "queued") return;
   const context = runContext(run);
+  await inTransaction(application.database, (transaction) => lockServiceGrant(transaction, context));
   const trip = await readAgentTrip(application.database, run.ownerUserId, run.tripId, run.baseTripVersion, "compact");
   const conversation = run.purpose === "refinement" ? await new ConversationRepository(application.database).context(run.ownerUserId, run.tripId, run.baseTripVersion) : {};
   const body: CreateAgentRunRequest = CreateAgentRunRequestSchema.parse({ contractVersion: "1", actor: {

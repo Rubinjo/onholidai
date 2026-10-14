@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Onholidai",
-  description: "Plan, refine, and book a trip with explicit approval at every step.",
+  description: "Plan a private multi-destination holiday with AI. Start without an account, review estimated proposals, and approve every change.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

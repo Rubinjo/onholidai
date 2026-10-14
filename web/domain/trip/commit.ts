@@ -221,17 +221,19 @@ export async function commitTripMutation(
       deliveredAt: null,
       lastErrorCategory: null,
     });
+    const auditActor = await repositories.trips.auditIdentity?.(input.ownerUserId);
     await repositories.trips.appendAudit({
       id: input.auditEventId,
       actorType: input.initiatingActor === "user" ? "user" : "service",
-      actorId: input.ownerUserId,
+      actorId: input.initiatingActor === "user" ? auditActor?.id ?? input.ownerUserId : input.ownerUserId,
       action: "trip.version.commit",
       targetType: "trip",
       targetId: input.tripId,
       requestId: input.requestId,
       traceId: input.traceId,
       outcome: "succeeded",
-      metadata: { version: nextVersion, changedFieldCount: input.changeSummary.length },
+      metadata: { version: nextVersion, changedFieldCount: input.changeSummary.length,
+        ...(auditActor ? { planningOwnerId: input.ownerUserId, planningActorKind: auditActor.kind } : {}) },
     });
 
     const result = commitResultSchema.parse({

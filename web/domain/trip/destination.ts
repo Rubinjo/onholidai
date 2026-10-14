@@ -17,9 +17,10 @@ export const placeCandidateSchema = z.object({
   }
 });
 export const placeLookupInputSchema = z.object({
-  query: z.string().trim().min(1).max(200),
+  query: z.string().trim().max(200),
   countryCode: z.string().regex(/^[A-Z]{2}$/).optional(),
-}).strict();
+  kind: z.enum(["country", "city", "airport", "place"]).optional(),
+}).strict().refine((input) => input.query.length > 0 || (input.kind === "city" && Boolean(input.countryCode)), "Enter a search or select a country for cities");
 export type PlaceCandidate = z.infer<typeof placeCandidateSchema>;
 export interface PlaceLookupProvider {
   search(input: z.infer<typeof placeLookupInputSchema>, signal: AbortSignal): Promise<readonly PlaceCandidate[]>;
@@ -37,7 +38,8 @@ export async function lookupPlaces(provider: PlaceLookupProvider, rawInput: unkn
   } finally { clearTimeout(timer); }
   const candidates = z.array(placeCandidateSchema).max(20)
     .parse(found)
-    .filter((candidate) => !input.countryCode || candidate.countryCode === input.countryCode);
+    .filter((candidate) => (!input.countryCode || candidate.countryCode === input.countryCode)
+      && (!input.kind || candidate.kind === input.kind));
   if (new Set(candidates.map((candidate) => candidate.placeId)).size !== candidates.length) {
     throw new Error("Place provider returned duplicate identities");
   }

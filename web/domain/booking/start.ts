@@ -1,3 +1,5 @@
+import type { BookingActor } from "@/server/auth/planning-actor";
+import { bookingActor, lockBookingTrip } from "@/server/auth/booking-access";
 import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import { z } from "zod";
@@ -13,11 +15,11 @@ import { tripSnapshotSchema } from "@/domain/trip/schema";
 
 const startSchema = z.object({ requestId: z.uuid(), authorizationId: z.uuid() }).strict();
 
-export async function startBooking(database: Kysely<Database>, userId: string, tripId: string, raw: unknown): Promise<BookingTransaction> {
+export async function startBooking(database: Kysely<Database>, proof: string | BookingActor, tripId: string, raw: unknown): Promise<BookingTransaction> {
   const input = startSchema.parse(raw);
+  const actor = await bookingActor(database, proof, tripId), userId = actor.accountUserId;
   const result = await inTransaction(database, async (transaction) => {
-    const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId)
-      .where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
+    const trip = await lockBookingTrip(transaction, actor, tripId);
     if (!trip) throw new ProblemError({ title: "Trip not found", status: 404, code: "trip_not_found" });
     const existing = await transaction.selectFrom("bookingTransactions").selectAll()
       .where("authorizationId", "=", input.authorizationId).where("ownerUserId", "=", userId).executeTakeFirst();
@@ -37,7 +39,7 @@ export async function startBooking(database: Kysely<Database>, userId: string, t
     }
     const transactionId = randomUUID();
     const workflowId = `booking-${transactionId}`;
-    const currentVersion = await readOwnedTripVersion(transaction, userId, tripId);
+    const currentVersion = await readOwnedTripVersion(transaction, actor.planningOwnerId, tripId);
     const currentSnapshot = tripSnapshotSchema.parse(currentVersion.snapshot);
     const authorizedComponents = authorization.operation === "book_trip"
       ? authorization.terms.components.filter((term) => currentSnapshot.components.some((component) =>

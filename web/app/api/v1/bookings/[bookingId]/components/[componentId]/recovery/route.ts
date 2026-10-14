@@ -1,11 +1,11 @@
-import { apiResponse, browserUser, requestJson } from "@/server/api";
+import { bookingApiResponse, browserUser, requestJson } from "@/server/api";
 import { ProblemError } from "@/server/errors";
 import { startWorkflow } from "@/server/workflows/client";
 import { z } from "zod";
 
 const requestSchema = z.object({ requestId: z.uuid(), action: z.enum(["status_check", "retry"]), authorizationId: z.uuid().nullable() }).strict();
 export async function POST(request: Request, context: { params: Promise<{ bookingId: string; componentId: string }> }): Promise<Response> {
-  return apiResponse(request, async (application) => {
+  return bookingApiResponse(request, async (application) => {
     const user = await browserUser(application, request), { bookingId, componentId } = await context.params;
     const input = requestSchema.parse(await requestJson(request));
     const transaction = await application.database.selectFrom("bookingTransactions").selectAll()

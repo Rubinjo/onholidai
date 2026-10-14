@@ -1,13 +1,14 @@
+import { inTransaction } from "@/server/db/transaction";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { apiResponse, internalActor, requestJson } from "@/server/api";
+import { internalPlanningApiResponse, internalActor, requestJson } from "@/server/api";
 import { searchPlanningOffers } from "@/server/supply/read";
 import { readOwnedTripVersion } from "@/domain/trip/read";
 import { projectCustomerSnapshot } from "@/domain/pricing/projections";
 import { RunRepository, runConflict } from "@/server/agent-client/run-repository";
 const querySchema = z.object({ startDate: z.iso.date(), endDate: z.iso.date(), destinationIds: z.array(z.uuid()).min(1).max(8) }).strict();
 export async function POST(request: Request, route: { params: Promise<{ tripId: string }> }) {
-  return apiResponse(request, async (application) => {
+  return internalPlanningApiResponse(request, async (application) => {
     const { tripId } = await route.params;
     const base = z.coerce.number().int().positive().parse(request.headers.get("x-base-trip-version"));
     const actor = internalActor(application, request, tripId, base, "trip:read");
@@ -23,7 +24,7 @@ export async function POST(request: Request, route: { params: Promise<{ tripId: 
     const started = performance.now();
     const result = await searchPlanningOffers(application.planningProviders, { ...query, componentTypes: ["flight", "accommodation", "activity", "rail"],
       currency: snapshot.price.currency, departureOrigin: snapshot.departureOrigin, travellerParty: snapshot.travellerParty });
-    await application.database.transaction().execute(async (transaction) => {
+    await inTransaction(application.database, async (transaction) => {
       for (const offer of result.offers) await transaction.insertInto("planningOfferRecords").values({ runId: run.id,
         componentId: offer.component.id, offer: { ...offer }, query: { ...query, currency: snapshot.price.currency,
           departureOrigin: snapshot.departureOrigin, travellerParty: snapshot.travellerParty } }).execute();

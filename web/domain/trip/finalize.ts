@@ -1,3 +1,4 @@
+import { inTransaction } from "@/server/db/transaction";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Kysely } from "kysely";
@@ -21,7 +22,7 @@ export async function reviewFinalization(database: Kysely<Database>, userId: str
 
 export async function finalizeTrip(database: Kysely<Database>, userId: string, tripId: string, raw: unknown) {
   const input = finalizeCommandSchema.parse(raw);
-  return database.transaction().execute(async (transaction) => {
+  return inTransaction(database, async (transaction) => {
     const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
     if (!trip) runConflict();
     const scope = `trip:${tripId}:finalize`, hash = fingerprint({ userId, ...input });

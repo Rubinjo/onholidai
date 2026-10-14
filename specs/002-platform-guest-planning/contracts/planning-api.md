@@ -63,3 +63,4 @@ Enforce two concurrent queued/running/awaiting_clarification runs and ten new re
 Apply guest-session/quota guard first when relevant, then principal/draft/trip/run and existing mutation/booking locks, with authority recheck before commit/replay. Count session-wide quotas without out-of-order locks and allocate quota/run atomically. A guest request resolved before linking cannot write afterward. Event streams recheck before delivery and terminate safely on link/expiry; account can recover retained evidence.
 
 Live review/revalidation follows successful link, never consent. Preserve original booking hashing/expiry/material-change/duplicate/partial-failure tests and dual-identity worker verification.
+> Implementation handoff (2026-10-15): these route families are implemented. New tests are unrun and comprehensive scenario matrices remain partial; this contract is not runtime acceptance evidence. See ../evidence/implementation-status.md and ../evidence/coverage.md.

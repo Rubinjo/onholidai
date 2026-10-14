@@ -1,3 +1,5 @@
+import type { BookingActor } from "@/server/auth/planning-actor";
+import { bookingActor, lockBookingTrip } from "@/server/auth/booking-access";
 import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import { z } from "zod";
@@ -28,17 +30,17 @@ export interface BookingAuthorizationReceipt {
 }
 
 export async function authorizeBooking(
-  database: Kysely<Database>, userId: string, tripId: string, raw: unknown, now = new Date(),
+  database: Kysely<Database>, proof: string | BookingActor, tripId: string, raw: unknown, now = new Date(),
 ): Promise<BookingAuthorizationReceipt> {
   const input = bookingAuthorizationRequestSchema.parse(raw);
+  const actor = await bookingActor(database, proof, tripId), userId = actor.accountUserId;
   return inTransaction(database, async (transaction) => {
-    const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId)
-      .where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
+    const trip = await lockBookingTrip(transaction, actor, tripId);
     if (!trip) throw new ProblemError({ title: "Trip not found", status: 404, code: "trip_not_found" });
     if (trip.currentVersion !== input.tripVersion || !["finalized", "partially_booked", "booked"].includes(trip.lifecycleState)) {
       throw new ProblemError({ title: "Booking terms are stale", status: 409, code: "booking_terms_stale" });
     }
-    const version = await readOwnedTripVersion(transaction, userId, tripId);
+    const version = await readOwnedTripVersion(transaction, actor.planningOwnerId, tripId);
     const snapshot = tripSnapshotSchema.parse(version.snapshot);
     if (snapshot.constraints.some((constraint) => constraint.source.kind === "system_inference"
       && constraint.priority !== "preference" && !constraint.confirmedByUser)) {

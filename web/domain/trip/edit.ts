@@ -1,3 +1,4 @@
+import { inTransaction } from "@/server/db/transaction";
 import { randomUUID } from "node:crypto";
 import { sql, type Kysely } from "kysely";
 import { z } from "zod";
@@ -76,7 +77,7 @@ export async function previewEdit(database: Kysely<Database>, userId: string, tr
 
 export async function applyEdit(database: Kysely<Database>, userId: string, tripId: string, raw: unknown) {
   const input = editSchema.parse(raw);
-  return database.transaction().execute(async (transaction) => {
+  return inTransaction(database, async (transaction) => {
     const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
     if (!trip || trip.lifecycleState !== "draft") runConflict();
     const review = await transaction.selectFrom("draftEditReviews").selectAll().where("id", "=", input.requestId).where("tripId", "=", tripId).where("ownerUserId", "=", userId).executeTakeFirst();

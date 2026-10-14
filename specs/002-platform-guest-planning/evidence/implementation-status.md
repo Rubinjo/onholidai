@@ -1,5 +1,15 @@
 ﻿# Implementation status: Phase 1 and foundation complete; stories open
 
+## Current handoff — 2026-10-15 (supersedes historical story status below)
+
+US1–US5 source is delivered: persisted public guest wizard/globe fallback, private planning and quotas, free authentication/atomic linking, dual booking identity, marketing and responsive layouts. Newly authored tests are unrun; comprehensive scenario coverage remains partial. Open tasks retain unfinished authoring and acceptance checks.
+
+Node.js, pnpm and Docker checks were skipped as requested. No migration, deployment, provider transaction, visual/manual accessibility check or participant study was performed. Release is not approved. Historical foundation results below do not validate these changes.
+
+Frontend-design informed the established forest palette, Georgia typography, editorial spacing and globe-led composition. No imagery or animation dependency was added.
+
+## Historical foundation handoff
+
 Recorded 2026-10-14. Work-in-progress evidence, not release approval.
 
 ## What is now complete

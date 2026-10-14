@@ -1,9 +1,9 @@
-import { apiResponse, browserUser } from "@/server/api";
+import { bookingApiResponse, browserUser } from "@/server/api";
 import { projectBookingTransactionRow } from "@/domain/booking/schema";
 import { ProblemError } from "@/server/errors";
 
 export async function GET(request: Request, context: { params: Promise<{ bookingId: string }> }): Promise<Response> {
-  return apiResponse(request, async (application) => {
+  return bookingApiResponse(request, async (application) => {
     const user = await browserUser(application, request);
     const { bookingId } = await context.params;
     const record = await application.database.selectFrom("bookingTransactions").selectAll()

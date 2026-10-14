@@ -1,3 +1,4 @@
+import { inTransaction } from "@/server/db/transaction";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Kysely } from "kysely";
@@ -9,7 +10,7 @@ import { tripSnapshotSchema } from "./schema";
 export const undoSchema = z.object({ requestId: z.uuid(), expectedVersion: z.number().int().positive(), restoreVersion: z.number().int().positive() }).strict();
 export async function undoDraft(database: Kysely<Database>, userId: string, tripId: string, raw: unknown) {
   const input = undoSchema.parse(raw);
-  return database.transaction().execute(async (transaction) => {
+  return inTransaction(database, async (transaction) => {
     const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
     if (!trip || !["draft", "finalized"].includes(trip.lifecycleState) || input.restoreVersion >= input.expectedVersion) runConflict();
     const rows = await transaction.selectFrom("tripVersions").selectAll().where("tripId", "=", tripId).where("version", ">=", input.restoreVersion).where("version", "<=", input.expectedVersion).orderBy("version").execute();

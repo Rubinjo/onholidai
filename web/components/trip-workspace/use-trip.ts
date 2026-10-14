@@ -2,13 +2,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { customerSnapshotSchema } from "@/domain/trip/proposal";
-import { planningJson } from "@/components/trip-setup/http";
+import { planningJson, PlanningRequestError } from "@/components/trip-setup/http";
 export const tripEnvelopeSchema = z.object({ tripId: z.uuid(), version: z.number().int().positive(), snapshot: customerSnapshotSchema, lifecycleState: z.string(), updatedAt: z.string() }).strict();
 export type TripEnvelope = z.infer<typeof tripEnvelopeSchema>;
 export const tripKey = (tripId: string) => ["trip", tripId] as const;
 export function useTrip(initial: TripEnvelope) {
   const client = useQueryClient();
   const query = useQuery({ queryKey: tripKey(initial.tripId), initialData: initial, refetchInterval: 1000,
+    retry: (count, error) => !(error instanceof PlanningRequestError && [401, 403, 404].includes(error.status)) && count < 2,
     queryFn: async () => {
       const latest = tripEnvelopeSchema.parse(await planningJson(`/api/v1/trips/${initial.tripId}`));
       const cached = client.getQueryData<TripEnvelope>(tripKey(initial.tripId));

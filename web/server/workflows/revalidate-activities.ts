@@ -1,3 +1,4 @@
+import { resolveBookingActor } from "@/server/auth/planning-actor";
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { sql, type Kysely } from "kysely";
@@ -17,6 +18,7 @@ export function createRevalidationActivities(database: Kysely<Database>, provide
   }
   return {
     async revalidateBooking(input: RevalidationWorkflowInput): Promise<RevalidationWorkflowResult> {
+      const actor = await resolveBookingActor(database, input.tripId, input.ownerUserId);
       const record = await database.selectFrom("bookingRevalidations").selectAll()
         .where("workflowId", "=", input.workflowId).where("tripId", "=", input.tripId)
         .where("ownerUserId", "=", input.ownerUserId).executeTakeFirst();
@@ -28,7 +30,7 @@ export function createRevalidationActivities(database: Kysely<Database>, provide
           termsHash: record.termsHash, expiresAt: record.expiresAt?.toISOString() ?? null };
       }
       const trip = await database.selectFrom("trips").selectAll().where("id", "=", input.tripId)
-        .where("ownerUserId", "=", input.ownerUserId).executeTakeFirst();
+        .where("ownerUserId", "=", actor.planningOwnerId).executeTakeFirst();
       const version = await database.selectFrom("tripVersions").select(["snapshot", "version"])
         .where("tripId", "=", input.tripId).where("version", "=", input.tripVersion).executeTakeFirst();
       if (!trip || !version || trip.currentVersion !== input.tripVersion) throw new Error("Trip changed before live revalidation");
@@ -89,6 +91,7 @@ export function createRevalidationActivities(database: Kysely<Database>, provide
     },
 
     async revalidateComponentReschedule(input: ComponentRescheduleWorkflowInput): Promise<RevalidationWorkflowResult> {
+      const actor = await resolveBookingActor(database, input.tripId, input.ownerUserId);
       const record = await database.selectFrom("bookingRevalidations").selectAll()
         .where("workflowId", "=", input.workflowId).where("tripId", "=", input.tripId)
         .where("ownerUserId", "=", input.ownerUserId).executeTakeFirst();
@@ -101,7 +104,7 @@ export function createRevalidationActivities(database: Kysely<Database>, provide
         .where("tripId", "=", input.tripId).where("version", "=", input.tripVersion).executeTakeFirst();
       const confirmed = await database.selectFrom("bookingConfirmations").select(["componentId"])
         .where("transactionId", "=", input.bookingId).where("componentId", "=", input.componentId).executeTakeFirst();
-      if (!record || !booking || !trip || trip.ownerUserId !== input.ownerUserId || !version
+      if (!record || !booking || !trip || trip.ownerUserId !== actor.planningOwnerId || !version
         || trip.currentVersion !== input.tripVersion || !confirmed) throw new Error("Reschedule identity or current confirmed component is invalid");
       if (record.status === "completed" || record.status === "failed") {
         return { workflowId: input.workflowId, status: record.status,

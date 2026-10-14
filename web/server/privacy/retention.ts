@@ -56,6 +56,20 @@ export function rawConversationExpiry(createdAt: Date): Date {
   return new Date(createdAt.getTime() + RAW_CONVERSATION_RETENTION_DAYS * 86_400_000);
 }
 
+// Access expiry never deletes accepted history or principals. Only short-lived
+// quota metadata is cleaned automatically; partial drafts enter policy review.
+export async function cleanupGuestQuotaMetadata(database: Kysely<Database>, now = new Date()): Promise<void> {
+  const cutoff = new Date(now.getTime() - 3600000);
+  await database.deleteFrom("guestResearchRequests").where("acceptedAt", "<=", cutoff).execute();
+  await database.deleteFrom("guestBootstrapBuckets").where("startedAt", "<=", cutoff).execute();
+}
+export async function reviewSetupDraftRetention(database: Kysely<Database>, now = new Date()) {
+  const drafts = await database.selectFrom("setupDrafts").select(["id", "planningOwnerId", "updatedAt"]).where("submittedTripId", "is", null).execute();
+  return drafts.map((draft) => ({ draftId: draft.id, planningOwnerId: draft.planningOwnerId,
+    reviewAfter: addCalendarMonths(draft.updatedAt, TRIP_RECORD_RETENTION_MONTHS),
+    status: now >= addCalendarMonths(draft.updatedAt, TRIP_RECORD_RETENTION_MONTHS) ? "review_required" : "not_due" }));
+}
+
 export async function expireRawConversationMessages(
   database: Kysely<Database>,
   now = new Date(),
@@ -64,6 +78,7 @@ export async function expireRawConversationMessages(
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 5_000) {
     throw new RangeError("batchSize must be between 1 and 5000");
   }
+  await cleanupGuestQuotaMetadata(database, now);
   return database.transaction().execute(async (transaction) => {
     const expired = await transaction.selectFrom("conversationMessages").select("id")
       .where("retentionExpiresAt", "<=", now)

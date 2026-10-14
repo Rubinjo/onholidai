@@ -1,6 +1,8 @@
 # Quickstart Validation: Platform UX, Guest Planning & Account Creation
 
-This guide describes validation after implementation. New routes/tests are planned, not currently implemented. Existing commands below are executable repository scripts; passing them now would not prove guest behavior. See [spec](spec.md), [data model](data-model.md) and [contracts](contracts/README.md).
+Guest setup, planning, linking, registration and marketing are implemented. Newly authored tests are unrun and exhaustive coverage is partial. See [implementation status](evidence/implementation-status.md), [spec](spec.md), [data model](data-model.md) and [contracts](contracts/README.md). Commands below are future checks: Node.js, pnpm and Docker were skipped as requested.
+
+Deploy web and booking worker from the same reviewed revision after fresh/upgrade checks for migrations 011/012. No deployment/migration was run here. Guest defaults are two active runs, ten new runs/session-hour and twenty sessions/network-hour. GUEST_TRUST_PROXY_IP defaults false (shared conservative bucket); enable only behind an edge that overwrites x-real-ip. GUEST_NETWORK_SECRET optionally separates the digest key. Keep cookie/Origin/ownership/account-booking protections active.
 
 ## Prerequisites and stack
 

@@ -12,10 +12,13 @@ import { PriceBar } from "./price-bar";
 import { DayPlan } from "./day-plan";
 import { ComponentDetails } from "./component-details";
 import { FinalizationReview } from "./finalization-review";
+import { planningError, PlanningRequestError } from "@/components/trip-setup/http";
 function WorkspacePanes({ initialTrip, initialRunId }: { initialTrip: TripEnvelope; initialRunId: string | null }) {
   const query = useTrip(initialTrip), trip = query.data;
   useTripEvents(initialTrip.tripId);
-  return <main className="planning-page planning-workspace"><h1>Your living trip</h1>{query.error && <p role="alert">Trip refresh unavailable. Showing saved version {trip.version}. <button type="button" onClick={() => void query.refetch()}>Retry trip refresh</button></p>}
+  if (query.error instanceof PlanningRequestError && [401, 403, 404].includes(query.error.status)) return <main className="planning-page"><h1>Private plan unavailable</h1>
+    <p role="alert">{planningError(query.error)}</p><a href="/sign-in">Sign in to your account</a><p><a href="/trips/new">Start a new plan</a></p></main>;
+  return <main className="planning-page planning-workspace"><h1>Your living trip</h1>{query.error && <p role="alert">{planningError(query.error)} Showing saved version {trip.version}. <button type="button" onClick={() => void query.refetch()}>Retry trip refresh</button></p>}
     {/* The price bar stays last in the DOM for the documented focus order and is
         placed in the middle column by the grid, which owns price and booking. */}
     <div className="trip-workspace">

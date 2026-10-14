@@ -1,9 +1,9 @@
-import { apiResponse, browserUser } from "@/server/api";
+import { planningApiResponse, planningUser } from "@/server/api";
 import { ConversationRepository } from "@/server/db/conversation-repository";
 import { z } from "zod";
 export async function GET(request: Request, route: { params: Promise<{ tripId: string }> }) {
-  return apiResponse(request, async (application) => {
-    const userId = (await browserUser(application, request)).id, tripId = (await route.params).tripId;
+  return planningApiResponse(request, async (application) => {
+    const userId = (await planningUser(application, request)).id, tripId = (await route.params).tripId;
     const messages = await new ConversationRepository(application.database).messages(userId, tripId);
     const after = z.uuid().nullable().parse(new URL(request.url).searchParams.get("after"));
     let query = application.database.selectFrom("conversations").selectAll().where("ownerUserId", "=", userId).where("tripId", "=", tripId).orderBy("id").limit(21);

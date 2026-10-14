@@ -6,6 +6,9 @@ import type { Kysely } from "kysely";
 import type { Database } from "@/server/db/database";
 import { redactConversation } from "@/server/db/conversation-repository";
 import { authorizeRetentionDeletion, reviewTripRetention, type RetentionDeletionPolicy, type RetentionDeletionRequest } from "./retention";
+import { type PlanningActor, planningNotFound } from "@/server/auth/planning-actor";
+import { lockPlanningAccess, lockPlanningTrip } from "@/server/db/planning-access";
+import { inTransaction } from "@/server/db/transaction";
 
 export const PRIVACY_EXPORT_SCOPES = ["trip", "conversation", "booking", "audit"] as const;
 export type PrivacyExportScope = typeof PRIVACY_EXPORT_SCOPES[number];
@@ -15,16 +18,31 @@ function permittedScopes(isOwner: boolean): ReadonlySet<PrivacyExportScope> {
     : new Set<PrivacyExportScope>(["trip", "booking", "audit"]);
 }
 
-export async function exportTripData(
+export async function exportTripData(database: Kysely<Database>, proof: AuthorizationSession | PlanningActor | null,
+  tripId: string, requestedScopes: readonly PrivacyExportScope[] = PRIVACY_EXPORT_SCOPES) {
+  return inTransaction(database, async (transaction) => {
+    if (proof && "kind" in proof) {
+      await lockPlanningAccess(transaction, proof);
+      await lockPlanningTrip(transaction, proof.planningOwnerId, tripId);
+      return exportTripDataUnlocked(transaction, null, tripId, requestedScopes, proof.planningOwnerId);
+    }
+    return exportTripDataUnlocked(transaction, proof, tripId, requestedScopes);
+  });
+}
+
+async function exportTripDataUnlocked(
   database: Kysely<Database>,
   session: AuthorizationSession | null,
   tripId: string,
   requestedScopes: readonly PrivacyExportScope[] = PRIVACY_EXPORT_SCOPES,
+  provenPlanningOwnerId?: string,
 ) {
   const trip = await database.selectFrom("trips").selectAll().where("id", "=", tripId).executeTakeFirst();
   if (!trip) throw new Error("trip_not_found");
-  const user = requireOwnerOrInternalTeamRole(session, trip.ownerUserId, ["support", "operations", "admin", "administrator"]);
-  const owner = user.id === trip.ownerUserId;
+  const principal = await database.selectFrom("planningPrincipals").select("accountUserId").where("id", "=", trip.ownerUserId).executeTakeFirst();
+  if (!principal) planningNotFound();
+  const owner = provenPlanningOwnerId === trip.ownerUserId || Boolean(session && session.user.id === principal.accountUserId);
+  if (!provenPlanningOwnerId) requireOwnerOrInternalTeamRole(session, principal.accountUserId ?? trip.ownerUserId, ["support", "operations", "admin", "administrator"]);
   const allowed = permittedScopes(owner);
   const scopes = [...new Set(requestedScopes)];
   if (scopes.some((scope) => !PRIVACY_EXPORT_SCOPES.includes(scope) || !allowed.has(scope))) {
@@ -73,14 +91,23 @@ export async function exportTripData(
 
 export async function requestTripDataDeletion(
   database: Kysely<Database>,
-  session: AuthorizationSession | null,
+  session: AuthorizationSession | PlanningActor | null,
   policy: RetentionDeletionPolicy | undefined,
   request: Omit<RetentionDeletionRequest, "ownerUserId">,
 ) {
   const trip = await database.selectFrom("trips").select(["ownerUserId"])
     .where("id", "=", request.tripId).executeTakeFirst();
   if (!trip) throw new Error("trip_not_found");
-  requireOwnerOrInternalTeamRole(session, trip.ownerUserId, ["admin", "administrator"]);
+  if (session && "kind" in session) {
+    await inTransaction(database, async (transaction) => {
+      await lockPlanningAccess(transaction, session);
+      await lockPlanningTrip(transaction, session.planningOwnerId, request.tripId);
+    });
+  } else {
+    const principal = await database.selectFrom("planningPrincipals").select("accountUserId").where("id", "=", trip.ownerUserId).executeTakeFirst();
+    if (!principal) planningNotFound();
+    requireOwnerOrInternalTeamRole(session, principal.accountUserId ?? trip.ownerUserId, ["admin", "administrator"]);
+  }
   const review = await reviewTripRetention(database, request.tripId, request.reviewedAt);
   if (review.status !== "review_required") throw new Error(`retention_review_${review.status}`);
   const ownedRequest = { ...request, ownerUserId: trip.ownerUserId };

@@ -9,6 +9,9 @@ export interface Problem {
   code: string;
   detail?: string;
   correlationId: string;
+  currentRevision?: number;
+  nextPath?: string;
+  fieldErrors?: readonly { path: string; message: string }[];
 }
 
 export interface ProblemErrorOptions {
@@ -18,6 +21,9 @@ export interface ProblemErrorOptions {
   code: string;
   detail?: string;
   retryAfterSeconds?: number;
+  currentRevision?: number;
+  nextPath?: `/trips/${string}`;
+  fieldErrors?: readonly { path: string; message: string }[];
 }
 
 export class ProblemError extends Error {
@@ -27,6 +33,9 @@ export class ProblemError extends Error {
   readonly code: string;
   readonly detail?: string;
   readonly retryAfterSeconds?: number;
+  readonly currentRevision?: number;
+  readonly nextPath?: string;
+  readonly fieldErrors?: readonly { path: string; message: string }[];
 
   constructor({
     type = "about:blank",
@@ -35,6 +44,9 @@ export class ProblemError extends Error {
     code,
     detail,
     retryAfterSeconds,
+    currentRevision,
+    nextPath,
+    fieldErrors,
   }: ProblemErrorOptions) {
     super(title);
     this.name = "ProblemError";
@@ -44,6 +56,9 @@ export class ProblemError extends Error {
     this.code = code;
     this.detail = detail;
     this.retryAfterSeconds = retryAfterSeconds;
+    this.currentRevision = currentRevision;
+    this.nextPath = nextPath;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -68,6 +83,9 @@ export function problemResponse(error: unknown, correlationId: string): Response
       ? { detail: safeProblem.detail }
       : {}),
     correlationId: safeCorrelationId,
+    ...(safeProblem instanceof ProblemError && safeProblem.currentRevision !== undefined ? { currentRevision: safeProblem.currentRevision } : {}),
+    ...(safeProblem instanceof ProblemError && safeProblem.nextPath ? { nextPath: safeProblem.nextPath } : {}),
+    ...(safeProblem instanceof ProblemError && safeProblem.fieldErrors ? { fieldErrors: safeProblem.fieldErrors } : {}),
   };
 
   const headers: Record<string, string> = {
@@ -95,17 +113,19 @@ export const planningProblems = {
       status: 401,
       code: "guest_session_unavailable",
     }),
-  draftRevisionConflict: () =>
+  draftRevisionConflict: (currentRevision?: number) =>
     new ProblemError({
       title: "Draft revision conflict",
       status: 409,
       code: "draft_revision_conflict",
+      currentRevision,
     }),
-  draftAlreadySubmitted: () =>
+  draftAlreadySubmitted: (tripId?: string) =>
     new ProblemError({
       title: "Draft already submitted",
       status: 409,
       code: "draft_already_submitted",
+      ...(tripId ? { nextPath: `/trips/${tripId}` as const } : {}),
     }),
   bookingIntentExpired: () =>
     new ProblemError({

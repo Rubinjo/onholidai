@@ -37,7 +37,9 @@ export async function renewPlanningSession(database: Kysely<Database>, credentia
 }
 export async function createPlanningSession(database: Kysely<Database>, options: { now?: () => Date; random?: () => Buffer } = {}) {
   const now = (options.now ?? (() => new Date()))();
-  const credential = (options.random ?? (() => randomBytes(32)))().toString("base64url");
+  const bytes = (options.random ?? (() => randomBytes(32)))();
+  if (bytes.length !== 32) throw new RangeError("Planning credentials require 32 random bytes");
+  const credential = bytes.toString("base64url");
   const row = await database.insertInto("guestPlanningSessions").values({ id: randomUUID(),
     credentialDigest: digestPlanningCredential(credential), createdAt: now, lastActivityAt: now,
     expiresAt: new Date(now.getTime() + PLANNING_IDLE_MS), revokedAt: null }).returningAll().executeTakeFirstOrThrow();
