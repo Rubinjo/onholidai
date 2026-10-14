@@ -6,7 +6,7 @@ from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import langsmith
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import END, START, StateGraph  # pyright: ignore[reportMissingTypeStubs]
 
 from onholidai_agent.graph.estimate import EstimateGraph, EstimateState
 from onholidai_agent.graph.refine import question
@@ -24,7 +24,7 @@ async def finalize(request: CreateAgentRunRequest, sources: TripReader) -> Agent
     graph.add_node("finalize", compose)
     graph.add_edge(START, "finalize")
     graph.add_edge("finalize", END)
-    with langsmith.tracing_context(enabled=False):
+    with langsmith.tracing_context(enabled=False):  # pyright: ignore[reportUnknownMemberType]
         async with asyncio.timeout(30):
             result = await graph.compile().ainvoke({"request": request})
     value = result.get("result")

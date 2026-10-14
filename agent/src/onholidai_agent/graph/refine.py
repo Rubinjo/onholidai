@@ -26,7 +26,7 @@ def question(text: str, reason: str = "scope") -> AgentResult:
 
 async def refine(request: CreateAgentRunRequest, sources: TripReader) -> AgentResult:
     import langsmith
-    from langgraph.graph import END, START, StateGraph
+    from langgraph.graph import END, START, StateGraph  # pyright: ignore[reportMissingTypeStubs]
 
     async def compose(state: EstimateState) -> dict[str, AgentResult]:
         return {"result": await compose_refinement(state["request"], sources)}
@@ -37,7 +37,7 @@ async def refine(request: CreateAgentRunRequest, sources: TripReader) -> AgentRe
     graph.add_edge("refine", END)
 
     # Raw prompt/context must never become implicit LangGraph/LangSmith traces.
-    with langsmith.tracing_context(enabled=False):
+    with langsmith.tracing_context(enabled=False):  # pyright: ignore[reportUnknownMemberType]
         async with asyncio.timeout(30):
             result = await graph.compile().ainvoke({"request": request})
     value = result.get("result")

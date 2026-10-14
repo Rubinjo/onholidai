@@ -43,7 +43,10 @@ def test_corpus_copies_hash_and_exact_counts_are_deterministic() -> None:
     assert len(corpus["unambiguousRequests"]) == 100
     assert len(corpus["ambiguities"]) == 20
     assert len(corpus["itineraryDays"]) == 100
-    assert sum(len(day["input"]["itineraryDays"][0]["items"]) for day in corpus["itineraryDays"]) == 500
+    item_count = sum(
+        len(day["input"]["itineraryDays"][0]["items"]) for day in corpus["itineraryDays"]
+    )
+    assert item_count == 500
     assert len(corpus["hardConflicts"]) == 20
     assert corpus["metadata"]["changeControl"]["reviewedReasonRequired"] is True
     assert corpus["metadata"]["changeControl"]["reviewedReason"]

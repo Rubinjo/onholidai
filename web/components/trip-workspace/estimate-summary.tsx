@@ -67,7 +67,7 @@ export function EstimateSummary({ initialTrip, initialProposal, initialRunId }: 
   if (!pending && trip.snapshot.components.length) return <Workspace initialTrip={trip} initialRunId={null} />;
   const formatter = new Intl.NumberFormat("en", { style: "currency", currency: snapshot.price.currency });
   const total = formatter.format(snapshot.price.finalCustomerMinor / (10 ** (formatter.resolvedOptions().maximumFractionDigits ?? 2)));
-  return <section><h1>{pending ? "Proposed estimate" : proposal?.status === "applied" ? "Accepted estimated draft" : "Your saved trip setup"}</h1>
+  return <main className="planning-page"><section><h1>{pending ? "Proposed estimate" : proposal?.status === "applied" ? "Accepted estimated draft" : "Your saved trip setup"}</h1>
     <p role="status">Research status: {status || "saved"}. Saved version {trip.version}.</p><p role="alert">{error}</p>
     {error && <button type="button" onClick={() => { setError(""); setPollRetry((value) => value + 1); }}>Retry status read</button>}
     {pending && <p>Nothing has been applied yet.</p>}
@@ -90,5 +90,5 @@ export function EstimateSummary({ initialTrip, initialProposal, initialRunId }: 
     {clarification && <fieldset disabled={busy}><legend>Clarification needed</legend><label>{clarification.question}<textarea value={answer} maxLength={4000} onChange={(event) => setAnswer(event.target.value)} /></label><button type="button" disabled={!answer.trim()} onClick={() => void resume()}>Send clarification</button></fieldset>}
     <button type="button" disabled={busy || ["queued", "running"].includes(status)} onClick={() => void retry()}>Research a new estimate</button>
     <p>Booking is not available in this planning increment.</p>
-  </section>;
+  </section></main>;
 }

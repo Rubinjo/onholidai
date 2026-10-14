@@ -1,2 +1,9 @@
 packages:
   - web
+
+# pnpm 12 requires an explicit decision for lifecycle scripts. These were ignored under
+# pnpm 10; each resolves its platform binary from optional dependencies without scripts.
+allowBuilds:
+  "@swc/core": false
+  protobufjs: false
+  unrs-resolver: false

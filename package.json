@@ -5,7 +5,7 @@
   "packageManager": "pnpm@12.11.2",
   "engines": {
     "node": ">=24 <25",
-    "pnpm": ">=10 <11"
+    "pnpm": ">=12 <13"
   },
   "scripts": {
     "dev": "pnpm --filter @onholidai/web dev",

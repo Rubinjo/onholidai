@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Protocol, cast
 
 from onholidai_agent.models.api import CreateAgentRunRequest
 from onholidai_agent.models.tools import RetrieveRelevantContextInput
@@ -18,7 +18,7 @@ async def retrieve_relevant_context(
     query = RetrieveRelevantContextInput.model_validate(raw)
     response = await reader.retrieve_context(request, query.model_dump(mode="json", by_alias=True))
     items = response.get("items", [])
-    if not isinstance(items, list) or len(items) > query.limit:
+    if not isinstance(items, list) or len(cast("list[object]", items)) > query.limit:
         raise ValueError("context_response_exceeded")
     if len(str(response).encode()) > 16000:
         raise ValueError("context_response_exceeded")

@@ -5,7 +5,7 @@
 
 ## Runtime and Workspace Baselines
 
-**Decision**: Use Node.js 24 LTS for the Next.js application and TypeScript workers, Python 3.13 for the FastAPI/LangGraph service, pnpm 10 for JavaScript workspaces, and uv for Python dependency management. Commit lockfiles and pin mutually compatible stable framework, SDK, action, and image versions during implementation.
+**Decision**: Use Node.js 24 LTS for the Next.js application and TypeScript workers, Python 3.13 for the FastAPI/LangGraph service, pnpm 12 for JavaScript workspaces, and uv for Python dependency management. Commit lockfiles and pin mutually compatible stable framework, SDK, action, and image versions during implementation.
 
 **Rationale**: LTS and mature interpreter baselines reduce compatibility risk while pnpm and uv provide deterministic cross-language workspace installs. Exact library versions must be selected as a tested compatibility set rather than assumed from independent latest releases.
 

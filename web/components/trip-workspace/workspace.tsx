@@ -15,7 +15,7 @@ import { FinalizationReview } from "./finalization-review";
 function WorkspacePanes({ initialTrip, initialRunId }: { initialTrip: TripEnvelope; initialRunId: string | null }) {
   const query = useTrip(initialTrip), trip = query.data;
   useTripEvents(initialTrip.tripId);
-  return <><h1>Your living trip</h1>{query.error && <p role="alert">Trip refresh unavailable. Showing saved version {trip.version}. <button type="button" onClick={() => void query.refetch()}>Retry trip refresh</button></p>}
+  return <main className="planning-page planning-workspace"><h1>Your living trip</h1>{query.error && <p role="alert">Trip refresh unavailable. Showing saved version {trip.version}. <button type="button" onClick={() => void query.refetch()}>Retry trip refresh</button></p>}
     {/* The price bar stays last in the DOM for the documented focus order and is
         placed in the middle column by the grid, which owns price and booking. */}
     <div className="trip-workspace">
@@ -23,7 +23,7 @@ function WorkspacePanes({ initialTrip, initialRunId }: { initialTrip: TripEnvelo
       <div className="trip-workspace__pane trip-workspace__pane--route"><ItineraryList trip={trip} /><ItineraryMap trip={trip} fill /></div>
       <div className="trip-workspace__pane trip-workspace__pane--conversation"><Conversation trip={trip} initialRunId={initialRunId} onCommit={query.accept} /></div>
       <PriceBar trip={trip} />
-    </div></>;
+    </div></main>;
 }
 export function Workspace(props: { initialTrip: TripEnvelope; initialRunId: string | null }) {
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } } }));

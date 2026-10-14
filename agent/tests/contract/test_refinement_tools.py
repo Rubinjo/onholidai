@@ -31,7 +31,7 @@ def refinement_request(message: str) -> CreateAgentRunRequest:
 
 class RefinementSource:
     def __init__(self):
-        self.trip = {
+        self.trip: dict[str, object] = {
             "version": 2,
             "snapshot": {
                 "destinations": [

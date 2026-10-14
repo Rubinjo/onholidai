@@ -1,5 +1,6 @@
 import asyncio
 from copy import deepcopy
+from typing import Any, cast
 from uuid import uuid4
 
 from onholidai_agent.graph.finalize import compose_itinerary
@@ -8,7 +9,7 @@ from onholidai_agent.models.api import CreateAgentRunRequest
 
 
 def test_itinerary_is_a_reviewable_proposal_and_preserves_authoritative_choices():
-    snapshot = {
+    snapshot: dict[str, Any] = {
         "destinations": [
             {
                 "id": str(uuid4()),
@@ -27,7 +28,7 @@ def test_itinerary_is_a_reviewable_proposal_and_preserves_authoritative_choices(
     before = deepcopy(snapshot)
 
     class Reader:
-        async def get_trip(self, request):
+        async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]:
             return {"version": 2, "snapshot": snapshot}
 
     request = CreateAgentRunRequest.model_validate(
@@ -51,7 +52,7 @@ def test_itinerary_is_a_reviewable_proposal_and_preserves_authoritative_choices(
     assert result.proposal.purpose == "finalization"
     assert [operation.target for operation in result.proposal.operations] == ["/itineraryDays"]
     assert snapshot == before
-    days = result.proposal.operations[0].value
+    days = cast("list[dict[str, Any]]", result.proposal.operations[0].value)
     assert len(days) == 2
     for day in days:
         assert sum(item["type"] == "meal" for item in day["items"]) >= 2
@@ -80,7 +81,7 @@ def planning_request(message: str, purpose: str = "refinement") -> CreateAgentRu
 
 def test_missing_timezone_requires_clarification_without_inventing_one():
     class Reader:
-        async def get_trip(self, request):
+        async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]:
             return {
                 "version": 2,
                 "snapshot": {
@@ -99,7 +100,7 @@ def test_missing_timezone_requires_clarification_without_inventing_one():
 
 def test_lower_priority_activity_changes_are_proposals_and_preserve_supplier_items():
     activity_id = str(uuid4())
-    snapshot = {
+    snapshot: dict[str, Any] = {
         "destinations": [],
         "preferences": {},
         "constraints": [],
@@ -122,7 +123,7 @@ def test_lower_priority_activity_changes_are_proposals_and_preserve_supplier_ite
     }
 
     class Reader:
-        async def get_trip(self, request):
+        async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]:
             return {"version": 2, "snapshot": snapshot}
 
     for message, count in [
@@ -132,7 +133,8 @@ def test_lower_priority_activity_changes_are_proposals_and_preserve_supplier_ite
         before = deepcopy(snapshot)
         result = asyncio.run(compose_refinement(planning_request(message), Reader())).root
         assert result.kind == "proposal"
-        assert len(result.proposal.operations[0].value[0]["items"]) == count
+        days = cast("list[dict[str, Any]]", result.proposal.operations[0].value)
+        assert len(days[0]["items"]) == count
         assert snapshot == before
     snapshot["itineraryDays"][0]["items"][0]["componentId"] = str(uuid4())
     result = asyncio.run(

@@ -12,7 +12,7 @@ Build a two-service travel-planning monorepo in which the Next.js application ow
 
 ## Technical Context
 
-**Language/Version**: Node.js 24 LTS with TypeScript for Next.js and TypeScript Temporal workers; Python 3.13 for FastAPI, LangGraph, and any future Python Temporal worker; pnpm 10 and uv with committed lockfiles
+**Language/Version**: Node.js 24 LTS with TypeScript for Next.js and TypeScript Temporal workers; Python 3.13 for FastAPI, LangGraph, and any future Python Temporal worker; pnpm 12 and uv with committed lockfiles
 
 **Primary Dependencies**: Next.js App Router, React, Better Auth, Zod, TanStack Query, Tailwind CSS, shadcn/ui, Radix UI, MapLibre GL JS, React DayPicker, date-fns; FastAPI, Pydantic, LangGraph, OpenAI-compatible Nebius client; Temporal TypeScript and Python SDKs; OpenTelemetry and LangSmith
 

@@ -34,14 +34,15 @@ services:
     command:
       - |
         export POSTGRES_PWD="$$(cat /run/secrets/temporal_db_password)"
-        exec /etc/temporal/entrypoint.sh /etc/temporal/auto-setup.sh
+        # The image's entrypoint only runs auto-setup.sh when the literal argument
+        # "autosetup" is present; otherwise the server starts against an empty schema.
+        exec /etc/temporal/entrypoint.sh autosetup
     environment:
       DB: postgres12
       DB_PORT: "5432"
       POSTGRES_USER: temporal
       POSTGRES_SEEDS: postgres
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
-      TEMPORAL_BROADCAST_ADDRESS: temporal
     ports:
       - "7233:7233"
     secrets:

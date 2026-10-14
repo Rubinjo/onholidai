@@ -4,7 +4,7 @@ ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN corepack enable && corepack prepare pnpm@10.18.3 --activate
+RUN corepack enable && corepack prepare pnpm@12.11.2 --activate
 
 WORKDIR /workspace
 

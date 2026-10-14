@@ -4,7 +4,7 @@ This guide defines the runnable end-to-end evidence expected after implementatio
 
 ## Prerequisites
 
-- Node.js 24 LTS and pnpm 10
+- Node.js 24 LTS and pnpm 12
 - Python 3.13 and uv
 - Docker Engine with Docker Compose v2
 - Playwright browser dependencies
@@ -13,15 +13,15 @@ This guide defines the runnable end-to-end evidence expected after implementatio
 
 ## Start the Local Stack
 
-The web application requires independent `service_token_secret.txt` and `pricing_diagnostic_secret.txt` files in `infra/compose/secrets/`, alongside `web_auth_secret.txt`. Each contains at least 32 characters; use distinct values. The service key is shared with the agent transport; the pricing key stays in web/authorized diagnostic callers. Local non-container development uses synthetic defaults in `.env.example`. Production startup requires explicit database/auth/service/diagnostic configuration. Build-only credentials in CI and Dockerfile are placeholders for shell compilation and are not installed as runtime environment values. The current schema is migrations 001–009; always apply the full ordered migration set through the controlled migration command.
+The web application requires independent `service_token_secret.txt` and `pricing_diagnostic_secret.txt` files in `infra/compose/secrets/`, alongside `web_auth_secret.txt`. Each contains at least 32 characters; use distinct values. The service key is shared with the agent transport; the pricing key stays in web/authorized diagnostic callers. Local non-container development uses synthetic defaults in `.env.example`. Production startup requires explicit database/auth/service/diagnostic configuration. Build-only credentials in CI and Dockerfile are placeholders for shell compilation and are not installed as runtime environment values. The current schema is migrations 001–010; always apply the full ordered migration set through the controlled migration command.
 
-Readiness is staged. After setup, install locked dependencies, start `--profile infrastructure` and run web/agent shell health checks with `pnpm dev`; no migration job, application container profile or booking worker is required. After foundation, run the `migrations` profile. The complete commands below require all story implementations through US4; `applications` runs containerized app services and `booking` runs the worker.
+Readiness is staged. After setup, install locked dependencies, start `--profile infrastructure` and run web/agent shell health checks with `pnpm dev`; no migration job, application container profile or booking worker is required. After foundation, run the `migrations` profile. The complete commands below require all story implementations through US4; `applications` runs containerized app services and `booking` runs the worker. Compose only resolves a `depends_on` target inside a profile that is enabled for that invocation, so every stage command names the profiles it needs — the migration job depends on `postgres`, so it enables `infrastructure` as well as `migrations`.
 
 ```bash
 pnpm install --frozen-lockfile
 uv sync --project agent --frozen
 docker compose -f infra/compose/compose.yml --profile infrastructure up -d
-docker compose -f infra/compose/compose.yml --profile migrations run --rm migrate
+docker compose -f infra/compose/compose.yml --profile infrastructure --profile migrations run --rm migrate
 docker compose -f infra/compose/compose.yml --profile infrastructure --profile applications --profile booking up -d
 ```
 
