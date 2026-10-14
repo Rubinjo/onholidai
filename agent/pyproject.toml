@@ -16,6 +16,7 @@ dependencies = [
     "pydantic==2.14.0",
     "pydantic-settings==2.15.0",
     "uvicorn[standard]==0.54.0",
+    "tzdata==2025.2",
 ]
 
 [project.scripts]

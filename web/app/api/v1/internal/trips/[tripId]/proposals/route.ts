@@ -12,7 +12,7 @@ export async function POST(request: Request, context: { params: Promise<{ tripId
     const run = await application.database.selectFrom("agentRuns").select("id").where("tripId", "=", tripId)
       .where("ownerUserId", "=", actor.userId).where("requestId", "=", actor.requestId).executeTakeFirst();
     if (!run) runConflict();
-    return proposal.purpose === "refinement" ? recordRefinement(application.database, actor, run.id, proposal, application.planningProviders)
+    return ["refinement", "finalization"].includes(proposal.purpose) ? recordRefinement(application.database, actor, run.id, proposal, application.planningProviders)
       : recordEstimate(application.database, actor, run.id, proposal);
   }, { status: 201 });
 }

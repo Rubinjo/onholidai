@@ -284,6 +284,18 @@ paths:
         "409":
           $ref: "#/components/responses/VersionConflict"
   /trips/{tripId}/commands/finalize:
+    get:
+      tags: [Trips]
+      operationId: reviewFinalization
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200':
+          description: Saved-version feasibility review; this read never finalizes or books
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinalizationReview'
     post:
       tags: [Trips]
       operationId: finalizeTrip
@@ -294,10 +306,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VersionedCommand'
+              $ref: '#/components/schemas/FinalizeCommand'
       responses:
         '200':
-          description: Finalized trip or blocking feasibility issues
+          description: Finalized planning trip with disclosed unverified conditions; no booking
           content:
             application/json:
               schema:
@@ -1428,6 +1440,60 @@ components:
           type: "string"
           pattern: "^/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$"
         value: {}
+    FinalizeCommand:
+      type: object
+      additionalProperties: false
+      required: [requestId, expectedVersion, acknowledgeUnverified, reviewFingerprint]
+      properties:
+        requestId: { type: string, format: uuid }
+        expectedVersion: { type: integer, minimum: 1 }
+        acknowledgeUnverified: { type: boolean }
+        reviewFingerprint: { type: string, pattern: '^[a-f0-9]{64}$' }
+    FinalizationIssue:
+      type: object
+      additionalProperties: false
+      required: [code, message, relatedIds]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        relatedIds:
+          type: array
+          items: { type: string, format: uuid }
+    FinalizationReview:
+      type: object
+      additionalProperties: false
+      required: [tripId, version, report, reviewFingerprint]
+      properties:
+        tripId: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        reviewFingerprint: { type: string, pattern: '^[a-f0-9]{64}$' }
+        report:
+          type: object
+          additionalProperties: false
+          required: [policyVersion, blocking, unverified, exceptions, suggestions, totalItems, verifiedItems]
+          properties:
+            policyVersion: { const: '1' }
+            blocking:
+              type: array
+              items: { $ref: '#/components/schemas/FinalizationIssue' }
+            unverified:
+              type: array
+              items: { $ref: '#/components/schemas/FinalizationIssue' }
+            exceptions:
+              type: array
+              items: { $ref: '#/components/schemas/FinalizationIssue' }
+            suggestions:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [itemId, action, reason]
+                properties:
+                  itemId: { type: string, format: uuid }
+                  action: { enum: [move, remove] }
+                  reason: { type: string }
+            totalItems: { type: integer, minimum: 0 }
+            verifiedItems: { type: integer, minimum: 0 }
     TripEnvelope:
       type: "object"
       additionalProperties: false

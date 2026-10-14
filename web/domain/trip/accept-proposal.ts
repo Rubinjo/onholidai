@@ -18,12 +18,13 @@ export async function acceptProposal(database: Kysely<Database>, userId: string,
     const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
     const row = await transaction.selectFrom("changeProposals").selectAll().where("id", "=", proposalId).where("tripId", "=", tripId).forUpdate().executeTakeFirst();
     const candidate = await transaction.selectFrom("estimateCandidates").select("snapshot").where("proposalId", "=", proposalId).executeTakeFirst();
-    if (!trip || trip.lifecycleState !== "draft" || !row || row.purpose !== "refinement" || !candidate || row.baseTripVersion !== input.expectedVersion) runConflict();
+    if (!trip || trip.lifecycleState !== "draft" || !row || !["refinement", "finalization"].includes(row.purpose) || !candidate || row.baseTripVersion !== input.expectedVersion) runConflict();
     if (row.status !== "applied") {
       if (row.status !== "proposed" || row.expiresAt.getTime() <= Date.now() || trip.currentVersion !== input.expectedVersion) runConflict();
       const run = await transaction.selectFrom("agentRuns").selectAll().where("id", "=", row.agentRunId).executeTakeFirst();
       if (!run || run.status !== "proposed" || run.result?.kind !== "proposal" || (run.result.proposal as { id?: string })?.id !== proposalId || !run.resultFingerprint || run.resultCursor !== run.eventCursor) runConflict();
-      if (candidate.snapshot.components.some((component) => component.bookingStatus !== "unbooked" || component.offerStatus !== "available" || (component.expiresAt && Date.parse(component.expiresAt) <= Date.now()))) runConflict();
+      if (candidate.snapshot.components.some((component) => component.bookingStatus !== "unbooked"
+        || row.purpose === "refinement" && (component.offerStatus !== "available" || (component.expiresAt && Date.parse(component.expiresAt) <= Date.now())))) runConflict();
       await transaction.updateTable("changeProposals").set({ status: "accepted" }).where("id", "=", proposalId).execute();
     }
     const base = await readOwnedTripVersion(transaction, userId, tripId, input.expectedVersion);

@@ -167,7 +167,14 @@ class WebRunStore:
     async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]:
         response = await self.client.get(
             f"/api/v1/internal/trips/{request.actor.trip_id}/agent-view",
-            params={"baseTripVersion": request.actor.base_trip_version, "detail": "compact"},
+            params={
+                "baseTripVersion": request.actor.base_trip_version,
+                "detail": "components"
+                if request.purpose == "finalization"
+                else "itinerary"
+                if request.purpose == "refinement"
+                else "compact",
+            },
             headers=self.headers(request, "trip:read"),
         )
         response.raise_for_status()

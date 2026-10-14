@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { itemEvidenceFields, segmentGuidanceFields, planningDetailsSchema } from "./itinerary";
 
 export const CURRENT_TRIP_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 export const LEGACY_TRIP_SNAPSHOT_SCHEMA_VERSION = 0 as const;
@@ -200,6 +201,7 @@ export const geographyPointSchema = z
 
 export const destinationSchema = z
   .object({
+    timezone: timezoneSchema.optional(),
     id: UUID,
     kind: z.enum(["country", "city", "place"]),
     name: nonBlank(120),
@@ -239,6 +241,7 @@ export const travelPlaceSchema = z
 
 export const travelSegmentSchema = z
   .object({
+    ...segmentGuidanceFields,
     mode: z.enum(["walk", "public_transport", "drive", "flight", "rail", "transfer", "ferry", "other"]),
     origin: travelPlaceSchema,
     destination: travelPlaceSchema,
@@ -308,6 +311,7 @@ export const componentPriceSchema = z
   });
 
 const componentBaseFields = {
+  planningDetails: planningDetailsSchema.optional(),
   id: UUID,
   itineraryItemIds: z.array(UUID).max(64),
   provider: nonBlank(120),
@@ -365,6 +369,7 @@ export const travelComponentSchema = z
 
 export const itineraryItemSchema = z
   .object({
+    ...itemEvidenceFields,
     id: UUID,
     type: z.enum(["activity", "meal", "free_time", "travel", "note"]),
     start: localDateTimeSchema,
@@ -393,6 +398,8 @@ export const itineraryItemSchema = z
 
 export const itineraryDaySchema = z
   .object({
+    practicalNotes: z.array(nonBlank(1000)).max(16).optional(),
+    mandatoryTravelException: nonBlank(2000).optional(),
     date: localDateSchema,
     destinationId: UUID,
     timezone: timezoneSchema,
@@ -409,9 +416,6 @@ export const itineraryDaySchema = z
       const current = day.items[index];
       if (current.start < previous.start) {
         addIssue(context, ["items", index, "start"], "Itinerary items must be ordered by start time");
-      }
-      if (current.start < previous.end && current.status !== "cancelled" && previous.status !== "cancelled") {
-        addIssue(context, ["items", index, "start"], "Active itinerary items cannot overlap");
       }
     }
   });
@@ -561,7 +565,7 @@ function validateSnapshot(snapshot: SnapshotForValidation, context: z.Refinement
       if (item.componentId !== null && !componentIds.includes(item.componentId)) {
         addIssue(context, ["itineraryDays", dayIndex, "items", itemIndex, "componentId"], "Unknown component reference");
       }
-      if (item.start.slice(0, 10) !== day.date || item.end.slice(0, 10) !== day.date) {
+      if (item.start.slice(0, 10) !== day.date || (item.type !== "travel" && item.end.slice(0, 10) !== day.date)) {
         addIssue(context, ["itineraryDays", dayIndex, "items", itemIndex], "Itinerary item local times must fall on the day date");
       }
     }

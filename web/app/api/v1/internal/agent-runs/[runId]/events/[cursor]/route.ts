@@ -11,7 +11,7 @@ export async function PUT(request: Request, route: { params: Promise<{ runId: st
     const receipt = await new RunRepository(application.database).event(actor, runId, z.coerce.number().int().positive().parse(cursor), input);
     if (input.event.type === "proposal") {
       // Refinements need web-owned repricing, so the reviewed impact exists before acceptance.
-      await (input.event.proposal.purpose === "refinement"
+      await (["refinement", "finalization"].includes(input.event.proposal.purpose)
         ? recordRefinement(application.database, actor, runId, input.event.proposal, application.planningProviders)
         : recordEstimate(application.database, actor, runId, input.event.proposal));
     }

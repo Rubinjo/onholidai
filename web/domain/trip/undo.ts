@@ -11,12 +11,12 @@ export async function undoDraft(database: Kysely<Database>, userId: string, trip
   const input = undoSchema.parse(raw);
   return database.transaction().execute(async (transaction) => {
     const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
-    if (!trip || trip.lifecycleState !== "draft" || input.restoreVersion >= input.expectedVersion) runConflict();
+    if (!trip || !["draft", "finalized"].includes(trip.lifecycleState) || input.restoreVersion >= input.expectedVersion) runConflict();
     const rows = await transaction.selectFrom("tripVersions").selectAll().where("tripId", "=", tripId).where("version", ">=", input.restoreVersion).where("version", "<=", input.expectedVersion).orderBy("version").execute();
     const target = rows[0], current = rows.at(-1);
     if (!target || !current || rows.length !== input.expectedVersion - input.restoreVersion + 1 || rows.some((row) => row.initiatingActor === "booking_workflow" || row.snapshot.components.some((component) => component.bookingStatus !== "unbooked")) || rows.slice(1).some((row) => row.nonReversibleReason !== null)) runConflict();
     const receipt = await commitTripMutation(transaction, { tripId, ownerUserId: userId, expectedVersion: input.expectedVersion, requestId: input.requestId, idempotencyKey: input.requestId, requestFingerprint: fingerprint(input),
-      snapshot: tripSnapshotSchema.parse(target.snapshot), initiatingActor: "user", proposalId: null, changeSummary: [`Restored draft content from version ${input.restoreVersion}`],
+      snapshot: tripSnapshotSchema.parse(target.snapshot), lifecycleState: "draft", initiatingActor: "user", proposalId: null, changeSummary: [`Restored draft content from version ${input.restoreVersion}`],
       inverseOperation: { operation: "replace", target: "/", value: current.snapshot }, nonReversibleReason: null, outboxEventId: randomUUID(), auditEventId: randomUUID() });
     return readTrip(transaction, userId, tripId, { version: receipt.version });
   });

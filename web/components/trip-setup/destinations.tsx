@@ -40,7 +40,7 @@ export function Destinations({ origin, destinations, onOrigin, onDestinations }:
     <ul>{candidates.map((place) => <li key={place.placeId}><button type="button" disabled={destinations.length >= 8} onClick={() => {
       if (destinations.some((destination) => Object.values(destination.providerPlaceIds).includes(place.placeId))) return;
       onDestinations([...destinations, { id: crypto.randomUUID(), kind: place.kind === "airport" ? "place" : place.kind,
-        name: place.name, countryCode: place.countryCode, providerPlaceIds: { lookup: place.placeId }, location: place.location,
+        name: place.name, countryCode: place.countryCode, timezone: place.timezone, providerPlaceIds: { lookup: place.placeId }, location: place.location,
         routePosition: destinations.length, arrivalDate: null, departureDate: null, plannedNights: 0 }]);
       setCandidates([]);
     }}>Add {place.name}, {place.countryCode} ({place.kind})</button></li>)}</ul>

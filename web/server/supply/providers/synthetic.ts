@@ -10,8 +10,19 @@ export function syntheticReadClient(type: "flight" | "accommodation" | "activity
       : { originStation: "Synthetic departure station", destinationStation: "Synthetic arrival station", route: "Synthetic route" };
     const rate = type === "flight" ? people * 60000 : type === "accommodation" ? days * 14000 : type === "activity" ? people * 4000 : people * 6000;
     const now = new Date();
-    return [{ currency: query.currency, offerId: `synthetic-${type}-${query.startDate}`, supplierMinor: rate, taxesMinor: Math.round(rate * 0.1), feesMinor: 0,
+    const instant = (offset: number, hour: number, minute = 0) => new Date(Date.parse(query.startDate + "T00:00:00Z")
+      + offset * 86400000 + hour * 3600000 + minute * 60000).toISOString();
+    const intervals = type === "flight"
+      ? [{ start: instant(0, 3), end: instant(0, 9), group: "flight:outbound" },
+        { start: instant(days, 3), end: instant(days, 9), group: "flight:return" }]
+      : type === "accommodation" ? [{ start: instant(0, 15), end: instant(days, 10), group: "accommodation:whole_query" }]
+      : type === "activity" ? [{ start: instant(Math.min(1, days), 11), end: instant(Math.min(1, days), 13), group: "activity:whole_query" }]
+      : [{ start: instant(Math.floor(days / 2), 7), end: instant(Math.floor(days / 2), 8, 30), group: "rail:whole_query" }];
+    return intervals.map((interval) => ({ currency: query.currency, offerId: `synthetic-${type}-${query.startDate}-${interval.group}`,
+      selectionGroup: interval.group, serviceStart: interval.start, serviceEnd: interval.end,
+      supplierMinor: rate / intervals.length, taxesMinor: Math.round(rate / intervals.length * 0.1), feesMinor: 0,
       checkedAt: now.toISOString(), expiresAt: new Date(now.getTime() + 900000).toISOString(),
-      terms: null, details, minimumAge: null, maximumAge: null, maximumAdults: null, maximumChildren: null, accessibilityVerified: null }];
+      terms: null, details: type === "flight" ? { ...details, legs: [`Synthetic ${interval.group.split(":")[1]} flight; airport and carrier facts unverified`] } : details,
+      minimumAge: null, maximumAge: null, maximumAdults: null, maximumChildren: null, accessibilityVerified: null }));
   } };
 }

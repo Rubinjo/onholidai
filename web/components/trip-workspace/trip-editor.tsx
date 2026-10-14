@@ -38,7 +38,8 @@ export function TripEditor({ trip, onCommit }: { trip: TripEnvelope; onCommit: (
     <p>Saved travellers: {trip.snapshot.travellerParty.adults} adults; child ages at trip start: {trip.snapshot.travellerParty.children.map((child) => child.ageAtTripStart).join(", ") || "none"}.</p>
     {editingBase.version !== trip.version && <p role="alert">The trip changed while you were editing. Your unsaved inputs are preserved. Reload current details before making a new review.</p>}
     <button type="button" disabled={busy} onClick={() => { setEditingBase(trip); setDraft(trip.snapshot); setReview(null); setCommand(null); }}>Reload current trip details</button>
-    <form onSubmit={(event) => { event.preventDefault(); void preview(); }}><fieldset disabled={busy}><legend>Edit draft settings</legend>
+    {trip.lifecycleState === "finalized" && <p>Undo finalization in version history to return to a draft before editing.</p>}
+    <form onSubmit={(event) => { event.preventDefault(); void preview(); }}><fieldset disabled={busy || trip.lifecycleState !== "draft"}><legend>Edit draft settings</legend>
       <Destinations origin={draft.departureOrigin} destinations={draft.destinations} onOrigin={(departureOrigin) => setDraft({ ...draft, departureOrigin })} onDestinations={(destinations) => setDraft({ ...draft, destinations: destinations.map((entry) => ({ ...entry, arrivalDate: null, departureDate: null, plannedNights: 0 })) })} />
       <Availability windows={draft.availabilityWindows} duration={draft.duration} onWindows={(availabilityWindows) => setDraft({ ...draft, availabilityWindows })} onDuration={(duration) => setDraft({ ...draft, duration })} />
       <PartyPreferences party={draft.travellerParty} preferences={draft.preferences} onParty={(travellerParty) => setDraft({ ...draft, travellerParty })} onPreferences={(preferences) => setDraft({ ...draft, preferences })} />

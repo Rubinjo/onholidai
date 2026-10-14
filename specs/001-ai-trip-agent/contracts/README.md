@@ -50,6 +50,8 @@ An omitted first-run conversation summary resolves to empty lists bound to the r
 
 ## Shared Rules
 
+US3 adds GET `/trips/{tripId}/commands/finalize` for a saved-version policy report and POST for the explicit planning transition. POST binds the request, actor, exact version and report fingerprint, requires acknowledgement of disclosed unknowns/exceptions, and blocks known conflicts. It never authorizes booking. Finalization proposals update daily planning only and use the existing durable callback/acceptance flow; web discards model assertions of verified supplier evidence. Additive optional item evidence, destination timezone and component detail fields preserve older v1 snapshots; absent fields remain unverified. `contracts/trip-domain/itinerary-v1.schema.json` is exported alongside the snapshot by `pnpm --dir web snapshot:contract`.
+
 - All timestamps use RFC 3339 UTC unless explicitly named as local date/time with an IANA timezone.
 - Money uses ISO 4217 currency plus integer minor units.
 - Identifiers are opaque UUIDs unless a provider reference is explicitly named.

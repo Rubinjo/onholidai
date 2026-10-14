@@ -39,7 +39,7 @@ interface EvaluationCorpus {
   estimates: Array<{ categories: string[] }>;
   unambiguousRequests: Array<{ group: string }>;
   ambiguities: unknown[];
-  itineraryDays: Array<{ items: unknown[] }>;
+  itineraryDays: Array<{ input: { itineraryDays: Array<{ items: unknown[] }> } }>;
   hardConflicts: unknown[];
 }
 
@@ -67,7 +67,7 @@ describe("evaluation policy v1 fixtures", () => {
 
     expect(webCorpus).toBe(agentCorpus);
     expect(corpus.metadata).toMatchObject({
-      corpusVersion: "1.2.0",
+      corpusVersion: "1.3.0",
       policyVersion: "1",
       seed: "onholidai-evaluation-v1-seed-20261011",
       corpusHash: hash,
@@ -81,7 +81,7 @@ describe("evaluation policy v1 fixtures", () => {
   it("contains every exact denominator and required category coverage", async () => {
     const corpus = await readCorpus();
     const itemCount = corpus.itineraryDays.reduce(
-      (total, day) => total + day.items.length,
+      (total, day) => total + day.input.itineraryDays.reduce((count, entry) => count + entry.items.length, 0),
       0,
     );
 

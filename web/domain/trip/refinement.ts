@@ -9,9 +9,10 @@ import { researchDraftImpact } from "./edit";
 import { readOwnedTripVersion } from "./read";
 import { changeProposalSchema } from "./proposal";
 import { tripSnapshotSchema } from "./schema";
+import { previewFinalization } from "./finalization-proposal";
 
 export async function recordRefinement(database: Kysely<Database>, context: ServiceTokenContext, runId: string, proposal: AgentProposal, providers: readonly SupplyReadProvider[]) {
-  if (proposal.purpose !== "refinement" || proposal.initiatingRequestId !== context.requestId || proposal.baseTripVersion !== context.baseTripVersion) runConflict();
+  if (!["refinement", "finalization"].includes(proposal.purpose) || proposal.initiatingRequestId !== context.requestId || proposal.baseTripVersion !== context.baseTripVersion) runConflict();
   const existing = await database.selectFrom("estimateCandidates").select("proposalId").where("proposalId", "=", proposal.id).executeTakeFirst();
   if (existing) {
     const saved = await new ProposalRepository(database).read(context.userId, context.tripId, proposal.id);
@@ -19,7 +20,9 @@ export async function recordRefinement(database: Kysely<Database>, context: Serv
     return saved;
   }
   const base = await readOwnedTripVersion(database, context.userId, context.tripId, context.baseTripVersion);
-  const review = await researchDraftImpact(tripSnapshotSchema.parse(base.snapshot), context.baseTripVersion, proposal.operations, providers);
+  const review = proposal.purpose === "finalization"
+    ? previewFinalization(tripSnapshotSchema.parse(base.snapshot), proposal.operations)
+    : await researchDraftImpact(tripSnapshotSchema.parse(base.snapshot), context.baseTripVersion, proposal.operations, providers);
   const value = changeProposalSchema.parse({ ...proposal, tripId: context.tripId, agentRunId: runId, status: "proposed", createdAt: new Date().toISOString(),
     previewSnapshot: review.previewSnapshot, priceImpact: review.priceImpact, scheduleImpact: review.scheduleImpact, affectedFacts: review.affectedFacts,
     warnings: [...proposal.warnings, ...review.warnings].slice(0, 64) });

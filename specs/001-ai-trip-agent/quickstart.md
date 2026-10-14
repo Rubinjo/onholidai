@@ -166,6 +166,12 @@ Expected:
 
 ## Scenario 6: Revalidation and Authorization Invalidation
 
+### US3 planning gate (booking not required)
+
+From a refined draft with sourced per-component service times and explicit destination timezones, select **Prepare detailed itinerary**, review the day plan and accept its proposal. Select **Review finalization**, resolve known conflicts through reviewed draft changes, acknowledge the current unverified conditions/exceptions, then explicitly finalize planning. Reload the saved result and use version history to undo back to a draft. Repeat with a known hard conflict and with map loading disabled; the blocking case must not advance the version or lifecycle. Booking remains disabled until US4.
+
+Run `pnpm --dir web test -- tests/integration/finalization.test.ts` and `pnpm --dir web test:e2e -- --grep @us3`. Set `US3_TRIP_ID` to a fresh refined fixture and `US1_STORAGE_STATE` to its authenticated storage state. Broad synthetic supplier placeholder intervals may produce validly blocked schedules; a successful fixture must carry realistic accepted service times. See [US3 evidence](./evidence/us3.md) for corpus identity and outstanding manual/participant gates.
+
 1. Finalize a synthetic trip and start booking revalidation.
 2. Configure one provider double to change price and another to leave terms unchanged.
 3. Accept changed terms and explicitly authorize the exact canonical summary.

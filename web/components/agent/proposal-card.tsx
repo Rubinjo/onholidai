@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeProposal } from "@/domain/trip/proposal";
 import { planningJson, planningError } from "@/components/trip-setup/http";
+import { DayPlan } from "@/components/trip-workspace/day-plan";
 export function ProposalCard({ proposal, tripId, version, onCommit, onDismiss }: { proposal: ChangeProposal; tripId: string; version: number; onCommit: (raw: unknown) => void; onDismiss: () => void }) {
   const request = useRef(crypto.randomUUID()), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [expired, setExpired] = useState(false);
@@ -20,6 +21,7 @@ export function ProposalCard({ proposal, tripId, version, onCommit, onDismiss }:
   return <article aria-label="Proposal review"><h3>Review proposed changes</h3><p>{proposal.rationale}</p><p>Affected: {proposal.affectedFacts.join(", ")}</p>
     {proposal.priceImpact && <p>Estimated total: {proposal.priceImpact.beforeMinor} → {proposal.priceImpact.afterMinor} minor units {proposal.priceImpact.currency}; change {proposal.priceImpact.deltaMinor}.</p>}
     <ol>{proposal.previewSnapshot?.destinations.map((entry) => <li key={entry.id}>{entry.name}: {entry.plannedNights} nights, {entry.arrivalDate} to {entry.departureDate}</li>)}</ol>
+    {proposal.purpose === "finalization" && proposal.previewSnapshot && <DayPlan days={proposal.previewSnapshot.itineraryDays} />}
     <h4>Transport, stays and activities</h4><ul>{proposal.previewSnapshot?.components.map((entry) => <li key={entry.id}>{entry.type}: {entry.serviceStart} to {entry.serviceEnd}; {entry.price.status}, {entry.price.finalCustomerMinor} minor units {entry.price.currency}.</li>)}</ul>
     <h4>Availability and requirements</h4><ul>{proposal.previewSnapshot?.availabilityWindows.map((entry) => <li key={entry.id}>{entry.preference}: {entry.startDate} to {entry.endDate}</li>)}{proposal.previewSnapshot?.constraints.filter((entry) => entry.status !== "removed").map((entry) => <li key={entry.id}>{entry.priority}: {entry.statement}; {entry.status}.</li>)}</ul>
     <ul>{proposal.tradeoffs?.map((entry) => <li key={entry}>{entry}</li>)}{proposal.warnings?.map((entry) => <li key={entry}>{entry}</li>)}</ul>

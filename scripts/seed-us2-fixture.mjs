@@ -86,7 +86,7 @@ function createClient(baseUrl) {
 
 function buildDraft(requestId) {
   const destination = (name, countryCode, latitude, longitude, routePosition, arrivalDate, departureDate, plannedNights) => ({
-    id: randomUUID(), kind: "city", name, countryCode, providerPlaceIds: {},
+    id: randomUUID(), kind: "city", name, countryCode, timezone: "Asia/Tokyo", providerPlaceIds: {},
     location: { latitude, longitude }, routePosition, arrivalDate, departureDate, plannedNights,
   });
   return {

@@ -18,6 +18,7 @@ const commitInputSchema = z
     tripId: z.uuid(),
     ownerUserId: z.string().trim().min(1),
     expectedVersion: z.number().int().nonnegative(),
+    lifecycleState: z.enum(["draft", "finalized"]).optional(),
     creation: z.object({ title: z.string().trim().min(1).max(120) }).strict().optional(),
     requestId: z.uuid(),
     idempotencyKey: z.string().trim().min(1).max(256),
@@ -123,6 +124,7 @@ export async function commitTripMutation(
   const requestFingerprint = createHash("sha256").update(canonicalJson({
     ...(input.creation ? { creation: input.creation } : { tripId: input.tripId }),
     ownerUserId: input.ownerUserId, expectedVersion: input.expectedVersion,
+    lifecycleState: input.lifecycleState,
     requestId: input.requestId, requestFingerprint: input.requestFingerprint,
     snapshot: input.creation ? { ...input.snapshot, price: { ...input.snapshot.price, checkedAt: null } } : input.snapshot,
     initiatingActor: input.initiatingActor, proposalId: input.proposalId,
@@ -182,6 +184,10 @@ export async function commitTripMutation(
     );
     if (!advanced) {
       throw new TripVersionConflictError(input.expectedVersion, trip?.currentVersion ?? input.expectedVersion);
+    }
+    if (input.lifecycleState) {
+      await transaction.updateTable("trips").set({ lifecycleState: input.lifecycleState })
+        .where("id", "=", input.tripId).where("currentVersion", "=", nextVersion).executeTakeFirstOrThrow();
     }
 
     await repositories.trips.appendOutbox({

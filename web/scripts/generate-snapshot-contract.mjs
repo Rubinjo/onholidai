@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
   CURRENT_TRIP_SNAPSHOT_SCHEMA_VERSION,
   tripSnapshotSchema,
+  itineraryDaySchema,
 } from "../domain/trip/schema.ts";
 
 const outputPath = resolve(process.cwd(), "../contracts/trip-domain/snapshot-v1.schema.json");
@@ -29,3 +30,14 @@ if (process.argv.includes("--check")) {
   await writeFile(outputPath, generated, "utf8");
   console.log(`Wrote ${outputPath}`);
 }
+
+const itineraryPath = resolve(process.cwd(), "../contracts/trip-domain/itinerary-v1.schema.json");
+const itinerary = `${JSON.stringify({
+  $id: "https://onholidai.local/contracts/trip-domain/itinerary-v1.schema.json",
+  title: "Itinerary v1",
+  description: "Timezone-qualified daily planning and reproducible feasibility policy v1 evidence.",
+  ...z.toJSONSchema(z.array(itineraryDaySchema).max(366), { target: "draft-2020-12" }),
+}, null, 2)}\n`;
+if (process.argv.includes("--check")) {
+  assert.equal(await readFile(itineraryPath, "utf8"), itinerary, "itinerary-v1.schema.json has drifted");
+} else { await writeFile(itineraryPath, itinerary, "utf8"); }

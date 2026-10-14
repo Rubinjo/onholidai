@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { createItineraryCases } from "./itinerary-corpus.mjs";
 
-const CORPUS_VERSION = "1.2.0";
+const CORPUS_VERSION = "1.3.0";
 const POLICY_VERSION = "1";
 const SEED = "onholidai-evaluation-v1-seed-20261011";
 const estimateCategories = [
@@ -147,49 +148,7 @@ const ambiguities = Array.from({ length: 20 }, (_, index) => {
   };
 });
 
-const itineraryDays = Array.from({ length: 100 }, (_, dayIndex) => {
-  const date = dateForDay(dayIndex);
-  const hasPolicyFailure = dayIndex < 20;
-  const items = Array.from({ length: 5 }, (_, itemIndex) => ({
-    id: `${id("day", dayIndex + 1)}-item-${itemIndex + 1}`,
-    type: ["meal", "activity", "free_time", "activity", "meal"][itemIndex],
-    startLocal: [`08:00`, `09:00`, `12:00`, `13:00`, `18:00`][itemIndex],
-    endLocal: [`08:45`, `11:00`, `13:00`, `15:00`, `18:45`][itemIndex],
-    expectedPolicyResult:
-      hasPolicyFailure && itemIndex === 3 ? "fail" : "pass",
-    evidence:
-      hasPolicyFailure && itemIndex === 3
-        ? "synthetic activity exceeds predetermined pace allowance"
-        : "synthetic timing evidence v1",
-  }));
-
-  return {
-    id: id("day", dayIndex + 1),
-    date,
-    timezone: "Europe/Lisbon",
-    pace: 50,
-    items,
-    expectedPassingItems: hasPolicyFailure ? 4 : 5,
-  };
-});
-
-const hardConflicts = Array.from({ length: 20 }, (_, index) => ({
-  id: id("hard-conflict", index + 1),
-  kind: [
-    "impossible_connection",
-    "required_accessibility_unavailable",
-    "traveller_ineligible",
-    "date_window_violation",
-    "required_constraint_conflict",
-  ][index % 5],
-  input: `Synthetic hard conflict ${index + 1}`,
-  expected: {
-    disclosed: true,
-    finalizationBlocked: true,
-    disposition: "requires_resolution",
-  },
-}));
-
+const { itineraryDays, hardConflicts } = createItineraryCases(estimateInput, dateForDay);
 const payload = {
   estimates,
   unambiguousRequests,
@@ -220,7 +179,7 @@ const corpus = {
     },
     changeControl: {
       reviewedReasonRequired: true,
-      reviewedReason: "US2 revision: replace refinement placeholders with complete synthetic accepted-route inputs, concrete requests and predetermined typed operations across all five required groups, plus separate material ambiguities. Preserve US1 inputs, seed and denominators. Itinerary/hard-conflict placeholders remain pending T128 and are not scored as evidence.",
+      reviewedReason: "US3 revision: replace itinerary and hard-conflict placeholders with timezone-qualified schedules, sourced upper duration bounds and concrete connection/accessibility/eligibility/date/required-constraint failures. Expected item outcomes derive from policy v1. Preserve estimate/refinement cases, seed and denominators; a complete evaluation remains required before acceptance.",
       policy:
         "Every revision must record a reviewed reason and run a fresh complete evaluation.",
     },

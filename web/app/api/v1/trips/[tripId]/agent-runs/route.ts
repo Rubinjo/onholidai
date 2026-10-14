@@ -4,7 +4,7 @@ import { RunRepository } from "@/server/agent-client/run-repository";
 import { dispatchEstimate } from "@/server/agent-client/client";
 import { publicRun } from "@/server/agent-client/results";
 const command = z.object({ requestId: z.uuid(), baseTripVersion: z.number().int().positive(),
-  conversationId: z.uuid().nullable().optional(), message: z.string().trim().min(1).max(12000), purpose: z.enum(["initial_estimate", "refinement"]) }).strict();
+  conversationId: z.uuid().nullable().optional(), message: z.string().trim().min(1).max(12000), purpose: z.enum(["initial_estimate", "refinement", "finalization"]) }).strict();
 export async function POST(request: Request, route: { params: Promise<{ tripId: string }> }) {
   return apiResponse(request, async (application) => {
     const user = await browserUser(application, request), { tripId } = await route.params;

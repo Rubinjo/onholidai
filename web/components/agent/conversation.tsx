@@ -13,14 +13,14 @@ export function Conversation({ trip, initialRunId, onCommit }: { trip: TripEnvel
   const client = useQueryClient(), [runId, setRunId] = useState(initialRunId), [message, setMessage] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false), [dismissed, setDismissed] = useState<string | null>(null);
   const history = useQuery({ queryKey: ["conversation", trip.tripId], queryFn: async () => messagesSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}/conversations`)), refetchInterval: 2000 });
   const run = useQuery({ queryKey: ["run", runId], enabled: Boolean(runId), queryFn: async () => runSchema.parse(await planningJson(`/api/v1/agent-runs/${runId}`)), refetchInterval: (query) => ["queued", "running"].includes(query.state.data?.status ?? "queued") ? 1000 : false });
-  async function submit() {
+  async function submit(purpose?: "finalization") {
     setError(""); setBusy(true);
     try {
       // Another actor may have committed since this pane cached the trip, and a run must
       // reserve against the current version. Fall back to the cached envelope if the read fails.
       const latest = await planningJson(`/api/v1/trips/${trip.tripId}`)
         .then((raw) => tripEnvelopeSchema.parse(raw)).catch(() => trip);
-      const value = runSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}/agent-runs`, { requestId: crypto.randomUUID(), baseTripVersion: latest.version, conversationId: null, purpose: latest.snapshot.components.length ? "refinement" : "initial_estimate", message }));
+      const value = runSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}/agent-runs`, { requestId: crypto.randomUUID(), baseTripVersion: latest.version, conversationId: null, purpose: purpose ?? (latest.snapshot.components.length ? "refinement" : "initial_estimate"), message: purpose === "finalization" ? "Prepare detailed itinerary" : message }));
       setRunId(value.id); setMessage(""); setDismissed(null); void history.refetch();
     } catch (failure) { setError(planningError(failure)); } finally { setBusy(false); }
   }
@@ -34,6 +34,7 @@ export function Conversation({ trip, initialRunId, onCommit }: { trip: TripEnvel
     {result?.proposal?.status === "rejected" && <p>This proposal was rejected; it did not change the trip.</p>}
     {result?.clarification && runId && run.data?.status === "awaiting_clarification" && <Clarification key={result.clarification.id} runId={runId} question={result.clarification} onResume={() => { void client.invalidateQueries({ queryKey: ["run", runId] }); }} />}
     {result?.kind === "answer" && <p>{result.message}</p>}
-    <form onSubmit={(event) => { event.preventDefault(); void submit(); }}><label>Discuss a trip change<textarea required maxLength={12000} value={message} onChange={(event) => setMessage(event.target.value)} /></label><button type="submit" disabled={busy || active || !message.trim()}>Request a proposal</button></form>
+    <button type="button" disabled={busy || active || trip.lifecycleState !== "draft"} onClick={() => void submit("finalization")}>Prepare detailed itinerary</button>
+    <form onSubmit={(event) => { event.preventDefault(); void submit(); }}><label>Discuss a trip change<textarea required maxLength={12000} value={message} onChange={(event) => setMessage(event.target.value)} /></label><button type="submit" disabled={busy || active || !message.trim() || trip.lifecycleState !== "draft"}>Request a proposal</button></form>
   </section>;
 }

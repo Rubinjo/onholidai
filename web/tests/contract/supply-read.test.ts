@@ -11,7 +11,8 @@ describe("injected planning suppliers", () => {
     const result = await searchPlanningOffers(providers, { componentTypes: ["flight", "accommodation"], currency: "GBP",
       departureOrigin: trip.departureOrigin, destinationIds: trip.destinations.map((destination) => destination.id),
       startDate: "2030-05-01", endDate: "2030-05-08", travellerParty: { adults: 2, children: [] } });
-    expect(result.offers).toHaveLength(2);
+    expect(result.offers).toHaveLength(3);
+    expect(result.offers.filter((offer) => offer.component.type === "flight").map((offer) => offer.selectionGroup)).toEqual(["flight:outbound", "flight:return"]);
     expect(result.offers.every((offer) => offer.component.bookingStatus === "unbooked" && offer.accessibility === "unverified")).toBe(true);
     expect(providers.every((provider) => provider.capabilities.readOnly)).toBe(true);
     expect(result.offers[0].component.price.finalCustomerAmount.minorUnits).toBeGreaterThan(0);

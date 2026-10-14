@@ -13,7 +13,7 @@ import type { ServiceTokenContext } from "./credentials";
 import { redactConversation } from "@/server/db/conversation-repository";
 
 export const reserveRunSchema = z.object({ userId: z.uuid(), tripId: z.uuid(), requestId: z.uuid(),
-  baseTripVersion: z.number().int().positive(), purpose: z.enum(["initial_estimate", "refinement"]),
+  baseTripVersion: z.number().int().positive(), purpose: z.enum(["initial_estimate", "refinement", "finalization"]),
   message: z.string().trim().min(1).max(12000) }).strict();
 export function runConflict(): never { throw new ProblemError({ title: "Run state conflict", status: 409, code: "run_conflict" }); }
 export function fingerprint(value: unknown): string { return createHash("sha256").update(canonicalJson(value)).digest("hex"); }

@@ -62,6 +62,64 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
     trip = await get_trip(sources, request)
     context = build_context(request, trip)
     snapshot = cast(dict[str, object], trip["snapshot"])
+    scheduled_edit = re.search(
+        r"\b(remove|move) activity ([0-9a-f-]{36})(?: to (\d{4}-\d{2}-\d{2}) at (\d{2}:\d{2}))?",
+        message,
+    )
+    if scheduled_edit:
+        import copy
+        from datetime import datetime
+
+        days = copy.deepcopy(cast(list[dict[str, object]], snapshot.get("itineraryDays", [])))
+        selected = None
+        for day in days:
+            for entry in cast(list[dict[str, object]], day["items"]):
+                if entry["id"] == scheduled_edit.group(2) and entry["type"] == "activity":
+                    selected = (day, entry)
+        if selected is None:
+            return question("Which scheduled activity should move or be removed?", "feasibility")
+        source_day, entry = selected
+        if entry.get("componentId"):
+            return question(
+                "This activity has supplier terms. Review a fresh offer before changing its time.",
+                "feasibility",
+            )
+        source_items = cast(list[dict[str, object]], source_day["items"])
+        if scheduled_edit.group(1) == "move":
+            target_day = next((day for day in days if day["date"] == scheduled_edit.group(3)), None)
+            if (
+                not target_day
+                or not scheduled_edit.group(4)
+                or target_day["timezone"] != source_day["timezone"]
+            ):
+                return question(
+                    "Which itinerary date/time in the same timezone should I use?", "feasibility"
+                )
+            try:
+                start = datetime.fromisoformat(str(entry["start"]))
+                end = datetime.fromisoformat(str(entry["end"]))
+                moved = datetime.fromisoformat(
+                    scheduled_edit.group(3) + "T" + scheduled_edit.group(4)
+                )
+            except ValueError:
+                return question("Which valid date and local time should I use?", "feasibility")
+            source_items.remove(entry)
+            entry["start"], entry["end"] = moved.isoformat(), (moved + (end - start)).isoformat()
+            entry.pop("startOffset", None)
+            entry.pop("endOffset", None)
+            entry["verificationStatus"], entry["constraintEvidence"] = "unverified", []
+            target_items = cast(list[dict[str, object]], target_day["items"])
+            target_items.append(entry)
+            target_items.sort(key=lambda item: str(item["start"]))
+        else:
+            source_items.remove(entry)
+        return propose_trip_changes(
+            request,
+            [{"operation": "replace", "target": "/itineraryDays", "value": days}],
+            "Review the requested lower-priority activity change. Supplier terms and prices "
+            "are unchanged; feasibility is checked again before finalization.",
+            [],
+        )
     destinations = cast(list[dict[str, object]], snapshot["destinations"])
     matches = [entry for entry in destinations if str(entry["name"]).casefold() in message]
     operations: list[dict[str, object]] = []
@@ -334,4 +392,8 @@ async def dispatch(request: CreateAgentRunRequest, sources: Sources) -> AgentRes
         return await estimate(request, sources)
     if request.purpose == "refinement":
         return await refine(request, sources)
-    raise ValueError("finalization_not_available")
+    if request.purpose == "finalization":
+        from onholidai_agent.graph.finalize import finalize
+
+        return await finalize(request, sources)
+    raise ValueError("unsupported_purpose")

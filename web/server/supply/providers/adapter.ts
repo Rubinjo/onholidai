@@ -3,11 +3,14 @@ import { z } from "zod";
 import type { SupplyReadProvider, SupplyReadQuery } from "../read";
 import { normalizePlanningOffer } from "../offers";
 import { currencySchema, travelComponentSchema } from "@/domain/trip/schema";
+import { planningDetailsSchema } from "@/domain/trip/itinerary";
 
 // Provider-specific SDK/HTTP clients translate wire payloads to this narrow, read-only port.
 // No supplier credential, reservation method or arbitrary URL crosses the port.
 export interface ReadOfferClient { search(query: SupplyReadQuery, signal: AbortSignal): Promise<unknown> }
 const hitSchema = z.object({ selectionGroup: z.string().min(1).max(120).optional(), currency: currencySchema, offerId: z.string().min(1).max(256), supplierMinor: z.number().int().nonnegative(),
+  serviceStart: z.iso.datetime({ offset: true }).optional(), serviceEnd: z.iso.datetime({ offset: true }).optional(),
+  planningDetails: planningDetailsSchema.optional(),
   taxesMinor: z.number().int().nonnegative(), feesMinor: z.number().int().nonnegative(),
   checkedAt: z.iso.datetime(), expiresAt: z.iso.datetime(), terms: z.string().min(1).max(2000).nullable(),
   details: z.record(z.string(), z.json()), minimumAge: z.number().int().nonnegative().nullable(),
@@ -26,7 +29,8 @@ export function createReadAdapter(provider: string, type: "flight" | "accommodat
         || (hit.maximumChildren !== null && ages.length > hit.maximumChildren)
         || ages.some((age) => (hit.minimumAge !== null && age < hit.minimumAge) || (hit.maximumAge !== null && age > hit.maximumAge));
       const component = travelComponentSchema.parse({ id: randomUUID(), itineraryItemIds: [], provider, supplierOfferId: hit.offerId,
-        type, offerStatus: "available", serviceStart: `${query.startDate}T12:00:00Z`, serviceEnd: `${query.endDate}T12:00:00Z`,
+        type, offerStatus: "available", serviceStart: hit.serviceStart ?? `${query.startDate}T12:00:00Z`, serviceEnd: hit.serviceEnd ?? `${query.endDate}T12:00:00Z`,
+        planningDetails: hit.planningDetails,
         travellerIds: [...Array.from({ length: query.travellerParty.adults }, () => randomUUID()), ...query.travellerParty.children.map((child) => child.id)],
         bookingRequirements: ["Traveller identities and current eligibility must be verified before booking"],
         cancellationTerms: hit.terms ?? "Unverified cancellation terms", checkedAt: hit.checkedAt, expiresAt: hit.expiresAt,

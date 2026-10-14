@@ -67,7 +67,7 @@ export const changeProposalSchema = z.object({
   styleCompatibility: text(2000).optional(), constraintSummary: z.array(text(1000)).max(64).optional(),
   warnings: z.array(text(1000)).max(64).optional(),
 }).strict().superRefine((proposal, context) => {
-  if (proposal.purpose === "refinement" && (!proposal.previewSnapshot || !proposal.priceImpact || !proposal.scheduleImpact)) {
+  if (["refinement", "finalization"].includes(proposal.purpose) && (!proposal.previewSnapshot || !proposal.priceImpact || !proposal.scheduleImpact)) {
     context.addIssue({ code: "custom", message: "Refinements require a trusted preview with price and schedule impacts" });
   }
   if (Date.parse(proposal.expiresAt) <= Date.parse(proposal.createdAt)) {
