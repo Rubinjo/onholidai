@@ -67,7 +67,7 @@ describe("evaluation policy v1 fixtures", () => {
 
     expect(webCorpus).toBe(agentCorpus);
     expect(corpus.metadata).toMatchObject({
-      corpusVersion: "1.3.0",
+      corpusVersion: "1.4.0",
       policyVersion: "1",
       seed: "onholidai-evaluation-v1-seed-20261011",
       corpusHash: hash,

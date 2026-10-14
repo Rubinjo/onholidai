@@ -88,6 +88,14 @@ export interface OutboxEventTable {
   lastErrorCategory: string | null;
 }
 
+export interface TripEventReceiptTable {
+  eventId: string;
+  state: Generated<"claimed" | "completed">;
+  claimedAt: GeneratedTimestamp;
+  leaseExpiresAt: Timestamp;
+  completedAt: Timestamp | null;
+}
+
 export interface IdempotencyRecordTable {
   scope: string;
   idempotencyKey: string;
@@ -146,6 +154,7 @@ export interface TripCoreDatabase {
   conversationMessages: ConversationMessageTable;
   conversationSummaries: ConversationSummaryTable;
   outboxEvents: OutboxEventTable;
+  tripEventReceipts: TripEventReceiptTable;
   idempotencyRecords: IdempotencyRecordTable;
   auditEvents: AuditEventTable;
   privacyLegalHolds: PrivacyLegalHoldTable;

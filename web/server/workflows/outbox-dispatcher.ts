@@ -9,6 +9,14 @@ const revalidationPayload = z.object({ workflowId: z.string().min(1), tripId: z.
 const reschedulePayload = revalidationPayload.extend({ bookingId: z.uuid(), componentId: z.uuid(), requestedChange: z.record(z.string(), z.unknown()) });
 const bookingPayload = z.object({ transactionId: z.uuid(), workflowId: z.string().min(1) }).passthrough();
 
+// Only booking events are claimed here. Trip-state events (`trip.version.committed`) are consumed
+// by the trip event stream and must never be failed or retried by the booking dispatcher.
+export const BOOKING_OUTBOX_EVENT_TYPES = Object.freeze([
+  "booking.revalidation.requested",
+  "booking.reschedule.revalidation.requested",
+  "booking.transaction.requested",
+] as const);
+
 function payload(event: ClaimedOutboxEvent): Record<string, unknown> { return event.payload as Record<string, unknown>; }
 
 function alreadyStarted(error: unknown): boolean {
@@ -38,7 +46,11 @@ export class BookingOutboxPublisher implements OutboxPublisher {
 }
 
 export async function dispatchBookingOutboxBatch(database: Kysely<Database>) {
-  return deliverOutboxBatch(new OutboxRepository(database), new BookingOutboxPublisher(), { batchSize: 20, leaseMilliseconds: 30_000 });
+  return deliverOutboxBatch(new OutboxRepository(database), new BookingOutboxPublisher(), {
+    batchSize: 20,
+    leaseMilliseconds: 30_000,
+    eventTypes: BOOKING_OUTBOX_EVENT_TYPES,
+  });
 }
 
 export async function runBookingOutboxDispatcher(database: Kysely<Database>, signal: AbortSignal): Promise<void> {

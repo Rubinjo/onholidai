@@ -1,4 +1,5 @@
 import { sql, type Kysely, type Selectable } from "kysely";
+import { z } from "zod";
 
 import type { TripSnapshot } from "@/domain/trip/schema";
 import type { Database } from "@/server/db/database";
@@ -7,7 +8,7 @@ import type { OutboxEventTable } from "@/server/db/types";
 export type ClaimedOutboxEvent = Selectable<OutboxEventTable>;
 
 export interface OutboxRepositoryPort {
-  claimBatch(now: Date, batchSize: number, leaseMilliseconds: number): Promise<ClaimedOutboxEvent[]>;
+  claimBatch(now: Date, batchSize: number, leaseMilliseconds: number, eventTypes?: readonly string[]): Promise<ClaimedOutboxEvent[]>;
   markDelivered(eventId: string, deliveredAt: Date): Promise<void>;
   markFailed(eventId: string, nextAttemptAt: Date, errorCategory: string): Promise<void>;
 }
@@ -15,10 +16,10 @@ export interface OutboxRepositoryPort {
 export class OutboxRepository implements OutboxRepositoryPort {
   constructor(private readonly database: Kysely<Database>) {}
 
-  claimBatch(now: Date, batchSize: number, leaseMilliseconds: number): Promise<ClaimedOutboxEvent[]> {
+  claimBatch(now: Date, batchSize: number, leaseMilliseconds: number, eventTypes?: readonly string[]): Promise<ClaimedOutboxEvent[]> {
     const leaseExpiresAt = new Date(now.getTime() + leaseMilliseconds);
     return this.database.transaction().execute(async (transaction) => {
-      const candidates = await transaction
+      let query = transaction
         .selectFrom("outboxEvents")
         .select(["id"])
         .where((expression) =>
@@ -33,12 +34,11 @@ export class OutboxRepository implements OutboxRepositoryPort {
               expression("leaseExpiresAt", "<=", now),
             ]),
           ]),
-        )
-        .orderBy("createdAt")
-        .forUpdate()
-        .skipLocked()
-        .limit(batchSize)
-        .execute();
+        );
+      if (eventTypes && eventTypes.length > 0) {
+        query = query.where("eventType", "in", [...eventTypes]);
+      }
+      const candidates = await query.orderBy("createdAt").forUpdate().skipLocked().limit(batchSize).execute();
 
       const ids = candidates.map(({ id }) => id);
       if (ids.length === 0) return [];
@@ -95,6 +95,7 @@ export interface DeliverOutboxOptions {
   batchSize?: number;
   leaseMilliseconds?: number;
   baseRetryMilliseconds?: number;
+  eventTypes?: readonly string[];
 }
 
 export async function deliverOutboxBatch(
@@ -108,6 +109,7 @@ export async function deliverOutboxBatch(
     claimedAt,
     options.batchSize ?? 50,
     options.leaseMilliseconds ?? 30_000,
+    options.eventTypes,
   );
   let delivered = 0;
   let failed = 0;
@@ -133,18 +135,90 @@ export interface TripEventReceiptStore {
   abandon(eventId: string): Promise<void>;
 }
 
-export interface TripEventEnvelope {
-  id: string;
-  aggregateId: string;
-  aggregateVersion: number;
-  payload: Readonly<Record<string, unknown>>;
+export const tripEventEnvelopeSchema = z
+  .object({
+    id: z.uuid(),
+    eventType: z.string().min(1),
+    eventVersion: z.number().int().positive(),
+    aggregateType: z.string().min(1),
+    aggregateId: z.uuid(),
+    aggregateVersion: z.number().int().positive(),
+    payload: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
+export type TripEventEnvelope = z.infer<typeof tripEventEnvelopeSchema>;
+
+// Only a reviewed type/version combination may be consumed. Anything else fails safely instead of
+// synthesizing or overwriting committed trip state.
+export const SUPPORTED_TRIP_EVENTS: Readonly<Record<string, readonly number[]>> = Object.freeze({
+  "trip.version.committed": Object.freeze([1]),
+});
+
+export class UnsupportedTripEventError extends Error {
+  readonly category = "unsupported_event";
+  constructor(eventType: string, eventVersion: number) {
+    super(`Unsupported trip event ${eventType}@${eventVersion}`);
+    this.name = "UnsupportedTripEventError";
+  }
+}
+
+export function parseTripEventEnvelope(input: unknown): TripEventEnvelope {
+  const envelope = tripEventEnvelopeSchema.parse(input);
+  const supportedVersions = SUPPORTED_TRIP_EVENTS[envelope.eventType];
+  if (!supportedVersions?.includes(envelope.eventVersion)) {
+    throw new UnsupportedTripEventError(envelope.eventType, envelope.eventVersion);
+  }
+  return envelope;
+}
+
+export class PostgresTripEventReceiptStore implements TripEventReceiptStore {
+  constructor(
+    private readonly database: Kysely<Database>,
+    private readonly leaseMilliseconds = 30_000,
+  ) {}
+
+  async begin(eventId: string): Promise<boolean> {
+    const leaseExpiresAt = new Date(Date.now() + this.leaseMilliseconds);
+    const claimed = await this.database
+      .insertInto("tripEventReceipts")
+      .values({ eventId, state: "claimed", leaseExpiresAt })
+      .onConflict((conflict) =>
+        conflict
+          .column("eventId")
+          .doUpdateSet({ state: "claimed", leaseExpiresAt, claimedAt: sql`now()` })
+          .where("tripEventReceipts.state", "=", "claimed")
+          .where("tripEventReceipts.leaseExpiresAt", "<=", new Date()),
+      )
+      .returning("eventId")
+      .executeTakeFirst();
+    return Boolean(claimed);
+  }
+
+  async complete(eventId: string): Promise<void> {
+    await this.database
+      .updateTable("tripEventReceipts")
+      .set({ state: "completed", completedAt: new Date() })
+      .where("eventId", "=", eventId)
+      .where("state", "=", "claimed")
+      .executeTakeFirst();
+  }
+
+  async abandon(eventId: string): Promise<void> {
+    await this.database
+      .deleteFrom("tripEventReceipts")
+      .where("eventId", "=", eventId)
+      .where("state", "=", "claimed")
+      .executeTakeFirst();
+  }
 }
 
 export async function consumeTripEvent(
-  event: TripEventEnvelope,
+  input: unknown,
   receipts: TripEventReceiptStore,
   reloadCommittedSnapshot: (tripId: string, version: number) => Promise<TripSnapshot>,
 ): Promise<{ duplicate: boolean; snapshot?: TripSnapshot }> {
+  const event = parseTripEventEnvelope(input);
   if (!(await receipts.begin(event.id))) {
     return { duplicate: true };
   }

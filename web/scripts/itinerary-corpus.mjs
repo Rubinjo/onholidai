@@ -28,7 +28,12 @@ export function createItineraryCases(estimateInput, dateForDay) {
   const hardConflicts = Array.from({ length: 20 }, (_, index) => {
     const input = snapshotFor(index + 20), day = input.itineraryDays[0], item = day.items[1];
     const kind = ["impossible_connection", "required_accessibility_unavailable", "traveller_ineligible", "date_window_violation", "required_constraint_conflict"][index % 5];
-    if (kind === "date_window_violation") input.availabilityWindows[0].endDate = dateForDay(index + 19);
+    if (kind === "date_window_violation") {
+      // The single planned day is fewer than the accepted minimum duration while the window could
+      // hold it: a storable snapshot whose date/duration conflict the policy reports (spec.md line 99).
+      input.availabilityWindows[0].endDate = dateForDay(index + 24);
+      input.duration = { minimumDays: 3, idealDays: 4, maximumDays: 5 };
+    }
     if (kind === "required_constraint_conflict" || kind === "required_accessibility_unavailable") {
       const constraint = { id: uuid(9500 + index), category: kind === "required_accessibility_unavailable" ? "accessibility" : "schedule",
         statement: kind === "required_accessibility_unavailable" ? "Step-free access required" : "No activities before 11:00",

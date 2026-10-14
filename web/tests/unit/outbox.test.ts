@@ -59,7 +59,9 @@ describe("trip event consumption", () => {
       abandon: vi.fn(async () => undefined),
     };
     const reload = vi.fn(async () => snapshot);
-    const envelope = { id: event.id, aggregateId: event.aggregateId, aggregateVersion: 2, payload: { snapshot: { authoritative: false } } };
+    const envelope = { id: event.id, eventType: "trip.version.committed", eventVersion: 1,
+      aggregateType: "trip", aggregateId: event.aggregateId, aggregateVersion: 2,
+      payload: { snapshot: { authoritative: false } } };
 
     const first = await consumeTripEvent(envelope, receipts, reload as never);
     const duplicate = await consumeTripEvent(envelope, receipts, reload as never);
@@ -68,5 +70,23 @@ describe("trip event consumption", () => {
     expect(duplicate).toEqual({ duplicate: true });
     expect(reload).toHaveBeenCalledOnce();
     expect(reload).toHaveBeenCalledWith(event.aggregateId, 2);
+  });
+
+  it("fails safely without consuming unknown event types, versions or unexpected fields", async () => {
+    const receipts = { begin: vi.fn(async () => true), complete: vi.fn(async () => undefined), abandon: vi.fn(async () => undefined) };
+    const reload = vi.fn(async () => ({}));
+    const envelope = { id: event.id, eventType: "trip.version.committed", eventVersion: 1,
+      aggregateType: "trip", aggregateId: event.aggregateId, aggregateVersion: 2, payload: {} };
+
+    for (const invalid of [
+      { ...envelope, eventType: "trip.version.future" },
+      { ...envelope, eventVersion: 2 },
+      { ...envelope, unexpected: true },
+      { ...envelope, aggregateVersion: 0 },
+    ]) {
+      await expect(consumeTripEvent(invalid, receipts as never, reload as never)).rejects.toThrow();
+    }
+    expect(receipts.begin).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
   });
 });

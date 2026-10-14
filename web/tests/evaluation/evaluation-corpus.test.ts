@@ -82,12 +82,8 @@ describe("finalization evaluation corpus", () => {
     expect(results.every((result) => result.disclosed)).toBe(true);
     // finalizeTrip never commits a version while any blocking issue exists.
     expect(results.every((result) => result.codes.length > 0)).toBe(true);
-    // A date-window violation cannot be stored as a current snapshot at all; the same
-    // schema finalization applies rejects it before policy review (corpus repair is T128).
-    const rejected = results.filter((result) => !result.storable);
-    expect(rejected.map((result) => result.kind)).toEqual(
-      expect.arrayContaining(["date_window_violation"]),
-    );
-    expect(rejected.every((result) => result.kind === "date_window_violation")).toBe(true);
+    // Every conflict, including the date-window violation, is a storable snapshot that the
+    // policy reports rather than one the schema rejects before review.
+    expect(results.every((result) => result.storable)).toBe(true);
   });
 });

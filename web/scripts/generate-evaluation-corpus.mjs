@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { createItineraryCases } from "./itinerary-corpus.mjs";
 import { assertGeneratedArtifact } from "./generated-artifact.mjs";
 
-const CORPUS_VERSION = "1.3.0";
+const CORPUS_VERSION = "1.4.0";
 const POLICY_VERSION = "1";
 const SEED = "onholidai-evaluation-v1-seed-20261011";
 const estimateCategories = [
@@ -179,7 +179,7 @@ const corpus = {
     },
     changeControl: {
       reviewedReasonRequired: true,
-      reviewedReason: "US3 revision: replace itinerary and hard-conflict placeholders with timezone-qualified schedules, sourced upper duration bounds and concrete connection/accessibility/eligibility/date/required-constraint failures. Expected item outcomes derive from policy v1. Preserve estimate/refinement cases, seed and denominators; a complete evaluation remains required before acceptance.",
+      reviewedReason: "US3 revision 1.4.0: repair the four date-window hard-conflict inputs so each is a storable snapshot whose availability window starts after the planned day, letting the feasibility policy (code date_duration) rather than the snapshot schema reject it. Preserve estimate/refinement cases, seed and denominators; a complete evaluation remains required before acceptance.",
       policy:
         "Every revision must record a reviewed reason and run a fresh complete evaluation.",
     },

@@ -2,9 +2,9 @@
 
 ## Services and startup order
 
-Use Node.js 24, pnpm 10, Python 3.13/uv, and Docker Compose v2. Provision distinct 32-character secrets for the web auth, service token, and pricing diagnostics. Never share the pricing diagnostic key with the agent or browser. For local-only runs, `.env.example` contains synthetic defaults; production startup rejects synthetic auth and service secrets.
+Use Node.js 24, pnpm 10, Python 3.13/uv, and Docker Compose v2. Provision distinct 32-character secrets for the web auth, service token, and pricing diagnostics. Never share the pricing diagnostic key with the agent or browser. For local-only runs, `.env.example` contains synthetic defaults; production startup rejects synthetic auth and service secrets. Database-backed tests use isolated databases created from `TEST_DATABASE_ADMIN_URL`/`TEST_DATABASE_MIGRATION_URL`/`TEST_DATABASE_APP_URL`/`TEST_DATABASE_WORKER_URL` (provision the roles with `infra/postgres/test-roles.sql`); without them those suites skip. On Windows, set `PYTEST_DEBUG_TEMPROOT` to an apostrophe-free directory when the user profile path breaks pytest's default temp root.
 
-Start `--profile infrastructure` for PostgreSQL 18/PostGIS, Temporal, and local observability. Apply schema migrations through the dedicated migration role using `--profile migrations`; migrations 001–009 are ordered and checksum-verified. Start `--profile applications` afterward. Start `--profile booking` only when the TypeScript Temporal worker is required. Do not run a second migration process concurrently.
+Start `--profile infrastructure` for PostgreSQL 18/PostGIS, Temporal, and local observability. Apply schema migrations through the dedicated migration role using `--profile migrations`; migrations 001–010 are ordered and checksum-verified. Start `--profile applications` afterward. Start `--profile booking` only when the TypeScript Temporal worker is required. Do not run a second migration process concurrently.
 
 ## Provider capabilities
 

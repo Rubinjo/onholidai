@@ -6,6 +6,7 @@ import { AuthorizationError, requireSession } from "./auth/authorize";
 import { type ServiceScope, verifyServiceToken, ServiceTokenError } from "./agent-client/credentials";
 import { ProblemError, problemResponse } from "./errors";
 import { getOrCreateCorrelationId } from "./telemetry";
+import { emitOperationSpan, routeTemplate } from "./telemetry-exporter";
 
 export interface ApiDependencies {
   application: () => Application;
@@ -13,12 +14,39 @@ export interface ApiDependencies {
 }
 const defaultDependencies: ApiDependencies = { application: getApplication, session: getSession };
 
+function traceIdentity(request: Request): { traceId?: string; spanId?: string } {
+  const traceparent = request.headers.get("traceparent")?.match(/^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/);
+  return traceparent ? { traceId: traceparent[1], spanId: traceparent[2] } : {};
+}
+
+function emitRequestSpan(request: Request, correlationId: string, startedAt: Date, status: number): void {
+  void emitOperationSpan({
+    name: "http.server.request",
+    startedAt,
+    endedAt: new Date(),
+    ...traceIdentity(request),
+    outcome: status >= 500 ? "error" : "success",
+    attributes: {
+      "http.request.method": request.method,
+      "http.route": routeTemplate(new URL(request.url).pathname),
+      "http.response.status_code": status,
+      "onholidai.correlation_id": correlationId,
+      "onholidai.duration_ms": Date.now() - startedAt.getTime(),
+      "onholidai.outcome": status >= 500 ? "error" : "success",
+      "service.name": "onholidai-web",
+    },
+  });
+}
+
 export async function apiResponse(request: Request, action: (application: Application) => Promise<unknown>,
   options: { status?: number; dependencies?: ApiDependencies } = {}): Promise<Response> {
   const correlationId = getOrCreateCorrelationId(request.headers);
+  const startedAt = new Date();
   try {
     const result = await action((options.dependencies ?? defaultDependencies).application());
-    return Response.json(result, { status: options.status ?? 200,
+    const status = options.status ?? 200;
+    emitRequestSpan(request, correlationId, startedAt, status);
+    return Response.json(result, { status,
       headers: { "Cache-Control": "private, no-store", "x-correlation-id": correlationId } });
   } catch (error) {
     const safe = error instanceof z.ZodError || error instanceof SyntaxError
@@ -29,6 +57,7 @@ export async function apiResponse(request: Request, action: (application: Applic
         : error;
     const response = problemResponse(safe, correlationId);
     response.headers.set("Cache-Control", "private, no-store");
+    emitRequestSpan(request, correlationId, startedAt, response.status);
     return response;
   }
 }

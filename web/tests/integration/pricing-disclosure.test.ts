@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import { allowlistedTelemetryAttributes } from "../../server/telemetry";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";

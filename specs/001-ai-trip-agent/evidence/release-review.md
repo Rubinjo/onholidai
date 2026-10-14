@@ -26,3 +26,17 @@ Review basis: project constitution v1.0.1, feature specification, task plan, and
 ## Decision
 
 Do not claim release acceptance. The code changes in Phase 7 can be reviewed, but task gates requiring measured capacity, browser evidence, participant results, provider access, or business/legal policy remain open.
+
+## Phase 7/8 automated closure pass (2026-10-14)
+
+This pass completed the automatable Phase 7 and convergence tasks that did not require manual human review:
+
+- Compatibility (T109/T155): `web/tests/integration/migration-compatibility.test.ts` plus an extended `agent/tests/contract/test_schema_compatibility.py`; `pnpm test:contracts` passes (web contracts 60, agent contracts 39).
+- Context/telemetry review (T111/T159): measured compaction, stable-prefix and retrieval evidence in `agent/tests/evaluation/test_context_budget.py` and `evidence/context-telemetry.md`; live trace inspection still needs credentials.
+- Evaluation corpus (T128): corpus repair to 1.4.0; see `evidence/us3.md`.
+- Deployment configuration (T129): `web/tests/unit/config.test.ts` proves the production/live requirements and the browser boundary.
+- Telemetry (T130): explicit OTLP startup wiring, sanitized span/event names, allowlisted attributes, per-request emission at the `apiResponse` boundary, and sink/collector-drift tests.
+- Outbox (T131): event-envelope/version validation, a PostgreSQL consumer receipt store, and type-scoped claiming with restart/duplicate/expired-lease/unknown-type tests.
+- Privacy retention (T154) and documentation (T160) verified.
+
+Deferred rows still requiring a human or a rebuilt stack: capacity measurements (T110/T156), cross-browser and assistive-technology journeys (T112/T157), quickstart scenarios and participant cohorts (T114/T158), the US1/US3/US4 story checkpoints (T136/T138/T143, T085/T107), and business/legal policy confirmation.

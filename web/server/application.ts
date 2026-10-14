@@ -5,6 +5,7 @@ import { Pool } from "pg";
 import { createAuth } from "@/server/auth/auth";
 import { loadServerConfig } from "@/server/config";
 import { createDatabase } from "@/server/db/database";
+import { configureSpanSink, createOtlpHttpSink } from "@/server/telemetry-exporter";
 import { createPlaceLookupProvider } from "@/server/supply/places";
 import { createPlanningProviders } from "@/server/supply/providers";
 import type { SupplyReadProvider } from "@/server/supply/read";
@@ -50,6 +51,15 @@ const runtime = globalThis as typeof globalThis & { onholidaiApplication?: Appli
 
 export function startApplication(environment: Record<string, string | undefined>): Application {
   runtime.onholidaiApplication ??= createApplication(environment);
+  const { config } = runtime.onholidaiApplication;
+  // Explicit telemetry startup: without a configured collector endpoint no span ever leaves the
+  // process, and the sink reuses the reviewed allowlist before serialization.
+  configureSpanSink(config.OTEL_EXPORTER_OTLP_ENDPOINT
+    ? createOtlpHttpSink({
+      endpoint: config.OTEL_EXPORTER_OTLP_ENDPOINT,
+      resource: { "service.name": "onholidai-web", "service.version": "1", "deployment.environment.name": config.NODE_ENV },
+    })
+    : null);
   return runtime.onholidaiApplication;
 }
 
@@ -61,5 +71,6 @@ export function getApplication(): Application {
 export async function stopApplication(): Promise<void> {
   const current = runtime.onholidaiApplication;
   delete runtime.onholidaiApplication;
+  configureSpanSink(null);
   await current?.shutdown();
 }
