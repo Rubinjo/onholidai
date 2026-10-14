@@ -21,7 +21,8 @@
     "corpus:check": "node scripts/generate-evaluation-corpus.mjs --check",
     "db:migrate:test": "vitest run tests/integration/migration-compatibility.test.ts --passWithNoTests",
     "test:foundation": "vitest run --config vitest.foundation.config.ts",
-    "test:temporal": "vitest run tests/integration/booking-workflows.test.ts --passWithNoTests"
+    "test:temporal": "vitest run tests/integration/booking-workflows.test.ts --passWithNoTests",
+    "booking:worker": "node --experimental-strip-types --import ./server/workflows/alias-loader.mjs server/workflows/worker-entry.ts"
   },
   "dependencies": {
     "@js-temporal/polyfill": "0.5.1",

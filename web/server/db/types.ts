@@ -114,6 +114,14 @@ export interface AuditEventTable {
 }
 
 export interface TripCoreDatabase {
+  bookingRevalidations: BookingRevalidationTable;
+  bookingAuthorizations: BookingAuthorizationTable;
+  bookingTransactions: BookingTransactionTable;
+  bookingComponentAttempts: BookingComponentAttemptTable;
+  bookingWriteClaims: BookingWriteClaimTable;
+  bookingConfirmations: BookingConfirmationTable;
+  bookingVersionEvidence: BookingVersionEvidenceTable;
+  bookingProviderCallbacks: BookingProviderCallbackTable;
   draftEditReviews: DraftEditReviewTable;
   agentRunEvents: AgentRunEventTable;
   agentRunResumes: AgentRunResumeTable;
@@ -129,6 +137,51 @@ export interface TripCoreDatabase {
   outboxEvents: OutboxEventTable;
   idempotencyRecords: IdempotencyRecordTable;
   auditEvents: AuditEventTable;
+}
+
+export interface BookingRevalidationTable {
+  workflowId: string; tripId: string; ownerUserId: string; requestId: string; requestFingerprint: string; tripVersion: number;
+  status: "accepted" | "running" | "completed" | "failed"; outcomes: Json<unknown[]>;
+  terms: Json<Record<string, unknown> | null>; termsHash: string | null; expiresAt: Timestamp | null;
+  createdAt: GeneratedTimestamp; updatedAt: GeneratedTimestamp;
+}
+export interface BookingAuthorizationTable {
+  id: string; tripId: string; ownerUserId: string; tripVersion: number;
+  operation: "book_trip" | "reschedule_component" | "cancel_component"; componentId: string | null;
+  terms: Json<Record<string, unknown>>; termsHash: string; acknowledgedNonReversibleActions: Json<string[]>;
+  status: "pending" | "authorized" | "invalidated" | "expired" | "consumed"; reason: string | null;
+  authorizedAt: Timestamp; expiresAt: Timestamp; createdAt: GeneratedTimestamp;
+}
+export interface BookingTransactionTable {
+  id: string; tripId: string; ownerUserId: string; authorizationId: string;
+  operation: "book_trip" | "reschedule_component" | "cancel_component"; workflowId: string;
+  requestId: string; status: "requested" | "running" | "partially_confirmed" | "confirmed" | "action_required" | "failed" | "cancelled";
+  components: Json<unknown[]>; executionBasis: Json<Record<string, unknown>>; lastObservedTripVersion: number;
+  executionStatus: "active" | "invalidated" | "expired" | "completed"; startedAt: GeneratedTimestamp; completedAt: Timestamp | null;
+}
+export interface BookingComponentAttemptTable {
+  id: string; transactionId: string; tripId: string; componentId: string;
+  operation: "book_trip" | "reschedule_component" | "cancel_component"; idempotencyKey: string; requestFingerprint: string;
+  providerAttempt: number; status: "claimed" | "dispatched" | "confirmed" | "failed" | "unknown" | "reconciled";
+  providerReference: string | null; safeReason: string | null; statusCheckedAt: Timestamp | null;
+  createdAt: GeneratedTimestamp; updatedAt: GeneratedTimestamp;
+}
+export interface BookingWriteClaimTable {
+  tripId: string; componentId: string; transactionId: string; attemptId: string;
+  state: "claimed" | "unknown"; evidence: Json<Record<string, unknown> | null>;
+  createdAt: GeneratedTimestamp; updatedAt: GeneratedTimestamp;
+}
+export interface BookingConfirmationTable {
+  id: string; transactionId: string; tripId: string; componentId: string;
+  providerReference: string; terms: Json<Record<string, unknown>>; confirmedAt: Timestamp;
+}
+export interface BookingVersionEvidenceTable {
+  tripId: string; tripVersion: number; transactionId: string; materialTermsHash: string; createdAt: GeneratedTimestamp;
+}
+export interface BookingProviderCallbackTable {
+  provider: "duffel" | "booking" | "getyourguide" | "trainline"; providerEventId: string; fingerprint: string;
+  transactionId: string; componentId: string; outcome: "confirmed" | "failed" | "unknown" | "action_required";
+  result: Json<Record<string, unknown>>; receivedAt: GeneratedTimestamp;
 }
 
 export interface AgentRunTable {

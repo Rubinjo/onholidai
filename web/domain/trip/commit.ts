@@ -12,6 +12,7 @@ import {
   type IdempotencyRepositoryPort,
 } from "@/server/db/idempotency-repository";
 import { TripRepository, type TripRepositoryPort } from "@/server/db/trip-repository";
+import { assertBookingWritesEditable, invalidateBookingStateForTripVersion } from "@/domain/booking/invalidate";
 
 const commitInputSchema = z
   .object({
@@ -168,6 +169,10 @@ export async function commitTripMutation(
     if (trip && trip.currentVersion !== input.expectedVersion) {
       throw new TripVersionConflictError(input.expectedVersion, trip.currentVersion);
     }
+    if (!input.creation) {
+      const ownBookingTransaction = input.initiatingActor === "booking_workflow" ? input.traceId : null;
+      await assertBookingWritesEditable(transaction, input.tripId, input.initiatingActor, ownBookingTransaction);
+    }
 
     if (input.creation) {
       await repositories.trips.insertTrip({ id: input.tripId, ownerUserId: input.ownerUserId,
@@ -188,6 +193,10 @@ export async function commitTripMutation(
     if (input.lifecycleState) {
       await transaction.updateTable("trips").set({ lifecycleState: input.lifecycleState })
         .where("id", "=", input.tripId).where("currentVersion", "=", nextVersion).executeTakeFirstOrThrow();
+    }
+    if (!input.creation) {
+      await invalidateBookingStateForTripVersion(transaction, input.tripId,
+        input.initiatingActor === "booking_workflow" ? input.traceId : null);
     }
 
     await repositories.trips.appendOutbox({
