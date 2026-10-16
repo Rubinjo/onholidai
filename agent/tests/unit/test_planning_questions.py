@@ -21,7 +21,9 @@ def test_question_answers_with_options_without_mutating_the_trip():
         dispatch(refinement_request("What are my options for this holiday?"), source)
     )
     assert result.root.kind == "answer"
-    assert "review" in result.root.message
+    assert "validated" in result.root.message
+    assert "changes require your review" not in result.root.message
+    assert len(result.root.message.split()) < 160
     assert source.trip == before
 
 

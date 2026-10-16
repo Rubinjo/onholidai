@@ -18,7 +18,8 @@ describe("booking-only authentication contract", () => {
   });
   it("derives current continuation and keeps intent ahead of ordinary safe redirects", () => {
     const id = crypto.randomUUID();
-    expect(bookingContinuationPath(id, "draft").nextPath).toBe(`/trips/${id}`);
+    expect(bookingContinuationPath(id, "draft").nextPath).toBe(`/trips/${id}/booking`);
+    expect(bookingContinuationPath(id, "cancelled").nextPath).toBe(`/trips/${id}`);
     expect(bookingContinuationPath(id, "finalized").nextPath).toBe(`/trips/${id}/booking`);
     expect(safeAuthDestination(id, "//attacker.invalid")).toBe(`/auth/continue?intentId=${id}`);
     for (const unsafe of ["//attacker.invalid", "https://attacker.invalid", "/\\attacker.invalid"]) expect(safeAuthDestination(undefined, unsafe)).toBe("/");
@@ -32,8 +33,7 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("booking authentication HTT
     const owner = state.run.ownerUserId, input = { requestId: crypto.randomUUID(), expectedVersion: 1, operations: [{ operation: "replace", target: "/preferences/pace", value: 60 }] };
     const review = await previewEdit(state.fixture.database, owner, state.trip.tripId, input, state.application.planningProviders);
     await applyEdit(state.fixture.database, owner, state.trip.tripId, { ...input, impactFingerprint: review.impactFingerprint });
-    // Seed eligibility; this suite tests authentication, not itinerary feasibility.
-    await state.fixture.database.updateTable("trips").set({ lifecycleState: "finalized" }).where("id", "=", state.trip.tripId).execute();
+    // Leave the trip a draft: Book trip admits review before readiness/finalization.
   }, 120000);
   afterEach(async () => { await state?.cleanup(); });
   it("creates/replays an intent, links the same trip and rejects the former guest credential", async () => {

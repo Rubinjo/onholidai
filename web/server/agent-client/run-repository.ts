@@ -1,6 +1,6 @@
 import { inTransaction } from "@/server/db/transaction";
 import { createHash, randomUUID } from "node:crypto";
-import type { Kysely, Transaction } from "kysely";
+import { sql, type Kysely, type Transaction } from "kysely";
 import { z } from "zod";
 import { AgentEventSchema, AgentPersistenceReceiptSchema, AgentRunSchema,
   AnswerClarificationRequestSchema, PersistAgentEventRequestSchema, PersistAgentResultRequestSchema } from "../../../contracts/agent-api/generated.zod";
@@ -17,10 +17,11 @@ import { checkGuestResearch } from "@/server/metrics/guest-planning";
 import { lockPlanningAccess } from "@/server/db/planning-access";
 import { planningProblems } from "@/server/errors";
 import type { PlanningActor } from "@/server/auth/planning-actor";
+import { lockServiceGrant } from "@/server/auth/planning-resource";
 
 export const reserveRunSchema = z.object({ userId: z.uuid(), tripId: z.uuid(), requestId: z.uuid(),
   baseTripVersion: z.number().int().positive(), purpose: z.enum(["initial_estimate", "refinement", "finalization"]),
-  message: z.string().trim().min(1).max(12000) }).strict();
+  message: z.string().trim().min(1).max(12000), applicationPolicy: z.enum(["manual", "automatic"]).optional() }).strict();
 export function runConflict(): never { throw new ProblemError({ title: "Run state conflict", status: 409, code: "run_conflict" }); }
 export function fingerprint(value: unknown): string { return createHash("sha256").update(canonicalJson(value)).digest("hex"); }
 export async function revokePrincipalRuns(transaction: Transaction<Database>, planningOwnerId: string, now: Date): Promise<void> {
@@ -113,7 +114,7 @@ export class RunRepository {
         ownerUserId: input.userId, retentionExpiresAt: rawConversationExpiry(now) }).execute();
       const row = await transaction.insertInto("agentRuns").values({ id, tripId: input.tripId, conversationId,
         ownerUserId: input.userId, requestId: input.requestId, baseTripVersion: input.baseTripVersion,
-        purpose: input.purpose, requestFingerprint: hash, leaseExpiresAt: lease(now), startedAt: now, phaseStartedAt: now,
+        purpose: input.purpose, applicationPolicy: input.applicationPolicy ?? "manual", requestFingerprint: hash, leaseExpiresAt: lease(now), startedAt: now, phaseStartedAt: now,
         completedAt: null, errorCategory: null, result: null, lastDurableProgressAt: null,
         resultFingerprint: null, resultCursor: null }).returningAll().executeTakeFirstOrThrow();
       if (actor.kind === "guest") await transaction.insertInto("guestResearchRequests").values({
@@ -179,6 +180,8 @@ export class RunRepository {
     if (input.userId !== context.userId || input.tripId !== context.tripId || input.requestId !== context.requestId
       || input.baseTripVersion !== context.baseTripVersion) runConflict();
     return inTransaction(this.database, async (transaction) => {
+      // Also protects direct repository callers. Lock access/trip before run/proposal.
+      await lockServiceGrant(transaction, context);
       const row = await this.lock(transaction, context.userId, runId); this.bind(row, context);
       const receipt = { runId, requestId: context.requestId, acceptedCursor: input.eventCursor, resultRecorded: true };
       if (row.resultFingerprint === hash && row.resultCursor === input.eventCursor) return receipt;
@@ -206,8 +209,30 @@ export class RunRepository {
         errorCategory: input.status === "failed" ? event.type === "failed" && event.safeErrorCode === "estimate_deadline"
           ? "deadline" : event.type === "failed" && event.safeErrorCode === "source_unavailable"
           ? "source_unavailable" : "invalid_result" : null }).where("id", "=", runId).execute();
+      let committedVersion = row.baseTripVersion;
+      let outcome = input.result?.kind === "clarification" ? input.result.clarification.question : input.result?.message ?? input.status;
+      if (input.result?.kind === "proposal" && row.applicationPolicy === "automatic") {
+        // Result receipt, validated mutation, version summary and chat outcome commit
+        // together. A domain conflict records a truthful non-application, not a retry loop.
+        await sql`SAVEPOINT automatic_proposal`.execute(transaction);
+        try {
+          const { acceptProposal } = await import("@/domain/trip/accept-proposal");
+          const committed = await acceptProposal(transaction, context.userId, row.tripId, input.result.proposal.id,
+            { requestId: row.requestId, expectedVersion: row.baseTripVersion });
+          committedVersion = committed.version;
+          const version = await transaction.selectFrom("tripVersions").select("changeSummary").where("tripId", "=", row.tripId).where("version", "=", committed.version).executeTakeFirstOrThrow();
+          outcome = version.changeSummary.join(" ");
+          await sql`RELEASE SAVEPOINT automatic_proposal`.execute(transaction);
+        } catch (failure) {
+          if (!(failure instanceof ProblemError) || ![409, 422].includes(failure.status)) throw failure;
+          await sql`ROLLBACK TO SAVEPOINT automatic_proposal`.execute(transaction);
+          await sql`RELEASE SAVEPOINT automatic_proposal`.execute(transaction);
+          outcome = "The trip could not be updated because its version, availability or booking state changed. Your saved trip is unchanged. Send your request again to use the latest version.";
+          await transaction.updateTable("changeProposals").set({ status: "stale" }).where("id", "=", input.result.proposal.id).where("status", "=", "proposed").execute();
+        }
+      } else if (input.result?.kind === "proposal") outcome = "A saved proposal is available for review. It has not changed the trip.";
       await transaction.insertInto("conversationMessages").values({ id: randomUUID(), conversationId: row.conversationId,
-        role: "assistant", tripVersion: row.baseTripVersion, agentRunId: row.id, content: { kind: input.status, text: redactConversation(input.result?.kind === "proposal" ? input.result.proposal.rationale : input.result?.kind === "clarification" ? input.result.clarification.question : input.result?.message ?? input.status) },
+        role: "assistant", tripVersion: committedVersion, agentRunId: row.id, content: { kind: input.status, text: redactConversation(outcome) },
         retentionExpiresAt: rawConversationExpiry(this.now()) }).execute();
       const constraints = await transaction.selectFrom("tripVersions").select("snapshot").where("tripId", "=", row.tripId)
         .where("version", "=", row.baseTripVersion).executeTakeFirstOrThrow();

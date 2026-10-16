@@ -19,12 +19,12 @@ test("@us1 outage status preserves the saved setup without acceptance", async ({
   await page.reload();
   await expect(page.getByText(/Committed version 1/)).toBeVisible();
 });
-test("@accessibility @us1 failed WebGL keeps the route list and acceptance usable", async ({ page }) => {
+test("@accessibility @us1 failed WebGL keeps the route list and automatic update usable", async ({ page }) => {
   await page.addInitScript(() => { HTMLCanvasElement.prototype.getContext = () => null; });
   await completeSetup(page);
-  await expect(page.getByRole("heading", { name: "Review proposed changes" })).toBeVisible({ timeout: 35000 });
+  await expect(page.getByText(/Committed version 2/)).toBeVisible({ timeout: 35000 });
   await expect(page.getByText(/Map unavailable/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Accept proposal" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Restore trip to version 1" })).toBeEnabled();
   await page.getByText("Route, stays and transport details", { exact: true }).click();
   await expect(page.getByRole("heading", { name: "Route and itinerary" })).toBeVisible();
 });

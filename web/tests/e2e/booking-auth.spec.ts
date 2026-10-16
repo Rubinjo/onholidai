@@ -10,21 +10,13 @@ test("free registration asks for identity only and offers an existing-account pa
   await expect(page.locator('input[name*="payment"],input[name*="card"]')).toHaveCount(0);
 });
 
-test("guest finalization continues through free sign-up and explicit same-trip linking without booking consent", async ({ page }) => {
+test("Book trip continues from a draft through free sign-up and same-trip linking without booking consent", async ({ page }) => {
   test.setTimeout(120000);
   await completeSetup(page, { title: "Same-trip account continuation" });
-  await expect(page.getByRole("button", { name: "Accept proposal" })).toBeEnabled({ timeout: 35000 }); await page.getByRole("button", { name: "Accept proposal" }).click();
-  await expect(page.getByText(/Committed version 2/)).toBeVisible();
-  await page.getByRole("button", { name: "Prepare detailed itinerary" }).click();
-  await expect(page.getByRole("button", { name: "Accept proposal" })).toBeEnabled({ timeout: 35000 }); await page.getByRole("button", { name: "Accept proposal" }).click();
-  await expect(page.getByText(/Committed version 3/)).toBeVisible();
-  await page.getByRole("button", { name: "Review finalization" }).click();
-  await expect(page.getByText("No known blocking conflicts.")).toBeVisible();
-  await page.getByLabel("I have reviewed the unverified conditions and planning exceptions").check();
-  await page.getByRole("button", { name: "Finalize planning itinerary" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Planning itinerary finalized" })).toBeVisible();
+  await expect(page.getByText(/Committed version 2/)).toBeVisible({ timeout: 35000 });
+  await expect(page.getByRole("heading", { name: "Finalization review" })).toHaveCount(0);
   const tripId = new URL(page.url()).pathname.split("/")[2], before = await (await page.request.get(`/api/v1/trips/${tripId}`)).json();
-  await page.getByRole("link", { name: "Review live booking terms" }).click();
+  await page.getByRole("link", { name: "Book trip" }).click();
   await expect(page.getByRole("heading", { name: "Keep this trip when you enter booking" })).toBeVisible();
   await page.getByRole("button", { name: "Create a free account" }).click();
   await expect(page.getByRole("heading", { name: "Create your free account" })).toBeVisible();
@@ -36,6 +28,9 @@ test("guest finalization continues through free sign-up and explicit same-trip l
   await expect(page.getByRole("heading", { name: "Your trip is linked to your account" })).toBeVisible();
   const after = await (await page.request.get(`/api/v1/trips/${tripId}`)).json();
   expect(after.version).toBe(before.version); expect(after.snapshot).toEqual(before.snapshot);
+  await page.goto(`/trips/${tripId}/booking`);
+  await expect(page.getByRole("heading", { name: "Review booking" })).toBeVisible();
+  expect((await (await page.request.get(`/api/v1/trips/${tripId}`)).json()).version).toBe(before.version);
   await page.goto(`/trips/${tripId}`);
   await expect(page.getByText("You can plan your visit without creating an account.", { exact: false })).toHaveCount(0);
   // Signing out removes account authority; the old guest cookie cannot recover a linked trip.

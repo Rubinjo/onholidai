@@ -20,8 +20,8 @@ describe("committed workspace convergence", () => {
     initial.snapshot.travellerParty.children = [{ id: childId, ageAtTripStart: 12 }];
     let latest = initial;
     api.read.mockImplementation((path: string) => {
-      if (path.endsWith("/versions")) return Promise.resolve({ items: [] });
-      if (path.endsWith("/conversations")) return Promise.resolve({ items: [], nextCursor: null });
+      if (path.includes("/versions")) return Promise.resolve({ items: [], nextBeforeVersion: null });
+      if (path.includes("/conversations")) return Promise.resolve({ items: [], nextCursor: null });
       return Promise.resolve(latest);
     });
     const view = render(<Workspace initialTrip={initial} initialRunId={null} />);

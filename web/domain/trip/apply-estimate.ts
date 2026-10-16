@@ -15,6 +15,7 @@ import { readOwnedTripVersion, readTrip } from "./read";
 import { changeProposalSchema } from "./proposal";
 import { commitTripMutation } from "./commit";
 import { tripSnapshotSchema, type TripSnapshot } from "./schema";
+import { summarizeTripChanges } from "./change-summary";
 
 export function priceEstimate(base: TripSnapshot, operations: readonly unknown[], offers: readonly PlanningOffer[], now: Date): TripSnapshot {
   const candidate = applyDraftOperations(base, operations, false);
@@ -118,9 +119,10 @@ export async function acceptEstimate(database: Kysely<Database>, userId: string,
       await transaction.updateTable("changeProposals").set({ status: "accepted" }).where("id", "=", proposalId).execute();
     }
     // Reversal records a validated draft root replacement; booking workflows remain unavailable.
+    const applied = row.appliedVersion === null ? null : await transaction.selectFrom("tripVersions").select("changeSummary").where("tripId", "=", tripId).where("version", "=", row.appliedVersion).executeTakeFirst();
     const receipt = await commitTripMutation(transaction, { tripId, ownerUserId: userId, expectedVersion: input.expectedVersion,
       requestId: input.requestId, idempotencyKey: input.requestId, requestFingerprint: fingerprint({ proposalId, ...input }),
-      snapshot, initiatingActor: "agent_proposal", proposalId, changeSummary: row.proposal.affectedFacts,
+      snapshot, initiatingActor: "agent_proposal", proposalId, changeSummary: applied?.changeSummary ?? summarizeTripChanges(tripSnapshotSchema.parse(base.snapshot), snapshot),
       inverseOperation: { operation: "replace", target: "/", value: base.snapshot }, nonReversibleReason: null,
       outboxEventId: randomUUID(), auditEventId: randomUUID() });
     if (row.status !== "applied") await transaction.updateTable("changeProposals").set({ status: "applied", appliedVersion: receipt.version }).where("id", "=", proposalId).execute();

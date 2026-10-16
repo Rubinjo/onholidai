@@ -214,6 +214,7 @@ export interface BookingProviderCallbackTable {
 }
 
 export interface AgentRunTable {
+  applicationPolicy: Generated<"manual" | "automatic">;
   planningAccessRevokedAt: Generated<Date | null>;
   dispatchRequest: Generated<Record<string, unknown> | null>;
   dispatchFingerprint: Generated<string | null>;

@@ -7,6 +7,7 @@ import { PriceBar } from "../../components/trip-workspace/price-bar";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import type { TripEnvelope } from "../../components/trip-workspace/use-trip";
+import { TripCheckpoint } from "../../components/agent/trip-checkpoints";
 
 const snapshot = projectCustomerSnapshot(createSyntheticTripSnapshot());
 snapshot.price = { currency: "GBP", finalCustomerMinor: 128500, taxesMinor: 8500, feesMinor: 0, status: "estimated", checkedAt: "2030-01-01T12:00:00Z" };
@@ -22,11 +23,13 @@ it("renders customer totals, unknown taxes and currency precision without intern
 it("renders consistent workspace sections, a labelled composer and guarded actions", () => {
   const html = renderToStaticMarkup(<Workspace initialTrip={trip} initialRunId={null} />);
   expect(html).toContain("assistant-chat__composer"); expect(html).toContain("Ask your travel assistant");
-  expect(html).toContain("Trip details"); expect(html).toContain("Version history");
-  expect(html).toContain("Finalize your trip to enable booking"); expect(html).not.toContain("Review live booking terms");
+  expect(html).toContain("Trip details"); expect(html).not.toContain("Version history");
+  expect(html).not.toContain("Finalization review"); expect(html).toContain("Book trip");
   // Opt-in synthetic artifact for browser layout/focus verification; no private data.
   if (process.env.WORKSPACE_VISUAL_HTML) {
     const output = resolve(process.cwd(), ".tmp/workspace-preview.html");
-    mkdirSync(dirname(output), { recursive: true }); writeFileSync(output, html);
+    const checkpoint = renderToStaticMarkup(<TripCheckpoint trip={trip} onCommit={() => {}} onStatus={() => {}} entry={{ version: 1, previousVersion: null, summary: ["Stay in Lisbon extended by one night; return travel and estimated total updated."], createdAt: "2030-01-01T00:00:00Z", runId: null, restorable: true, restoreReason: null }} />);
+    const preview = html.replace(/(<ol class="assistant-chat__messages"[^>]*>)(<\/ol>)/, `$1<li class="assistant-chat__message assistant-chat__message--assistant"><strong>OnHolidai</strong>${checkpoint}</li>$2`);
+    mkdirSync(dirname(output), { recursive: true }); writeFileSync(output, preview);
   }
 });

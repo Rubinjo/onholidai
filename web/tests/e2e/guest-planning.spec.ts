@@ -8,37 +8,29 @@ test("an unknown private trip shows an access outcome without disclosing content
   await expect(page.getByRole("link", { name: "Start a new plan" })).toHaveAttribute("href", "/trips/new");
 });
 
-for (const reducedMotion of ["no-preference", "reduce"] as const) test(`a fresh guest can ask, refine, accept, reload and undo without exposing the private trip (${reducedMotion})`, async ({ page, browser }) => {
+for (const reducedMotion of ["no-preference", "reduce"] as const) test(`a fresh guest can ask, automatically refine, reload and restore without exposing the private trip (${reducedMotion})`, async ({ page, browser }) => {
   test.setTimeout(120000);
   await page.emulateMedia({ reducedMotion });
   const timings: InputTiming[] = [];
   await completeSetup(page, { title: "Guest refinement journey" });
   await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible({ timeout: 35000 });
-  await expect(page.getByRole("button", { name: "Accept proposal" })).toBeEnabled({ timeout: 35000 });
-  await acknowledge(page, timings, "accept proposal", () => page.getByRole("button", { name: "Accept proposal" }).click(), () => expect(page.getByRole("status").filter({ hasText: "Saving your decision" })).toBeVisible());
-  await expect(page.getByText(/Committed version 2/)).toBeVisible();
+  await expect(page.getByText(/Committed version 2/)).toBeVisible({ timeout: 35000 });
+  await expect(page.getByRole("button", { name: "Accept proposal" })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath("workspace-accepted-estimate.png"), fullPage: true });
   const tripId = new URL(page.url()).pathname.split("/")[2];
   const original = await (await page.request.get(`/api/v1/trips/${tripId}`)).json();
   expect(original.version).toBe(2);
   await page.getByLabel("Ask your travel assistant").fill("What are my options for this holiday?");
+  const answerRun = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/agent-runs"));
   await acknowledge(page, timings, "chat send", () => page.getByRole("button", { name: "Send message" }).click(), () => expect(page.getByRole("status").filter({ hasText: "Sending your request" })).toBeVisible());
-  await expect(page.getByText("completed", { exact: true })).toBeVisible({ timeout: 35000 });
-  expect((await (await page.request.get(`/api/v1/trips/${tripId}`)).json()).version).toBe(2);
-  await page.getByLabel("Ask your travel assistant").fill("Set pace to 30"); await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page.getByRole("button", { name: "Reject proposal" })).toBeEnabled({ timeout: 35000 });
-  await acknowledge(page, timings, "reject proposal", () => page.getByRole("button", { name: "Reject proposal" }).click(), () => expect(page.getByRole("status").filter({ hasText: "Saving your decision" })).toBeVisible());
-  await expect(page.getByText("This proposal was rejected; it did not change the trip.")).toBeVisible();
-  await page.reload(); await expect(page.getByText("This proposal was rejected; it did not change the trip.")).toBeVisible();
+  const answerId = (await (await answerRun).json()).id;
+  await expect.poll(async () => (await (await page.request.get(`/api/v1/agent-runs/${answerId}`)).json()).status, { timeout: 35000 }).toBe("completed");
   expect((await (await page.request.get(`/api/v1/trips/${tripId}`)).json()).version).toBe(2);
   await page.getByLabel("Ask your travel assistant").fill("Set pace to 25"); await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page.getByRole("button", { name: "Accept proposal" })).toBeEnabled({ timeout: 35000 });
-  await page.getByRole("button", { name: "Accept proposal" }).click();
-  await expect(page.getByText(/Committed version 3/)).toBeVisible();
+  await expect(page.getByText(/Committed version 3/)).toBeVisible({ timeout: 35000 });
   await page.route("**/maps/countries.geojson", (route) => route.abort()); await page.reload();
   await expect(page.getByText(/Committed version 3/)).toBeVisible();
-  await expect(page.getByText("This proposal was accepted. Its committed version is recorded in history.")).toBeVisible();
-  await page.locator("summary").filter({ hasText: /^Version 3:/ }).click(); await page.getByRole("button", { name: "Undo latest draft change" }).click();
+  await page.getByRole("button", { name: "Restore trip to version 2" }).click();
   await expect(page.getByText(/Committed version 4/)).toBeVisible();
   expect((await (await page.request.get(`/api/v1/trips/${tripId}`)).json()).snapshot).toEqual(original.snapshot);
   const other = await browser.newContext({ storageState: { cookies: [], origins: [] } });

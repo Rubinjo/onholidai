@@ -1,5 +1,24 @@
 # UI Contract: Marketing, Setup, and Authentication
 
+## Phase 11 amendment: concise chat checkpoints
+
+New chat planning changes apply after server validation without Accept/Reject controls. Display
+the committed before/after summary once, not the complete updated trip. Distinguish questions,
+clarification, failed/stale results and successful changes; never claim application before commit.
+Retain manual controls only for clearly labelled historical pending runs, with a fresh-request option.
+Chat contains initial/direct/agent/restored version checkpoints and paginated older history. Each
+eligible older checkpoint has a compact Restore trip action with version-specific accessible name,
+pending/error feedback and exact target. Current/non-reversible versions explain their state.
+Keep checkpoint nodes during refresh, preserve dirty editor fields and announce new outcomes politely.
+No Version history or Finalization review section remains in the left pane.
+
+The price card action reads exactly Book trip. It navigates to booking review without financial
+effects or workspace finalization. The next page presents missing itinerary preparation, blocking
+conflicts and actual acknowledgement of unverified conditions, then live terms and separate consent.
+Use the existing forest/sage tokens and typography for restrained checkpoint footers, readable
+wrapping, 44px actions and complete keyboard-focus indicators. Manual assistive-technology and
+full state/zoom acceptance remain separate gates; static layout checks do not prove those journeys.
+
 ## Routes and draft controller
 
 Homepage is server-rendered marketing with value proposition, /trips/new CTA, process, benefits and clearly illustrative itineraries or licensed images with alt text. Trust/booking claims reflect enabled capabilities. No embedded builder or guest-session bootstrap.

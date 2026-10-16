@@ -1,5 +1,31 @@
 # Quickstart Validation: Platform UX, Guest Planning & Account Creation
 
+## Phase 11 chat and booking journey
+
+The latest user instruction supersedes manual Accept/Reject and left-pane history/finalization
+in the earlier journey below. New workspace requests send `applicationPolicy: automatic`;
+the server validates and commits a proposal with its durable result. Verify short actual-change
+summaries, current version convergence, reload, and inline Restore trip to any eligible older
+checkpoint. Restore appends a version; it never cancels reservations or removes history.
+Historical pending runs remain manual and are clearly labelled; opening a page cannot accept them.
+
+Book trip opens `/trips/{tripId}/booking` from a draft. Guest authentication/linking returns
+to that review without changing the trip. Detailed itinerary preparation, feasibility conditions
+and acknowledgement happen there, followed by live-term revalidation and separate exact-action
+authorization. GET, sign-in and Book trip navigation do not finalize, reserve or pay.
+
+Deploy reviewed migration `013_automatic_planning.sql` before the matching web revision.
+Its default preserves existing manual runs and its trigger makes the per-run policy immutable.
+No migration/deployment was performed in this implementation pass. See [Phase 11 evidence](evidence/phase11.md)
+for executed checks and still-open database/manual/deployment/participant gates.
+
+For standalone checkpoint layout checks, build production CSS, then from `web/` run
+`WORKSPACE_VISUAL_HTML=true pnpm test tests/unit/workspace-render.test.tsx` (PowerShell:
+`$env:WORKSPACE_VISUAL_HTML='true'` before the test command) and
+`pnpm exec playwright test --config playwright.preview.config.ts --workers=1`.
+This uses rendered production components and built CSS, not a hydrated app or a live database;
+it proves layout/focus only. Real guest/refinement/auth/booking browser journeys remain separate.
+
 ## Phase 9 redesigned journey
 
 See [Phase 9 evidence](evidence/phase9.md) for current results and incomplete gates.

@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { sql } from "kysely";
 import { describe, expect, it, vi } from "vitest";
 import { createTrip } from "../../domain/trip/create";
-import { readTrip } from "../../domain/trip/read";
+import { readTrip, readOwnedTripVersion } from "../../domain/trip/read";
+import { commitTripMutation } from "../../domain/trip/commit";
+import { undoDraft } from "../../domain/trip/undo";
+import { fingerprint } from "../../server/agent-client/run-repository";
+import { readChatVersions } from "../../server/db/chat-versions";
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import { RunRepository } from "../../server/agent-client/run-repository";
 import { acceptEstimate, recordEstimate } from "../../domain/trip/apply-estimate";
@@ -17,14 +21,14 @@ import { hasIsolatedDatabaseConfiguration, withIsolatedTestDatabase } from "../h
 vi.mock("server-only", () => ({}));
 if (process.env.CI && !hasIsolatedDatabaseConfiguration()) throw new Error("US1 requires database test credentials");
 describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research", () => {
-  it("persists a priced proposal without mutation, then commits exactly once on concurrent explicit acceptance", async () => {
+  it.each(["manual", "automatic", "automatic-stale"] as const)("persists a trusted proposal and safely applies or rejects it once (%s)", async (policy) => {
     await withIsolatedTestDatabase(async ({ database }) => {
       const userId = "10000000-0000-4000-8000-000000000011";
       await sql`INSERT INTO app."user" (id,name,email) VALUES (${userId},'Synthetic','accept@example.invalid')`.execute(database);
       const snapshot = projectCustomerSnapshot(createSyntheticTripSnapshot()); snapshot.itineraryDays = [];
       const trip = await createTrip(database, userId, { requestId: randomUUID(), title: "Accept estimate", currency: "GBP", snapshot });
       const runs = new RunRepository(database), context = { userId, tripId: trip.tripId, requestId: randomUUID(), baseTripVersion: 1 };
-      const run = await runs.reserve({ ...context, purpose: "initial_estimate", message: "Estimate reviewed settings" });
+      const run = await runs.reserve({ ...context, purpose: "initial_estimate", message: "Estimate reviewed settings", ...(policy !== "manual" ? { applicationPolicy: "automatic" } : {}) });
       const found = await searchPlanningOffers([createDuffelReadProvider(syntheticReadClient("flight")), createBookingReadProvider(syntheticReadClient("accommodation"))], {
         componentTypes: ["flight", "accommodation"], currency: "GBP", departureOrigin: snapshot.departureOrigin,
         destinationIds: snapshot.destinations.map((destination) => destination.id), startDate: "2030-05-01", endDate: "2030-05-08", travellerParty: snapshot.travellerParty });
@@ -47,7 +51,33 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research"
       const result = { version: "1", ...context, eventCursor: 1, status: "proposed", result: { kind: "proposal", message: "Review estimate", proposal } };
       await expect(acceptEstimate(database, userId, trip.tripId, proposal.id, { requestId: randomUUID(), expectedVersion: 1 }))
         .rejects.toMatchObject({ status: 409 });
+      if (policy === "automatic-stale") {
+        const prior = await readOwnedTripVersion(database, userId, trip.tripId);
+        const changed = structuredClone(prior.snapshot); changed.preferences.pace = 80;
+        const requestId = randomUUID();
+        await commitTripMutation(database, { tripId: trip.tripId, ownerUserId: userId, expectedVersion: 1, requestId, idempotencyKey: requestId,
+          requestFingerprint: fingerprint({ requestId }), snapshot: changed, initiatingActor: "user", proposalId: null,
+          changeSummary: ["Travel style updated."], inverseOperation: { operation: "replace", target: "/", value: prior.snapshot }, nonReversibleReason: null, outboxEventId: randomUUID(), auditEventId: randomUUID() });
+      }
       expect(await runs.result(context, run.id, result)).toEqual(await runs.result(context, run.id, result));
+      if (policy !== "manual") {
+        expect((await readTrip(database, userId, trip.tripId)).version).toBe(2);
+        const saved = await database.selectFrom("changeProposals").selectAll().where("id", "=", proposal.id).executeTakeFirstOrThrow();
+        expect(saved.status).toBe(policy === "automatic" ? "applied" : "stale");
+        expect(saved.appliedVersion).toBe(policy === "automatic" ? 2 : null);
+        const messages = await database.selectFrom("conversationMessages").selectAll().where("agentRunId", "=", run.id).where("role", "=", "assistant").execute();
+        expect(messages).toHaveLength(1);
+        expect(messages[0].tripVersion).toBe(policy === "automatic" ? 2 : 1);
+        expect(JSON.stringify(messages[0].content)).not.toMatch(/supplierAmount|platformMargin|previewSnapshot/);
+        const history = await readChatVersions(database, userId, trip.tripId);
+        expect(history.items.find((entry) => entry.version === 1)?.restorable).toBe(true);
+        expect(history.items[0].runId).toBe(policy === "automatic" ? run.id : null);
+        const restored = await undoDraft(database, userId, trip.tripId, { requestId: randomUUID(), expectedVersion: 2, restoreVersion: 1 });
+        expect(restored.version).toBe(3); expect(restored.snapshot).toEqual(trip.snapshot);
+        expect(await database.selectFrom("bookingTransactions").select("id").execute()).toHaveLength(0);
+        expect(await database.selectFrom("bookingAuthorizations").select("id").execute()).toHaveLength(0);
+        return;
+      }
       const command = { requestId: randomUUID(), expectedVersion: 1 };
       const accepted = await Promise.all([acceptEstimate(database, userId, trip.tripId, proposal.id, command), acceptEstimate(database, userId, trip.tripId, proposal.id, command)]);
       expect(accepted[0]).toEqual(accepted[1]); expect(accepted[0].version).toBe(2);

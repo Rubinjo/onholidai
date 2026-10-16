@@ -7,7 +7,7 @@ import { resourceActor } from "@/server/auth/planning-resource";
 import { lockPlanningAccess, lockPlanningTrip } from "@/server/db/planning-access";
 import { inTransaction } from "@/server/db/transaction";
 import { readTrip } from "@/domain/trip/read";
-import { BookingConsole } from "@/components/booking/booking-console";
+import { BookingReview } from "@/components/booking/booking-review";
 import { BookingBoundary } from "@/components/auth/booking-boundary";
 import { ProblemError } from "@/server/errors";
 import { z } from "zod";
@@ -27,7 +27,7 @@ export default async function BookingPage({ params }: { params: Promise<{ tripId
     if (!(failure instanceof z.ZodError) && !(failure instanceof ProblemError && [401, 403, 404].includes(failure.status))) throw failure;
     return <main className="planning-page"><h1>Private plan unavailable</h1><Link href="/sign-in">Sign in to your account</Link></main>;
   }
-  if (!["finalized", "partially_booked", "booked"].includes(data.trip.lifecycleState) || !data.trip.snapshot.components.length) redirect(`/trips/${tripId}`);
+  if (data.trip.lifecycleState === "cancelled") redirect(`/trips/${tripId}`);
   if (data.actor.kind === "guest") return <main className="auth-page"><BookingBoundary tripId={tripId} /></main>;
-  return <BookingConsole tripId={tripId} tripVersion={data.trip.version} components={data.trip.snapshot.components} />;
+  return <BookingReview initialTrip={data.trip} />;
 }

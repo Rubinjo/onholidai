@@ -26,14 +26,15 @@ async function requestProposal(page: Page, message: string): Promise<void> {
   await page.getByRole("button", { name: "Send message" }).click();
 }
 
-test("@us2 @accessibility review, conflict, history and undo keep the committed panes coherent", async ({ page, browser }) => {
+test("@us2 @accessibility automatic changes, concurrent edits and chat restoration keep panes coherent", async ({ page, browser }) => {
   test.skip(!process.env.US2_TRIP_ID || !process.env.US1_STORAGE_STATE, "Requires a seeded accepted synthetic estimate and authenticated storage state");
   test.skip(test.info().project.name !== "chromium", requiresExclusiveTrip);
   await page.goto(`/trips/${process.env.US2_TRIP_ID}`);
   await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Finalize your trip to enable booking" })).toBeDisabled();
+  const base = Number(await page.locator("[data-trip-version]").first().getAttribute("data-trip-version"));
+  await expect(page.getByRole("link", { name: "Book trip" })).toBeVisible();
   await requestProposal(page, "Add two nights in Kyoto and keep mornings free");
-  await expect(page.getByRole("heading", { name: "Review proposed changes" })).toBeVisible({ timeout: 35000 });
+  await expect(page.getByText(`Committed version ${base + 1}`, { exact: false })).toBeVisible({ timeout: 35000 });
   const competitor = await browser.newContext({ storageState: process.env.US1_STORAGE_STATE });
   try {
     const other = await competitor.newPage();
@@ -54,12 +55,11 @@ test("@us2 @accessibility review, conflict, history and undo keep the committed 
     // page as a user would; focus also triggers an immediate trip refetch, and the
     // window tolerates a loaded stack completing that round trip.
     await page.bringToFront();
-    await expect(page.getByRole("button", { name: "Accept proposal" })).toBeDisabled({ timeout: 20000 });
-    await expect(page.getByText(/This proposal is stale/)).toBeVisible();
+    await expect(page.getByText(`Committed version ${base + 2}`, { exact: false })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole("button", { name: "Accept proposal" })).toHaveCount(0);
   } finally { await competitor.close(); }
   await requestProposal(page, "Add two nights in Kyoto and keep mornings free");
-  await expect(page.getByRole("button", { name: "Accept proposal" })).toBeEnabled({ timeout: 35000 });
-  await page.getByRole("button", { name: "Accept proposal" }).click();
+  await expect(page.getByText(`Committed version ${base + 3}`, { exact: false })).toBeVisible({ timeout: 35000 });
   await expect(async () => {
     const versions = await page.locator("[data-trip-version]").evaluateAll((elements) => elements.map((element) => element.getAttribute("data-trip-version")));
     expect(new Set(versions).size).toBe(1);
@@ -67,13 +67,12 @@ test("@us2 @accessibility review, conflict, history and undo keep the committed 
   // History reloads for the newly committed version; retry the whole interaction, since
   // a refetch can replace the list node between locating and clicking it.
   await expect(async () => {
-    const version = await page.locator("[data-trip-version]").first().getAttribute("data-trip-version");
-    await page.locator("summary", { hasText: `Version ${version}:` }).click({ timeout: 3000 });
-    await page.getByRole("button", { name: "Undo latest draft change" }).click({ timeout: 3000 });
+    await page.getByRole("button", { name: `Restore trip to version ${base + 2}` }).click({ timeout: 3000 });
   }).toPass({ timeout: 25000 });
-  await expect(page.getByText(/^Version \d+:/).first()).toBeVisible();
+  await expect(page.getByText(`Committed version ${base + 4}`, { exact: false })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Version history" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Version history" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: `Restore trip to version ${base + 2}` })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your travel assistant" })).toBeVisible();
 });
 
@@ -83,6 +82,7 @@ test("@us2 @accessibility focused clarification resumes with original intent and
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.route("**/maps/countries.geojson", (route) => route.abort());
   await page.goto(`/trips/${process.env.US2_REFINEMENT_TRIP_ID}`);
+  const base = Number(await page.locator("[data-trip-version]").first().getAttribute("data-trip-version"));
   await page.getByText("Route, stays and transport details", { exact: true }).click();
   await expect(page.getByRole("region", { name: "Accessible route" })).toBeVisible();
   await requestProposal(page, "Add two nights there");
@@ -90,11 +90,11 @@ test("@us2 @accessibility focused clarification resumes with original intent and
   await expect(answer).toBeVisible({ timeout: 35000 });
   await answer.fill("Kyoto");
   await page.getByRole("button", { name: "Send clarification" }).click();
-  await expect(page.getByRole("heading", { name: "Review proposed changes" })).toBeVisible({ timeout: 35000 });
-  await page.getByRole("button", { name: "Reject proposal" }).click();
+  await expect(page.getByText(`Committed version ${base + 1}`, { exact: false })).toBeVisible({ timeout: 35000 });
+  await page.getByRole("button", { name: `Restore trip to version ${base}` }).click();
   await page.setViewportSize({ width: 400, height: 800 });
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
-  await expect(page.getByRole("button", { name: "Finalize your trip to enable booking" })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "Book trip" })).toBeVisible();
   await page.getByLabel("Ask your travel assistant").fill("Set pace to 25");
   await page.getByLabel("Ask your travel assistant").focus();
   await page.keyboard.press("Tab");

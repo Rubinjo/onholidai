@@ -45,7 +45,7 @@ class DeterministicModel:
             return (
                 "Two options to explore: keep your current route and ask about its daily "
                 "plans, or request a slower pace with longer stays and fewer transfers. "
-                "Tell me what matters most and I can prepare a proposal for your review. "
+                "Tell me what matters most and I can prepare a validated draft update. "
                 "This is a deterministic planning example, not verified travel advice. "
                 "No trip changes, reservations or payments have been made."
             )

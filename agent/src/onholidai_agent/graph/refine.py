@@ -407,7 +407,9 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
                             "Return JSON only with keys operations (1-32 allowlisted draft "
                             "JSON patch operations), rationale, warnings. Never change prices "
                             'or booking state. If ambiguous return {"question":"one focused '
-                            'question"}. Current trip facts override history.'
+                            'question"}. Current trip facts override history. Keep rationale '
+                            "to two short sentences about the requested difference; do not "
+                            "repeat the itinerary or claim the proposal has been applied."
                         ),
                     },
                     context[1],
@@ -470,7 +472,8 @@ async def dispatch(request: CreateAgentRunRequest, sources: Sources) -> AgentRes
                             "Answer the traveller's question in plain language. Offer two useful "
                             "options when appropriate. Distinguish verified trip facts from ideas. "
                             "Do not propose operations or claim changes, reservations or payments. "
-                            "A later explicit request can create a reviewable trip proposal."
+                            "A later explicit request can update the draft through validation. "
+                            "Keep the answer under 160 words; do not repeat the full trip."
                         ),
                     },
                     context[1],
@@ -483,7 +486,7 @@ async def dispatch(request: CreateAgentRunRequest, sources: Sources) -> AgentRes
             answer = (
                 f"Your saved route includes {route}. You could keep the current route and "
                 "explore its daily plans, or ask me to propose a change to the pace, dates or "
-                "stays. Tell me which option you prefer; changes require your review. "
+                "stays. Tell me which option you prefer; requested draft changes are validated. "
                 "Transport, activities and prices remain subject to verification."
             )
         return AgentResult.model_validate({"kind": "answer", "message": answer[:12000]})

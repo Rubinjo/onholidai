@@ -12,7 +12,7 @@ export function PriceBar({ trip, authenticated = false }: { trip: TripEnvelope; 
       <p>Version {trip.version} · {ready ? <>Checked <time dateTime={price.checkedAt}>{new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(price.checkedAt))}</time></> : "Research in progress"}</p>
       {ready && <dl className="trip-price-bar__breakdown"><div><dt>Taxes</dt><dd>{price.taxesMinor == null ? "To be confirmed" : money(price.taxesMinor)}</dd></div><div><dt>Fees</dt><dd>{price.feesMinor == null ? "To be confirmed" : money(price.feesMinor)}</dd></div></dl>}
     </div><div className="trip-price-bar__booking"><p>Terms and availability need revalidation.</p>
-    {trip.lifecycleState === "finalized" || trip.lifecycleState === "partially_booked" || trip.lifecycleState === "booked"
-      ? <Button asChild><a href={`/trips/${trip.tripId}/booking`}>Review live booking terms</a></Button>
-      : <Button disabled>Finalize your trip to enable booking</Button>}</div>{!authenticated && <p className="trip-price-bar__notice">You can plan your visit without creating an account. To review your booking, simply create a free account and confirm the current terms.</p>}</footer>;
+    {trip.lifecycleState !== "cancelled"
+      ? <Button asChild><a href={`/trips/${trip.tripId}/booking`}>Book trip</a></Button>
+      : <Button disabled>Trip cancelled</Button>}<p>Review readiness and current terms on the next page. This does not reserve anything.</p></div>{!authenticated && <p className="trip-price-bar__notice">You can plan your visit without creating an account. To review your booking, simply create a free account and confirm the current terms.</p>}</footer>;
 }

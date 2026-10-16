@@ -6,7 +6,7 @@ import { RunRepository } from "@/server/agent-client/run-repository";
 import { dispatchEstimate } from "@/server/agent-client/client";
 import { publicRun } from "@/server/agent-client/results";
 const command = z.object({ requestId: z.uuid(), baseTripVersion: z.number().int().positive(),
-  conversationId: z.uuid().nullable().optional(), message: z.string().trim().min(1).max(12000), purpose: z.enum(["initial_estimate", "refinement", "finalization"]) }).strict();
+  conversationId: z.uuid().nullable().optional(), message: z.string().trim().min(1).max(12000), applicationPolicy: z.enum(["manual", "automatic"]).optional(), purpose: z.enum(["initial_estimate", "refinement", "finalization"]) }).strict();
 export async function POST(request: Request, route: { params: Promise<{ tripId: string }> }) {
   return apiResponse(request, async (application) => {
     const { actor, id } = await planningUser(application, request), { tripId } = await route.params;
@@ -15,7 +15,7 @@ export async function POST(request: Request, route: { params: Promise<{ tripId: 
       await lockPlanningAccess(transaction, actor);
       return new RunRepository(transaction, () => new Date(), { active: application.config.GUEST_MAX_ACTIVE_RUNS,
         hourly: application.config.GUEST_MAX_RUNS_PER_HOUR }).reserve({ userId: id, tripId,
-        requestId: input.requestId, baseTripVersion: input.baseTripVersion, message: input.message, purpose: input.purpose });
+        requestId: input.requestId, baseTripVersion: input.baseTripVersion, message: input.message, purpose: input.purpose, ...(input.applicationPolicy ? { applicationPolicy: input.applicationPolicy } : {}) });
     });
     try { await dispatchEstimate(application, run, input.message); } catch { /* Durable reservation is replayable. */ }
     return inTransaction(application.database, async (transaction) => {

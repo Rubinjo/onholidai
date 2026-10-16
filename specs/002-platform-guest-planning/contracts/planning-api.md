@@ -1,5 +1,36 @@
 # Planning API and Access Contract
 
+## Phase 11 amendment: automatic planning and next-page booking review
+
+This amendment supersedes older manual-accept/workspace-finalization presentation below.
+POST trip agent-runs accepts optional `applicationPolicy: manual | automatic`; omission keeps
+legacy behavior. The workspace explicitly sends automatic for new requests. The policy is
+immutable and fingerprint-bound; no existing pending run is upgraded on read. Automatic result
+persistence rechecks the live grant/ownership/base/candidate and composes the existing mutation
+service inside the same transaction. Domain conflicts produce a durable non-application message;
+crashes roll back the result and mutation together, and identical callbacks replay their receipt.
+Public automatic results/events do not send full proposal snapshots. No policy grants supplier writes.
+
+GET versions with `compact=true` returns up to 50 descending compact checkpoints, no snapshots:
+version/previousVersion, actor/request/proposal/run provenance, bounded summary, createdAt,
+restorable and restoreReason. `nextBeforeVersion` supplies the exclusive `beforeVersion` cursor.
+These records project immutable versions and survive raw-message expiry, including direct edits,
+initial creation and restoration; missing legacy provenance is not invented. Eligibility reflects
+current lifecycle, non-reversible/booking history, supported schema and active provider-write claims;
+the existing POST undo service independently rechecks all mutation/version/ownership rules.
+Restoration creates a new version and invalidates old authorization; it never rolls back supplier actions.
+
+GET conversations with `timeline=true` returns bounded redacted messages across owned conversations
+and `nextMessageCursor`; pass that UUID as exclusive `beforeMessage` for earlier messages. The
+owner-scoped database tuple cursor preserves timestamp precision. Legacy conversation/version shapes
+remain available without these options. All reads retain private/no-store and current access checks.
+
+Drafts may enter next-page booking review and create a fixed review_booking authentication intent.
+Authentication continuation returns to review even when itinerary preparation remains necessary.
+Cancelled/unavailable lifecycle still returns to planning. Entry/link/GET cannot mutate readiness,
+authorize or execute. Existing validated finalization commands are internal readiness transitions
+invoked explicitly on the booking page; existing live-term and transaction guards remain unchanged.
+
 All JSON mutations retain exact configured Origin, content-type and 262144-byte request limits. Private successes/errors/streams remain private,no-store. Credentials/digests are absent from bodies/URLs/logs. IDs are resource references, never proof. See [data model](../data-model.md).
 
 ## Actor resolution

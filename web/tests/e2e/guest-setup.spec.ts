@@ -60,7 +60,7 @@ test("the builder blocks an invalid step and reports the field to correct", asyn
   await expect(page.getByLabel("Child 1 age at trip start")).toHaveAttribute("aria-invalid", "true");
 });
 
-test("reordered, replaced and removed destinations persist through a guest acceptance", async ({ page }) => {
+test("reordered, replaced and removed destinations persist through an automatic guest estimate", async ({ page }) => {
   test.setTimeout(120_000);
   await openBuilder(page);
   await addDestination(page, "Japan", "JP");
@@ -82,12 +82,11 @@ test("reordered, replaced and removed destinations persist through a guest accep
   await acknowledged;
   await finishSetup(page);
   await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Review proposed changes" })).toBeVisible({ timeout: 35000 });
-  await page.getByRole("button", { name: "Accept proposal" }).click();
+  await expect(page.getByText(/Committed version 2/)).toBeVisible({ timeout: 35000 });
   await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible({ timeout: 35000 });
   const url = page.url();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible();
   expect(page.url()).toBe(url);
-  await expect(page.getByRole("button", { name: "Finalize your trip to enable booking" })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "Book trip" })).toBeVisible();
 });

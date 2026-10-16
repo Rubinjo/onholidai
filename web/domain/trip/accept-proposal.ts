@@ -10,6 +10,7 @@ import { readOwnedTripVersion, readTrip } from "./read";
 import { ProposalRepository } from "@/server/db/proposal-repository";
 import { IdempotencyRepository } from "@/server/db/idempotency-repository";
 import { tripSnapshotSchema } from "./schema";
+import { summarizeTripChanges } from "./change-summary";
 
 export async function acceptProposal(database: Kysely<Database>, userId: string, tripId: string, proposalId: string, raw: unknown) {
   const proposal = await new ProposalRepository(database).read(userId, tripId, proposalId);
@@ -30,9 +31,10 @@ export async function acceptProposal(database: Kysely<Database>, userId: string,
     }
     const base = await readOwnedTripVersion(transaction, userId, tripId, input.expectedVersion);
     if (base.snapshot.components.some((component) => component.bookingStatus !== "unbooked")) runConflict();
+    const applied = row.appliedVersion === null ? null : await transaction.selectFrom("tripVersions").select("changeSummary").where("tripId", "=", tripId).where("version", "=", row.appliedVersion).executeTakeFirst();
     const receipt = await commitTripMutation(transaction, { tripId, ownerUserId: userId, expectedVersion: input.expectedVersion, requestId: input.requestId, idempotencyKey: input.requestId,
       requestFingerprint: fingerprint({ proposalId, ...input }), snapshot: tripSnapshotSchema.parse(candidate.snapshot), initiatingActor: "agent_proposal", proposalId,
-      changeSummary: row.proposal.affectedFacts, inverseOperation: { operation: "replace", target: "/", value: base.snapshot }, nonReversibleReason: null, outboxEventId: randomUUID(), auditEventId: randomUUID() });
+      changeSummary: applied?.changeSummary ?? summarizeTripChanges(tripSnapshotSchema.parse(base.snapshot), tripSnapshotSchema.parse(candidate.snapshot)), inverseOperation: { operation: "replace", target: "/", value: base.snapshot }, nonReversibleReason: null, outboxEventId: randomUUID(), auditEventId: randomUUID() });
     if (row.status !== "applied") await transaction.updateTable("changeProposals").set({ status: "applied", appliedVersion: receipt.version }).where("id", "=", proposalId).execute();
     return readTrip(transaction, userId, tripId, { version: receipt.version });
   });

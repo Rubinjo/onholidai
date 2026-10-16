@@ -8,11 +8,9 @@ import { TripEditor } from "./trip-editor";
 import { ItineraryList } from "./itinerary-list";
 import { ItineraryMap } from "@/components/map/itinerary-map";
 import { Conversation } from "@/components/agent/conversation";
-import { VersionHistory } from "./version-history";
 import { PriceBar } from "./price-bar";
 import { DayPlan } from "./day-plan";
 import { ComponentDetails } from "./component-details";
-import { FinalizationReview } from "./finalization-review";
 import { planningError, PlanningRequestError } from "@/components/trip-setup/http";
 import { Destinations } from "@/components/trip-setup/destinations";
 import { canonicalJson } from "@/domain/canonical-json";
@@ -37,7 +35,7 @@ function WorkspacePanes({ initialTrip, initialRunId, initialResearchRequestId, a
     {/* The price bar stays last in the DOM for the documented focus order and is
         placed in the middle column by the grid, which owns price and booking. */}
     <div className="trip-workspace">
-      <div className="trip-workspace__pane trip-workspace__pane--details"><TripEditor key={editor.base.version} trip={trip} onCommit={(raw) => { const accepted = tripEnvelopeSchema.parse(raw); query.accept(accepted); setEditor({ base: accepted, snapshot: accepted.snapshot }); setEditingRoute(false); }} draftState={{ snapshot: editorDraft, update: setEditorDraft }} onEditRoute={() => setEditingRoute(true)} /><details><summary>Daily plans and activities</summary><DayPlan days={trip.snapshot.itineraryDays} version={trip.version} /><ComponentDetails components={trip.snapshot.components} version={trip.version} /></details><FinalizationReview trip={trip} onCommit={query.accept} /><VersionHistory trip={trip} onCommit={query.accept} /></div>
+      <div className="trip-workspace__pane trip-workspace__pane--details"><TripEditor key={editor.base.version} trip={trip} onCommit={(raw) => { const accepted = tripEnvelopeSchema.parse(raw); query.accept(accepted); setEditor({ base: accepted, snapshot: accepted.snapshot }); setEditingRoute(false); }} draftState={{ snapshot: editorDraft, update: setEditorDraft }} onEditRoute={() => setEditingRoute(true)} /><details><summary>Daily plans and activities</summary><DayPlan days={trip.snapshot.itineraryDays} version={trip.version} /><ComponentDetails components={trip.snapshot.components} version={trip.version} /></details></div>
       <div className="trip-workspace__pane trip-workspace__pane--route">{editingRoute ? <div className="workspace-route-editor"><p role="status">Editing your route. Review edit impacts in Trip details to save these changes.</p><button type="button" onClick={() => setEditingRoute(false)}>Show accepted route</button>
         <Destinations mode="destinations" globe origin={editorDraft.departureOrigin} destinations={editorDraft.destinations} onOrigin={() => {}}
           order={editorDraft.destinationOrder ?? "manual"} onOrder={(destinationOrder) => setEditorDraft({ ...editorDraft, destinationOrder })}

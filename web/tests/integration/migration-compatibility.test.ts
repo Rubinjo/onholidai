@@ -41,6 +41,8 @@ describe("migration discovery", () => {
     expect(migrations.find((entry) => entry.version === 9)?.sql).toContain("privacy_legal_holds");
     expect(migrations.find((entry) => entry.version === 11)?.sql).toContain("planning_principals");
     expect(migrations.find((entry) => entry.version === 12)?.sql).toContain("planning_access_revoked_at");
+    expect(migrations.find((entry) => entry.version === 13)?.sql).toContain("DEFAULT 'manual'");
+    expect(migrations.find((entry) => entry.version === 13)?.sql).toContain("run application policy is immutable");
   });
 });
 

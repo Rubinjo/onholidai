@@ -14,15 +14,15 @@ import { readOwnedTripVersion } from "@/domain/trip/read";
 export const bookingIntentRequestSchema = z.object({ requestId: z.uuid(), tripId: z.uuid() }).strict();
 export const linkRequestSchema = z.object({ requestId: z.uuid() }).strict();
 export function bookingContinuationPath(tripId: string, lifecycle: string) {
-  return ["finalized", "partially_booked", "booked"].includes(lifecycle)
+  return ["draft", "finalized", "partially_booked", "booked"].includes(lifecycle)
     ? { nextPath: `/trips/${tripId}/booking` }
-    : { nextPath: `/trips/${tripId}`, reason: "finalization_required" as const };
+    : { nextPath: `/trips/${tripId}`, reason: "booking_unavailable" as const };
 }
 export async function currentBookingContinuation(database: Kysely<Database>, planningOwnerId: string, tripId: string, lifecycle: string) {
   const path = bookingContinuationPath(tripId, lifecycle);
   if ("reason" in path) return path;
-  const { snapshot } = await readOwnedTripVersion(database, planningOwnerId, tripId);
-  return snapshot.components.length > 0 ? path : { nextPath: `/trips/${tripId}`, reason: "finalization_required" as const };
+  await readOwnedTripVersion(database, planningOwnerId, tripId);
+  return path;
 }
 export async function createBookingIntent(database: Kysely<Database>, identity: PlanningIdentity, raw: unknown, now = new Date()) {
   const input = bookingIntentRequestSchema.parse(raw), actor = await resourceActor(database, identity, "trip", input.tripId);
@@ -32,9 +32,9 @@ export async function createBookingIntent(database: Kysely<Database>, identity: 
     const next = bookingContinuationPath(trip.id, trip.lifecycleState);
     if (actor.kind === "account") return currentBookingContinuation(transaction, actor.planningOwnerId, trip.id, trip.lifecycleState);
     const snapshot = (await readOwnedTripVersion(transaction, actor.planningOwnerId, trip.id)).snapshot;
-    if ("reason" in next || !snapshot.components.length || snapshot.components.some((component) =>
+    if ("reason" in next || snapshot.components.some((component) =>
       !["flight", "accommodation", "activity", "rail", "transfer"].includes(component.type))) {
-      throw new ProblemError({ title: "Finalize a supported trip before booking review", code: "booking_trip_not_available", status: 409 });
+      throw new ProblemError({ title: "This trip is not available for booking review", code: "booking_trip_not_available", status: 409 });
     }
     const hash = fingerprint({ ...input, action: "review_booking", guestSessionId: actor.guestSessionId });
     let intent = await transaction.selectFrom("bookingIntents").selectAll().where("guestSessionId", "=", actor.guestSessionId)

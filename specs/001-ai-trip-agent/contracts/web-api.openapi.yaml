@@ -109,6 +109,14 @@ paths:
       summary: Read permitted redacted conversation history for the trip
       parameters:
         - $ref: '#/components/parameters/TripId'
+        - name: timeline
+          in: query
+          schema: { type: boolean, default: false }
+          description: Return a bounded message page across all owned conversations.
+        - name: beforeMessage
+          in: query
+          schema: { type: string, format: uuid }
+          description: Exclusive owner-scoped message cursor from nextMessageCursor.
         - name: after
           in: query
           required: false
@@ -121,7 +129,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConversationPage'
+                oneOf:
+                  - $ref: '#/components/schemas/ConversationPage'
+                  - $ref: '#/components/schemas/ChatMessagePage'
         '404':
           $ref: '#/components/responses/NotFound'
   /trips/{tripId}/versions:
@@ -131,6 +141,14 @@ paths:
       summary: Read inspectable immutable trip versions and their change provenance
       parameters:
         - $ref: '#/components/parameters/TripId'
+        - name: compact
+          in: query
+          schema: { type: boolean, default: false }
+          description: Return latest compact chat checkpoints without snapshots, in descending order.
+        - name: beforeVersion
+          in: query
+          schema: { type: integer, minimum: 1 }
+          description: Exclusive older-version cursor for compact pages.
         - name: afterVersion
           in: query
           required: false
@@ -143,7 +161,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TripVersionPage'
+                oneOf:
+                  - $ref: '#/components/schemas/TripVersionPage'
+                  - $ref: '#/components/schemas/ChatVersionPage'
         '404':
           $ref: '#/components/responses/NotFound'
   /trips/{tripId}/commands/edit-preview:
@@ -350,6 +370,10 @@ paths:
                   maxLength: 12000
                 purpose:
                   enum: ["initial_estimate","refinement","finalization"]
+                applicationPolicy:
+                  enum: [manual, automatic]
+                  default: manual
+                  description: Automatic applies a validated planning candidate with its durable result; never authorizes external actions. Omission preserves legacy manual behavior.
       responses:
         "202":
           description: "Agent run accepted"
@@ -1879,6 +1903,51 @@ components:
         createdAt:
           type: string
           format: date-time
+    ChatMessagePage:
+      type: object
+      additionalProperties: false
+      required: [items, nextMessageCursor]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, messages]
+            properties:
+              id: { type: string, format: uuid }
+              messages:
+                type: array
+                maxItems: 200
+                items: { $ref: '#/components/schemas/ConversationMessage' }
+        nextMessageCursor: { type: [string, 'null'], format: uuid }
+    ChatVersionPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextBeforeVersion]
+      properties:
+        nextBeforeVersion: { type: [integer, 'null'], minimum: 1 }
+        items:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required: [version, previousVersion, actor, requestId, proposalId, summary, createdAt, runId, restorable, restoreReason]
+            properties:
+              version: { type: integer, minimum: 1 }
+              previousVersion: { type: [integer, 'null'], minimum: 1 }
+              actor: { enum: [user, agent_proposal, system_revalidation, booking_workflow] }
+              requestId: { type: string, format: uuid }
+              proposalId: { type: [string, 'null'], format: uuid }
+              summary:
+                type: array
+                maxItems: 6
+                items: { type: string, maxLength: 256 }
+              createdAt: { type: string, format: date-time }
+              runId: { type: [string, 'null'], format: uuid }
+              restorable: { type: boolean }
+              restoreReason: { type: [string, 'null'] }
     TripVersionPage:
       type: object
       additionalProperties: false

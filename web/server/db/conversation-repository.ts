@@ -1,7 +1,7 @@
 import { inTransaction } from "@/server/db/transaction";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import type { Database } from "./database";
 import { readTrip } from "@/domain/trip/read";
 import { ConversationSummarySchema, RetrieveRelevantContextInputSchema } from "@contracts/agent-api/generated.zod";
@@ -17,12 +17,16 @@ export function redactConversation(text: string): string {
 
 export class ConversationRepository {
   constructor(private readonly database: Kysely<Database>) {}
-  async messages(userId: string, tripId: string, limit = 200) {
+  async messages(userId: string, tripId: string, limit = 200, beforeId?: string) {
     await readTrip(this.database, userId, tripId);
     await expireRawConversationMessages(this.database);
-    const rows = await this.database.selectFrom("conversationMessages").innerJoin("conversations", "conversations.id", "conversationMessages.conversationId")
+    let query = this.database.selectFrom("conversationMessages").innerJoin("conversations", "conversations.id", "conversationMessages.conversationId")
       .selectAll("conversationMessages").where("conversations.ownerUserId", "=", userId).where("conversations.tripId", "=", tripId)
-      .where("conversationMessages.retentionExpiresAt", ">", new Date()).orderBy("conversationMessages.createdAt", "desc").orderBy("conversationMessages.id", "desc").limit(limit).execute();
+      .where("conversationMessages.retentionExpiresAt", ">", new Date()).orderBy("conversationMessages.createdAt", "desc").orderBy("conversationMessages.id", "desc").limit(limit);
+    if (beforeId) query = query.where(sql<boolean>`(conversation_messages.created_at, conversation_messages.id) <
+      (select m.created_at, m.id from app.conversation_messages m join app.conversations c on c.id = m.conversation_id
+       where m.id = ${beforeId} and c.trip_id = ${tripId} and c.owner_user_id = ${userId})`);
+    const rows = await query.execute();
     return rows.reverse().map((row) => ({ id: row.id, conversationId: row.conversationId, role: row.role, tripVersion: row.tripVersion, runId: row.agentRunId,
       occurredAt: row.createdAt.toISOString(), redactedContent: redactConversation(typeof row.content.text === "string" ? row.content.text : String(row.content.kind ?? "Saved planning message")) }));
   }
