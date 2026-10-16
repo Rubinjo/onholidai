@@ -5,10 +5,12 @@ from datetime import UTC, date, datetime, timedelta
 from typing import NotRequired, Protocol, TypedDict, cast
 from uuid import uuid4
 
+import httpx
 import langsmith
 from langgraph.graph import END, START, StateGraph  # pyright: ignore[reportMissingTypeStubs]
 
 from onholidai_agent.context.build import build_context
+from onholidai_agent.graph.route_policy import arrange_destinations
 from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import AgentResult, CreateAgentRunRequest
 from onholidai_agent.tools.get_trip import TripReader, get_trip
@@ -146,6 +148,7 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         end = start + timedelta(days=duration["idealDays"] - 1)
         if end > date.fromisoformat(window["endDate"]):
             raise ValueError("infeasible_duration")
+    destinations = arrange_destinations(destinations, snapshot.get("destinationOrder", "manual"))
     if duration["idealDays"] - 1 < len(destinations):
         return AgentResult.model_validate(
             {
@@ -166,12 +169,89 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         "endDate": end.isoformat(),
         "destinationIds": [item["id"] for item in destinations],
     }
-    found = await research(sources, request, query)
+    alternatives = cast(list[dict[str, object]], snapshot.get("departureOrigins", []))
+    try:
+        found = await research(sources, request, query)
+    except (ValueError, TimeoutError, httpx.HTTPError):
+        if len(alternatives) <= 1:
+            raise
+        found = {"offers": []}
     offers = cast(list[dict[str, object]], found.get("offers", []))
-    if not offers:
+    if not offers and len(alternatives) <= 1:
         raise ValueError("source_unavailable")
     preferences = cast(dict[str, int], snapshot["preferences"])
     offers = select_quotes(offers, preferences.get("spend", 50))
+    origin_notes = ""
+    if len(alternatives) > 1:
+
+        async def compare(
+            alternative: dict[str, object],
+        ) -> tuple[dict[str, object], list[dict[str, object]]]:
+            try:
+                found_alternative = await research(
+                    sources, request, {**query, "departurePlaceId": alternative["placeId"]}
+                )
+                selected = select_quotes(
+                    cast(list[dict[str, object]], found_alternative.get("offers", [])),
+                    preferences.get("spend", 50),
+                )
+                return alternative, selected
+            except (ValueError, TimeoutError, KeyError, httpx.HTTPError):
+                return alternative, []
+
+        comparisons = await asyncio.gather(
+            *(
+                compare(alternative)
+                for alternative in alternatives
+                if alternative.get("placeId") != origin.get("placeId")
+            )
+        )
+
+        def total(items: list[dict[str, object]]) -> int:
+            return sum(
+                cast(
+                    int,
+                    cast(dict[str, object], cast(dict[str, object], item["component"])["price"])[
+                        "finalCustomerMinor"
+                    ],
+                )
+                for item in items
+            )
+
+        def coverage(items: list[dict[str, object]]) -> list[str]:
+            return sorted(
+                str(item.get("selectionGroup", cast(dict[str, object], item["component"])["type"]))
+                for item in items
+            )
+
+        reference = coverage(offers) if offers else next(
+            (coverage(selected) for _, selected in comparisons if selected), []
+        )
+        comparable = [
+            (alternative, selected)
+            for alternative, selected in comparisons
+            if selected and coverage(selected) == reference
+        ]
+        available = ([(cast(dict[str, object], origin), offers)] if offers else []) + comparable
+        if not available:
+            raise ValueError("source_unavailable")
+        chosen_origin, chosen_offers = min(
+            available,
+            key=lambda item: total(item[1]),
+        )
+        origin = chosen_origin
+        offers = chosen_offers
+        query["departurePlaceId"] = origin["placeId"]
+        origin_notes = (
+            f" Compared {len(available)} departure alternatives. Review the recommended "
+            f"departure from {origin.get('name', 'your confirmed origin')} "
+            "and return to the same location."
+        )
+        if len(available) < len(alternatives):
+            origin_notes += (
+                " Some departure comparisons were unavailable or not comparable; "
+                "no savings are claimed for those locations."
+            )
     types = {cast(dict[str, object], offer["component"]).get("type") for offer in offers}
     if not types.intersection({"flight", "rail", "transfer"}) or (
         duration["idealDays"] > 1 and "accommodation" not in types
@@ -213,6 +293,13 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         + "without changing your duration preferences "
         "and preserves all availability windows. Return defaults to your confirmed origin."
     )
+    rationale += origin_notes
+    if snapshot.get("destinationOrder") == "ai":
+        rationale += (
+            " Destination order is an AI-proposed geographic circuit; departure/return "
+            "connections and transport feasibility still require verification. "
+            "Missing coordinates preserve the supplied order."
+        )
     source_facts = cast(list[dict[str, object]], found.get("researchFacts", []))
     if source_facts:
         from onholidai_agent.telemetry.redaction import redact_for_langsmith
@@ -273,6 +360,11 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
     return propose_trip_changes(
         request,
         [
+            *(
+                [{"operation": "replace", "target": "/departureOrigin", "value": origin}]
+                if alternatives
+                else []
+            ),
             {"operation": "replace", "target": "/destinations", "value": routed},
             {"operation": "replace", "target": "/components", "value": components},
             {"operation": "replace", "target": "/itineraryDays", "value": []},

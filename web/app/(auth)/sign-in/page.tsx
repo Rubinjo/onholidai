@@ -23,7 +23,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
     catch { return <main className="auth-page"><h1>Private continuation unavailable</h1><p>Use the same browser where you planned this trip.</p><Link href="/trips/new">Start a new plan</Link></main>; }
     if (session) redirect(safeAuthDestination(params.intentId));
   }
-  return <main className="auth-page"><Link href="/">Onholidai</Link>{session ? <section className="auth-form"><h1>You are signed in</h1>
+  return <main className="auth-page"><Link href="/">OnHolidai</Link>{session ? <section className="auth-form"><h1>You are signed in</h1>
     <p>{session.user.email}</p><form action={signOutAction}><Button type="submit" variant="outline">Sign out</Button></form><Link href="/trips/new">Plan a holiday</Link></section>
     : <AuthForm mode="sign-in" intentId={params.intentId} redirectTo={params.redirectTo} returnPath={returnPath} />}</main>;
 }

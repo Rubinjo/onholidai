@@ -1,7 +1,7 @@
 "use client";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Map as LibreMap, GeoJSONSource } from "maplibre-gl";
+import type { Map as LibreMap, GeoJSONSource, Marker } from "maplibre-gl";
 import type { TripSnapshot } from "@/domain/trip/schema";
 import type { PlaceCandidate } from "@/domain/trip/destination";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ export function DestinationGlobe({ destinations, candidates = [], onCountry, onC
   onCountry: (code: string, name: string) => void; onCity?: (place: PlaceCandidate) => void;
 }) {
   const container = useRef<HTMLDivElement>(null), map = useRef<LibreMap | null>(null);
+  const markers = useRef<Marker[]>([]), markerFactory = useRef<((element: HTMLElement) => Marker) | null>(null);
   const [failed, setFailed] = useState(false), [loaded, setLoaded] = useState(false), [retry, setRetry] = useState(0);
   const actions = useRef({ onCountry, onCity, candidates });
   const selections = useRef(destinations);
@@ -19,13 +20,23 @@ export function DestinationGlobe({ destinations, candidates = [], onCountry, onC
   const updateSources = useCallback(() => {
     const instance = map.current;
     if (!instance?.getSource("cities")) return;
-    const places = [...selections.current.filter((entry) => entry.location).map((entry) => ({ placeId: entry.id, name: entry.name, location: entry.location })),
+    const places = [...selections.current.filter((entry) => entry.location).map((entry) => ({ placeId: Object.values(entry.providerPlaceIds)[0] ?? entry.id, name: entry.name, location: entry.location })),
       ...actions.current.candidates.filter((entry) => entry.kind === "city" && entry.location)];
-    (instance.getSource("cities") as GeoJSONSource).setData({ type: "FeatureCollection", features: places.map((place) => ({
+    const unique = [...new Map(places.map((place) => [place.placeId, place])).values()];
+    (instance.getSource("cities") as GeoJSONSource).setData({ type: "FeatureCollection", features: unique.map((place) => ({
       type: "Feature", properties: { placeId: place.placeId, name: place.name },
       geometry: { type: "Point", coordinates: [place.location!.longitude, place.location!.latitude] } })) });
     instance.setFilter("selected", ["in", ["coalesce", ["get", "ISO_A2_EH"], ["get", "ISO_A2"]],
-      ["literal", [...new Set(selections.current.map((entry) => entry.countryCode))]]]);
+      ["literal", [...new Set(selections.current.filter((entry) => entry.kind === "country").map((entry) => entry.countryCode))]]]);
+    markers.current.forEach((marker) => marker.remove()); markers.current = [];
+    for (const place of unique) {
+      const element = document.createElement("button"); element.type = "button"; element.className = "globe-city"; element.textContent = place.name; element.tabIndex = -1;
+      element.onclick = (event) => { event.stopPropagation(); const resolved = actions.current.candidates.find((entry) => entry.placeId === place.placeId); if (resolved) actions.current.onCity?.(resolved); };
+      const marker = markerFactory.current?.(element).setLngLat([place.location!.longitude, place.location!.latitude]).addTo(instance);
+      if (marker) markers.current.push(marker);
+    }
+    const points = selections.current.flatMap((place) => place.location ? [[place.location.longitude, place.location.latitude]] : []);
+    (instance.getSource("journey") as GeoJSONSource).setData({ type: "FeatureCollection", features: points.length > 1 ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: points } }] : [] });
   }, []);
   useEffect(() => {
     let stopped = false, observer: ResizeObserver | undefined;
@@ -47,21 +58,33 @@ export function DestinationGlobe({ destinations, candidates = [], onCountry, onC
         instance.addLayer({ id: "selected", type: "fill", source: "countries", paint: { "fill-color": "#a9d4bf" }, filter: ["==", ["get", "ISO_A2"], ""] });
         instance.addSource("cities", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
         instance.addLayer({ id: "cities", type: "circle", source: "cities", paint: { "circle-radius": 6, "circle-color": "#12664f", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
+        instance.addLayer({ id: "city-hover", type: "circle", source: "cities", filter: ["==", ["get", "placeId"], ""], paint: { "circle-radius": 10, "circle-color": "#084c3a", "circle-stroke-color": "#ffffff", "circle-stroke-width": 3 } });
+        instance.addSource("journey", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        instance.addLayer({ id: "journey", type: "line", source: "journey", paint: { "line-color": "#12664f", "line-width": 2, "line-dasharray": [2, 3] } });
+        markerFactory.current = (element) => new library.Marker({ element, anchor: "top", offset: [0, 8] });
         updateSources(); setLoaded(true);
       });
       instance.on("click", (event) => {
         if (!instance.getLayer("countries")) return;
-        const city = instance.queryRenderedFeatures(event.point, { layers: ["cities"] })[0];
+        const city = instance.queryRenderedFeatures(event.point, { layers: ["city-hover", "cities"] })[0];
         const place = actions.current.candidates.find((candidate) => candidate.placeId === city?.properties?.placeId);
-        if (place && actions.current.onCity) { actions.current.onCity(place); return; }
+        if (city) { if (place) actions.current.onCity?.(place); return; }
         const country = instance.queryRenderedFeatures(event.point, { layers: ["countries"] })[0]?.properties;
         const code: unknown = country?.ISO_A2_EH ?? country?.ISO_A2, name: unknown = country?.NAME_EN ?? country?.NAME;
         if (typeof code === "string" && /^[A-Z]{2}$/.test(code) && typeof name === "string") actions.current.onCountry(code, name);
       });
+      instance.on("mousemove", "cities", (event) => {
+        instance.getCanvas().style.cursor = "pointer";
+        instance.setFilter("city-hover", ["==", ["get", "placeId"], event.features?.[0]?.properties?.placeId ?? ""]);
+      });
+      instance.on("mouseleave", "cities", () => {
+        instance.getCanvas().style.cursor = "";
+        instance.setFilter("city-hover", ["==", ["get", "placeId"], ""]);
+      });
       observer = new ResizeObserver(() => instance.resize()); observer.observe(container.current);
       // No automatic rotation, entrance camera or delayed controls, including reduced motion.
     }).catch(() => { if (!stopped) setFailed(true); });
-    return () => { stopped = true; observer?.disconnect(); map.current?.remove(); map.current = null; };
+    return () => { stopped = true; observer?.disconnect(); markers.current.forEach((marker) => marker.remove()); markers.current = []; map.current?.remove(); map.current = null; };
   // Sources update separately; selections never recreate the map instance.
   }, [retry, updateSources]);
   useEffect(() => { if (loaded) updateSources(); }, [destinations, candidates, loaded, updateSources]);
@@ -70,6 +93,7 @@ export function DestinationGlobe({ destinations, candidates = [], onCountry, onC
     <div ref={container} className="destination-globe__canvas" aria-hidden="true" />
     {failed && <div role="status"><p>The globe is unavailable. Search and the ordered list below work independently.</p>
       <Button variant="outline" onClick={() => { setFailed(false); setLoaded(false); setRetry((value) => value + 1); }}>Retry globe</Button></div>}
-    <p>Made with Natural Earth. Choose a country, then confirm a resolved destination. City points match the search results and route list; this is a planning diagram.</p>
+    <p>Made with Natural Earth. Select a country or one of its cities. Lines illustrate your journey; they are not verified transport routes.</p>
+    {candidates.some((place) => place.kind === "city") && <div className="globe-city-options" aria-label="Cities shown on globe">{candidates.filter((place) => place.kind === "city").map((place) => <Button key={place.placeId} variant="outline" onClick={() => onCity?.(place)}>{place.name}</Button>)}</div>}
   </section>;
 }

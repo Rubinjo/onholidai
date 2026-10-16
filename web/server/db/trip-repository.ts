@@ -70,8 +70,10 @@ export class TripRepository implements TripRepositoryPort {
       .set({
         currentVersion: nextVersion,
         currency,
-        updatedAt: changedAt,
-        lastActivityAt: changedAt,
+        // The application and database clocks may differ slightly. Keep durable
+        // timestamps monotonic without rejecting an otherwise valid commit.
+        updatedAt: sql<Date>`greatest(${changedAt}, created_at, updated_at)`,
+        lastActivityAt: sql<Date>`greatest(${changedAt}, created_at, last_activity_at)`,
       })
       .where("id", "=", tripId)
       .where("currentVersion", "=", expectedVersion)

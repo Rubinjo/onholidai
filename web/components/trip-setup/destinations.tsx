@@ -1,126 +1,98 @@
 "use client";
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { z } from "zod";
 import { placeCandidateSchema, type PlaceCandidate } from "@/domain/trip/destination";
 import type { TripSnapshot } from "@/domain/trip/schema";
 import { planningError, planningJson } from "./http";
 import { DestinationPicker } from "@/components/map/destination-picker";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { PlaceSearch } from "./place-search";
 type Destination = TripSnapshot["destinations"][number];
 type Origin = TripSnapshot["departureOrigin"];
 export function selectDestination(list: Destination[], place: PlaceCandidate, replaceId?: string): Destination[] {
   if (list.some((entry) => entry.id !== replaceId && Object.values(entry.providerPlaceIds).includes(place.placeId))) throw new Error("That destination is already on your route.");
-  if (!replaceId && list.length >= 8) throw new Error("Choose at most eight destinations.");
-  const previous = replaceId ? list.find((entry) => entry.id === replaceId) : undefined;
-  if (replaceId && !previous) throw new Error("Select the destination to replace again.");
+  const country = place.kind === "city" ? list.find((entry) => entry.kind === "country" && entry.countryCode === place.countryCode) : undefined;
+  const previous = list.find((entry) => entry.id === (replaceId ?? country?.id));
+  if (replaceId && !previous) throw new Error("Choose the destination to replace again.");
+  if (!previous && list.length >= 8) throw new Error("Choose at most eight destinations.");
   const destination: Destination = { id: previous?.id ?? crypto.randomUUID(), kind: place.kind === "airport" ? "place" : place.kind,
-    name: place.name, countryCode: place.countryCode, timezone: place.timezone, providerPlaceIds: { lookup: place.placeId },
-    location: place.location, routePosition: previous?.routePosition ?? list.length, arrivalDate: null, departureDate: null, plannedNights: 0 };
-  return previous ? list.map((entry) => entry.id === replaceId ? destination : entry) : [...list, destination];
+    name: place.name, countryCode: place.countryCode, timezone: place.timezone, providerPlaceIds: { lookup: place.placeId }, location: place.location,
+    routePosition: previous?.routePosition ?? list.length, arrivalDate: null, departureDate: null, plannedNights: 0 };
+  const result = previous ? list.map((entry) => entry.id === previous.id ? destination : entry) : [...list, destination];
+  return result.filter((entry) => !(place.kind === "city" && entry.kind === "country" && entry.countryCode === place.countryCode)).map((entry, routePosition) => ({ ...entry, routePosition }));
 }
-export function Destinations({ origin, destinations, onOrigin, onDestinations, mode = "both", globe = false }: {
-  origin: Origin | null; destinations: Destination[]; onOrigin: (origin: Origin) => void;
-  onDestinations: (destinations: Destination[]) => void; mode?: "both" | "destinations" | "origin"; globe?: boolean;
+export function Destinations({ origin, origins, destinations, onOrigin, onOrigins, onDestinations, order = "manual", onOrder, mode = "both", globe = false, mapVisible = true }: {
+  origin: Origin | null; origins?: Origin[]; destinations: Destination[]; onOrigin: (origin: Origin | null) => void; onOrigins?: (origins: Origin[]) => void;
+  onDestinations: (destinations: Destination[]) => void; order?: "manual" | "ai"; onOrder?: (order: "manual" | "ai") => void;
+  mode?: "both" | "destinations" | "origin"; globe?: boolean; mapVisible?: boolean;
 }) {
-  const id = useId(), searchRef = useRef<HTMLInputElement>(null), request = useRef(0);
-  const [query, setQuery] = useState(""), [departureQuery, setDepartureQuery] = useState("");
-  const [candidates, setCandidates] = useState<PlaceCandidate[]>([]), [origins, setOrigins] = useState<PlaceCandidate[]>([]);
-  const [error, setError] = useState(""), [busy, setBusy] = useState(false), [replaceId, setReplaceId] = useState<string>();
-  const [country, setCountry] = useState<{ code: string; name: string } | null>(null), [countryCandidates, setCountryCandidates] = useState<PlaceCandidate[]>([]);
-  const responseSchema = z.object({ candidates: z.array(placeCandidateSchema), ambiguous: z.boolean() }).passthrough();
-  function ambiguous(place: PlaceCandidate, list: readonly PlaceCandidate[]) {
-    return list.some((other) => other.placeId !== place.placeId && other.name === place.name && other.countryCode === place.countryCode
-      && other.timezone === place.timezone && other.kind === place.kind);
-  }
-  function locationHint(place: PlaceCandidate, list: readonly PlaceCandidate[]) {
-    if (!ambiguous(place, list)) return "";
-    return place.location ? `; coordinates ${place.location.latitude}, ${place.location.longitude}` : "; refine the search to distinguish these matches";
-  }
-  async function search(departure: boolean) {
-    const sequence = ++request.current; setError(""); setBusy(true);
-    try {
-      const result = responseSchema.parse(await planningJson(`/api/v1/places?query=${encodeURIComponent(departure ? departureQuery : query)}`));
-      if (sequence !== request.current) return;
-      if (departure) setOrigins(result.candidates.filter((place) => place.kind === "airport" || place.kind === "city"));
-      else setCandidates(result.candidates.filter((place) => place.kind !== "airport"));
-      if (!result.candidates.length) setError("No matches. Try another name and choose a specific place.");
-    } catch (failure) { if (sequence === request.current) setError(planningError(failure)); }
-    finally { if (sequence === request.current) setBusy(false); }
-  }
-  async function openCountry(code: string, name: string) {
-    setCountry({ code, name }); setCountryCandidates([]); setError("");
-    const sequence = ++request.current; setBusy(true);
-    try {
-      const [countries, cities] = await Promise.all([
-        planningJson(`/api/v1/places?query=${encodeURIComponent(name)}&countryCode=${code}&kind=country`),
-        planningJson(`/api/v1/places?query=&countryCode=${code}&kind=city`)]);
-      if (sequence === request.current) setCountryCandidates([...responseSchema.parse(countries).candidates, ...responseSchema.parse(cities).candidates]);
-    } catch (failure) { if (sequence === request.current) setError(planningError(failure)); }
-    finally { if (sequence === request.current) setBusy(false); }
-  }
+  const request = useRef(0), drag = useRef<number | null>(null);
+  const [candidates, setCandidates] = useState<PlaceCandidate[]>([]), [error, setError] = useState(""), [busy, setBusy] = useState(false), [replaceId, setReplaceId] = useState<string>();
+  const [searchKey, setSearchKey] = useState(0), [countryChoices, setCountryChoices] = useState<PlaceCandidate[]>([]), [moving, setMoving] = useState("");
+  const departures = origins ?? (origin ? [origin] : []);
   function choose(place: PlaceCandidate) {
-    try { onDestinations(selectDestination(destinations, place, replaceId)); setReplaceId(undefined); setError(""); setCandidates([]); }
+    request.current++; setBusy(false); setCountryChoices([]);
+    try { onDestinations(selectDestination(destinations, place, replaceId)); setReplaceId(undefined); setError(""); }
     catch (failure) { setError(failure instanceof Error ? failure.message : "Choose another destination."); }
   }
-  function move(index: number, offset: number) {
-    const list = [...destinations], [item] = list.splice(index, 1); list.splice(index + offset, 0, item);
-    onDestinations(list.map((entry, position) => ({ ...entry, routePosition: position })));
-    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-destination-id="${item.id}"] button:not(:disabled)`)?.focus());
+  async function openCountry(code: string, name: string) {
+    const sequence = ++request.current; setBusy(true); setError(""); setCountryChoices([]); setCandidates([]);
+    try {
+      const schema = z.object({ candidates: z.array(placeCandidateSchema) }).passthrough();
+      const [country, cities] = await Promise.all([
+        planningJson(`/api/v1/places?query=${encodeURIComponent(name)}&countryCode=${code}&kind=country`),
+        planningJson(`/api/v1/places?query=&countryCode=${code}&kind=city`)]);
+      if (sequence !== request.current) return;
+      const choices = schema.parse(country).candidates; setCandidates(schema.parse(cities).candidates);
+      if (choices.length === 1) choose(choices[0]);
+      else { setCountryChoices(choices); setError(choices.length ? "Choose the country region and timezone below." : "This country could not be resolved. Search for a destination."); }
+    } catch (failure) { if (sequence === request.current) setError(planningError(failure)); }
+    finally { if (sequence === request.current) setBusy(false); }
   }
-  function remove(destination: Destination) {
-    onDestinations(destinations.filter((entry) => entry.id !== destination.id).map((entry, routePosition) => ({ ...entry, routePosition })));
-    if (replaceId === destination.id) setReplaceId(undefined);
-    requestAnimationFrame(() => searchRef.current?.focus());
+  function move(index: number, target: number) {
+    if (target < 0 || target >= destinations.length || order !== "manual") return;
+    request.current++; setBusy(false);
+    const list = [...destinations], [item] = list.splice(index, 1); list.splice(target, 0, item);
+    onDestinations(list.map((entry, routePosition) => ({ ...entry, routePosition }))); setMoving(`${item.name} moved to stop ${target + 1}.`);
   }
+  function reset() { request.current++; setBusy(false); setCandidates([]); setCountryChoices([]); setReplaceId(undefined); setError(""); setMoving("Destinations cleared."); setSearchKey((value) => value + 1); onDestinations([]); }
   return <div className="destination-controls">
-    {mode !== "destinations" && <fieldset><legend>Confirm your departure</legend>
-      <label htmlFor={`${id}-departure`}>Departure search</label>
-      <Input data-setup-field="departureOrigin" id={`${id}-departure`} value={departureQuery} maxLength={200} onChange={(event) => setDepartureQuery(event.target.value)}
-        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(true); } }} />
-      <Button disabled={busy || !departureQuery.trim()} onClick={() => void search(true)}>Search departure</Button>
-      <ul>{origins.map((place) => <li key={place.placeId}><Button variant="outline" onClick={() => {
-        onOrigin({ kind: place.kind === "airport" ? "airport" : "city", placeId: place.placeId, name: place.name,
-          countryCode: place.countryCode, timezone: place.timezone, airportCode: place.airportCode, confirmedByUser: true }); setOrigins([]);
-      }}>Confirm departure from {place.name}, {place.countryCode} ({place.timezone})</Button></li>)}</ul>
-      <p>{origin ? `Confirmed departure: ${origin.name}. Return to this origin; airport alternatives need review.` : "Choose and confirm a city or airport. Your origin is never inferred."}</p>
+    {mode !== "destinations" && <fieldset><legend>Departure alternatives</legend><p>Add up to eight starting points. AI compares alternatives for everyone travelling together; you review its recommendation.</p>
+      <PlaceSearch departure onSelect={(place) => {
+        if (departures.some((entry) => entry.placeId === place.placeId)) { setError("That departure is already selected."); return; }
+        if (departures.length >= 8) { setError("Choose at most eight departure alternatives."); return; }
+        const next: Origin = { kind: place.kind === "airport" ? "airport" : "city", placeId: place.placeId, name: place.name,
+          countryCode: place.countryCode, timezone: place.timezone, airportCode: place.airportCode, confirmedByUser: true };
+        if (onOrigins) onOrigins([...departures, next]); else onOrigin(next); setError("");
+      }} />
+      <ul className="departure-cards">{departures.map((place) => <li key={place.placeId}><strong>{place.name}</strong><span>{place.countryCode} · {place.timezone}</span><Button variant="ghost" aria-label={`Remove departure ${place.name}`} onClick={() => {
+        const remaining = departures.filter((entry) => entry.placeId !== place.placeId);
+        if (onOrigins) onOrigins(remaining); else if (origin?.placeId === place.placeId) onOrigin(remaining[0] ?? null);
+      }}>Remove</Button></li>)}</ul>
+      <p>{departures.length ? "Each location is confirmed for research. You will review the recommended departure and return." : "Choose and confirm a city or airport. Your location is never inferred."}</p>
     </fieldset>}
-    {mode !== "origin" && <><DestinationPicker destinations={destinations}
-      {...(globe ? { onCountry: (code: string, name: string) => void openCountry(code, name), onCity: choose,
-        candidates: countryCandidates.filter((entry) => entry.kind === "city") } : {})} />
-      <fieldset><legend>Build your route</legend>
-        <label htmlFor={`${id}-destination`}>Destination search</label>
-        <Input data-setup-field="destinations" ref={searchRef} id={`${id}-destination`} value={query} maxLength={200} onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(false); } }} />
-        <Button disabled={busy || !query.trim()} onClick={() => void search(false)}>Search destinations</Button>
-        <p>Choose up to eight destinations. A country and its cities can both be part of your route.</p>
-        {replaceId && <p role="status">Choose a replacement for {destinations.find((entry) => entry.id === replaceId)?.name}.
-          <Button variant="ghost" onClick={() => setReplaceId(undefined)}>Cancel replacement</Button></p>}
-        <ul aria-label="Destination candidates">{candidates.map((place) => <li key={place.placeId}><Button variant="outline"
-          disabled={(!replaceId && destinations.length >= 8) || (ambiguous(place, candidates) && !place.location)} onClick={() => choose(place)}>
-          {replaceId ? "Replace with" : "Add"} {place.name}, {place.countryCode} ({place.kind}, {place.timezone}{locationHint(place, candidates)})
-        </Button></li>)}</ul>
-        <ol aria-label="Selected destinations" className="destination-list">{destinations.map((destination, index) => <li key={destination.id} data-destination-id={destination.id}>
-          <span className="destination-list__name">{destination.name}, {destination.countryCode}</span>
-          <div><Button variant="ghost" aria-label={`Move ${destination.name} earlier`} disabled={index === 0} onClick={() => move(index, -1)}>Earlier</Button>
-          <Button variant="ghost" aria-label={`Move ${destination.name} later`} disabled={index === destinations.length - 1} onClick={() => move(index, 1)}>Later</Button>
-          <Button variant="outline" aria-label={`Replace ${destination.name}`} onClick={() => { setReplaceId(destination.id); searchRef.current?.focus(); }}>Replace</Button>
-          <Button variant="ghost" aria-label={`Remove ${destination.name}`} onClick={() => remove(destination)}>Remove</Button></div>
-          {!destination.location && <small>Shown in your route list; map coordinates unavailable.</small>}
-        </li>)}</ol>
-      </fieldset>
-      <Sheet open={country !== null} onOpenChange={(open) => { if (!open) { request.current++; setBusy(false); setCountry(null); } }}>
-        <SheetContent><SheetTitle>{country?.name ?? "Choose destinations"}</SheetTitle>
-          <SheetDescription>Confirm the country or choose resolved cities. Search and route-list controls offer the same actions.</SheetDescription>
-          {busy && <p role="status">Finding destinations…</p>}
-          {!busy && !countryCandidates.length && <p>No resolved destinations are available here. Close this panel and search by name.</p>}
-          <ul>{countryCandidates.map((place) => <li key={place.placeId}><Button variant="outline" disabled={ambiguous(place, countryCandidates) && !place.location} onClick={() => choose(place)}>
-            {replaceId ? "Replace with" : "Add"} {place.name} ({place.kind}, {place.timezone}{locationHint(place, countryCandidates)})
-          </Button></li>)}</ul>
-          <p role="status">{error}</p>
-        </SheetContent>
-      </Sheet></>}
-    <p role="status" aria-live="polite">{error || (busy ? "Searching…" : "")}</p>
+    {mode !== "origin" && <>
+      <div className="globe-interface"><div className="globe-interface__search"><PlaceSearch key={searchKey} onSelect={choose} onResults={setCandidates} /></div>
+        {mapVisible && <DestinationPicker destinations={destinations} {...(globe ? { onCountry: (code: string, name: string) => void openCountry(code, name), onCity: choose, candidates } : {})} />}
+        <Button className="globe-interface__reset" variant="outline" onClick={reset}>Reset destinations</Button>
+      </div>
+      {countryChoices.length > 0 && <div aria-label="Country regions">{countryChoices.map((place) => <Button key={place.placeId} variant="outline" onClick={() => { choose(place); setCountryChoices([]); }}>{place.name} · {place.timezone}</Button>)}</div>}
+      <div className="route-order"><div><h2>Your journey</h2><p>{order === "manual" ? "Drag stops into your preferred order." : "AI will propose an order for you to review."}</p></div>
+        <div className="route-order__toggle" role="group" aria-label="Destination order"><Button aria-pressed={order === "manual"} variant={order === "manual" ? "default" : "outline"} onClick={() => onOrder?.("manual")}>My order</Button><Button aria-pressed={order === "ai"} variant={order === "ai" ? "default" : "outline"} onClick={() => onOrder?.("ai")}>Let AI arrange</Button></div></div>
+      {replaceId && <p role="status">Search for a replacement for {destinations.find((entry) => entry.id === replaceId)?.name}. <Button variant="ghost" onClick={() => setReplaceId(undefined)}>Cancel replacement</Button></p>}
+      <ol aria-label="Selected destinations" className={`destination-list route-cards route-cards--${order}`}>{destinations.map((destination, index) => <li key={destination.id} data-destination-id={destination.id} data-route-index={index}>
+        <button type="button" className="route-cards__handle" disabled={order !== "manual"} aria-label={`Reorder ${destination.name}; use arrow keys`} style={{ touchAction: "none" }}
+          onKeyDown={(event) => { if (["ArrowUp", "ArrowDown"].includes(event.key)) { event.preventDefault(); move(index, index + (event.key === "ArrowUp" ? -1 : 1)); } }}
+          onPointerDown={(event) => { drag.current = index; event.currentTarget.setPointerCapture(event.pointerId); }}
+          onPointerUp={(event) => { const target = document.elementsFromPoint(event.clientX, event.clientY).find((element) => element.closest("[data-route-index]"))?.closest<HTMLElement>("[data-route-index]"); if (drag.current !== null && target) move(drag.current, Number(target.dataset.routeIndex)); drag.current = null; }}
+          onPointerCancel={() => { drag.current = null; }}>{order === "manual" ? "⠿" : "✦"}<span className="sr-only">Stop </span>{index + 1}</button>
+        <div className="route-cards__body"><strong>{destination.name}</strong><span>{destination.countryCode} · {destination.kind}</span>{!destination.location && <small>Country highlighted; precise marker unavailable.</small>}
+          <div className="route-cards__actions"><Button variant="ghost" aria-label={`Move ${destination.name} earlier`} disabled={order !== "manual" || index === 0} onClick={() => move(index, index - 1)}>Earlier</Button><Button variant="ghost" aria-label={`Move ${destination.name} later`} disabled={order !== "manual" || index === destinations.length - 1} onClick={() => move(index, index + 1)}>Later</Button>
+            <Button variant="ghost" aria-label={`Replace ${destination.name}`} onClick={() => { request.current++; setBusy(false); setCountryChoices([]); setReplaceId(destination.id); }}>Replace</Button><Button variant="ghost" aria-label={`Remove ${destination.name}`} onClick={() => { request.current++; setBusy(false); setCountryChoices([]); onDestinations(destinations.filter((entry) => entry.id !== destination.id).map((entry, routePosition) => ({ ...entry, routePosition }))); setReplaceId(undefined); }}>Remove</Button></div></div>
+      </li>)}</ol>
+      {!destinations.length && <p className="route-empty">A country, a city, somewhere you’ve always wanted to go. Choose your first stop above.</p>}
+      <p>Choose up to eight destinations. Selecting a city replaces its whole-country stop.</p>
+    </>}
+    <p role="status" aria-live="polite">{error || (busy ? "Finding country and cities…" : moving)}</p>
   </div>;
 }

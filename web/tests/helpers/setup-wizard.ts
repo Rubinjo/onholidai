@@ -3,6 +3,15 @@ import { expect, type Locator, type Page } from "@playwright/test";
 // The builder is a client-rendered wizard: a controlled field discards typing that
 // arrives before React has hydrated, so retry until the application accepts it.
 export async function enterValue(field: Locator, value: string): Promise<void> {
+  const section = field.locator("xpath=ancestor::details[1]");
+  if (await section.count() && await section.getAttribute("open") === null) await section.locator("summary").first().click();
+  if (await field.getAttribute("type") === "range") {
+    await field.focus();
+    const step = Number(await field.getAttribute("step") ?? 1);
+    const difference = Math.round((Number(value) - Number(await field.inputValue())) / step);
+    for (let index = 0; index < Math.abs(difference); index++) await field.press(difference > 0 ? "ArrowRight" : "ArrowLeft");
+    await expect(field).toHaveValue(value); return;
+  }
   await expect(async () => {
     await field.fill(value);
     await expect(field).toHaveValue(value, { timeout: 1000 });
@@ -35,18 +44,18 @@ async function search(page: Page, field: Locator, submit: Locator, value: string
 
 export async function searchDestinations(page: Page, name: string): Promise<void> {
   await search(page, page.getByLabel("Destination search"),
-    page.getByRole("button", { name: "Search destinations" }), name);
+    page.getByRole("button", { name: "Find destinations" }), name);
 }
 
 export async function addDestination(page: Page, name: string, countryCode: string): Promise<void> {
   await searchDestinations(page, name);
-  await page.getByRole("button", { name: new RegExp(`Add ${name}, ${countryCode}`) }).click();
+  await page.getByRole("option", { name: new RegExp(`${name}.*${countryCode}`) }).click();
 }
 
 export async function confirmOrigin(page: Page, origin = "Amsterdam", originLabel = `${origin}, NL`): Promise<void> {
   await search(page, page.getByLabel("Departure search"),
-    page.getByRole("button", { name: "Search departure" }), origin);
-  await page.getByRole("button", { name: new RegExp(`Confirm departure from ${originLabel}`) }).click();
+    page.getByRole("button", { name: "Find departure locations" }), origin);
+  await page.getByRole("option", { name: new RegExp("^" + originLabel.replace(", ", " ") + "\\b") }).click();
 }
 
 // Walks the steps after destinations, which callers may already have arranged.

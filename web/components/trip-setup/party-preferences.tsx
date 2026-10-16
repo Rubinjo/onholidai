@@ -1,5 +1,6 @@
 "use client";
 import type { TripSnapshot } from "@/domain/trip/schema";
+import { displayPreference, storedPreference } from "./preference-scale";
 export function PartyPreferences({ party, preferences, onParty, onPreferences, mode = "both" }: {
   party: TripSnapshot["travellerParty"]; preferences: TripSnapshot["preferences"];
   onParty: (party: TripSnapshot["travellerParty"]) => void; onPreferences: (preferences: TripSnapshot["preferences"]) => void;
@@ -14,7 +15,7 @@ export function PartyPreferences({ party, preferences, onParty, onPreferences, m
     <p>Maximum ten travellers. No names, passports or payment details are needed for planning.</p>
     </>}
     {mode !== "party" && (["pace", "spend", "discovery", "independence", "setting"] as const).map((key) => <label key={key}>
-      {{ pace: "Pace: relaxed to full days", spend: "Spend: budget to premium", discovery: "Discovery: familiar to adventurous", independence: "Independence: guided to self-directed", setting: "Setting: nature to city" }[key]}<input type="range" min={0} max={100} step={1} value={preferences[key]} aria-valuetext={`${preferences[key]} of 100; 50 is neutral`} onChange={(event) => onPreferences({ ...preferences, [key]: Number(event.target.value) })} /><output>{preferences[key]}/100 (50 neutral)</output>
+      {{ pace: "Pace: relaxed to full days", spend: "Spend: budget to premium", discovery: "Discovery: familiar to adventurous", independence: "Independence: guided to self-directed", setting: "Setting: nature to city" }[key]}<input type="range" min={1} max={10} step={0.09} value={displayPreference(preferences[key])} aria-valuetext={`${displayPreference(preferences[key])} of 10; 5.5 is neutral`} onChange={(event) => onPreferences({ ...preferences, [key]: storedPreference(Number(event.target.value)) })} /><output>{displayPreference(preferences[key])}/10 (5.5 neutral)</output>
     </label>)}
   </fieldset>;
 }

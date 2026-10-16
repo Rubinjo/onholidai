@@ -254,8 +254,9 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
                 "value": int(match.group(2)),
             }
         )
+        display_value = round(1 + int(match.group(2)) * 0.09, 2)
         rationale = (
-            f"Set {match.group(1)} to {match.group(2)}/100, preserving hard "
+            f"Set {match.group(1)} to {display_value:g}/10, preserving hard "
             "requirements and refreshing affected recommendations."
         )
     elif re.search(
@@ -388,6 +389,39 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
 
 
 async def dispatch(request: CreateAgentRunRequest, sources: Sources) -> AgentResult:
+    if re.match(
+        r"^(what|why|how|which|tell me|compare|suggest|explain|can i)\b",
+        request.message.casefold().strip(),
+    ):
+        trip = await get_trip(sources, request)
+        context = build_context(request, trip)
+        if isinstance(sources, EstimateSources):
+            answer = await sources.model.complete(
+                [
+                    context[0],
+                    {
+                        "role": "system",
+                        "content": (
+                            "Answer the traveller's question in plain language. Offer two useful "
+                            "options when appropriate. Distinguish verified trip facts from ideas. "
+                            "Do not propose operations or claim changes, reservations or payments. "
+                            "A later explicit request can create a reviewable trip proposal."
+                        ),
+                    },
+                    context[1],
+                ]
+            )
+        else:
+            snapshot = cast(dict[str, object], trip["snapshot"])
+            places = cast(list[dict[str, object]], snapshot.get("destinations", []))
+            route = ", ".join(str(place.get("name", "")) for place in places)
+            answer = (
+                f"Your saved route includes {route}. You could keep the current route and "
+                "explore its daily plans, or ask me to propose a change to the pace, dates or "
+                "stays. Tell me which option you prefer; changes require your review. "
+                "Transport, activities and prices remain subject to verification."
+            )
+        return AgentResult.model_validate({"kind": "answer", "message": answer[:12000]})
     if request.purpose == "initial_estimate":
         return await estimate(request, sources)
     if request.purpose == "refinement":

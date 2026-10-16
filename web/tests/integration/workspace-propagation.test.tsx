@@ -1,4 +1,4 @@
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Workspace } from "../../components/trip-workspace/workspace";
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
@@ -34,8 +34,14 @@ describe("committed workspace convergence", () => {
       expect(new Set(versions)).toEqual(new Set(["2"]));
     }, { timeout: 2000 });
     expect(performance.now() - started).toBeLessThan(2000);
+    expect(screen.getByLabelText("Adults", { exact: true })).toHaveValue(3);
+    // A subsequent accepted version must not overwrite a traveller's dirty field.
+    fireEvent.change(screen.getByLabelText("Adults", { exact: true }), { target: { value: "4" } });
+    latest = { ...latest, version: 3 };
+    await waitFor(() => expect(screen.getByText(/The trip changed while you were editing/)).toBeTruthy(), { timeout: 2000 });
+    expect(screen.getByLabelText("Adults", { exact: true })).toHaveValue(4);
     latest = initial;
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1100)); });
-    expect([...view.container.querySelectorAll("[data-trip-version]")].every((element) => element.getAttribute("data-trip-version") === "2")).toBe(true);
+    expect([...view.container.querySelectorAll("[data-trip-version]")].every((element) => element.getAttribute("data-trip-version") === "3")).toBe(true);
   });
 });

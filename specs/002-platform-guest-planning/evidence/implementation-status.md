@@ -1,5 +1,20 @@
 # Implementation status: stories delivered and verified against Node.js, pnpm and Docker
 
+## Phase 9 continuation — 2026-10-16
+
+The redesigned home/setup/workspace source is implemented. The latest full web suite
+passes 317 tests with no skips; the agent passes 83 tests. Web/agent lint and type checks,
+generated contract checks and production build pass. Focused Chromium browser journeys
+pass 22 cases, including real guest chat/undo and free sign-up/link/sign-out/sign-in.
+The subsequent five-profile production HTTPS run passed 114 of 115 cases, with
+one unresolved desktop WebKit timeout and no skips. It is not an all-green run.
+The actual standalone worker entrypoint now starts against isolated services.
+
+18 of 28 convergence tasks are marked complete. T087/T088 and T098–T102/T110 retain
+unfinished downstream/exhaustive-matrix/deployment evidence; T111/T113 require actual
+manual assistive-technology and participant reviews. Phase 9 is not fully complete.
+See [phase9.md](phase9.md), [input timings](us5.md) and [rollout](rollout.md).
+
 ## Current handoff — 2026-10-15 (supersedes the earlier handoffs below)
 
 US1–US5 source is delivered **and now runs**. The earlier handoffs recorded that Node.js,

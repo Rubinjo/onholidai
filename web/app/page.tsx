@@ -12,9 +12,9 @@ export default function HomePage() {
         <p>Research, authentication and accepted planning changes do not make reservations or payments. Booking keeps its own live checks and exact-term confirmation.</p></div></section>
     <section className="marketing-examples" aria-label="Illustrative holidays"><ItineraryExample title="Three cities, your own pace" places={["Lisbon", "Coimbra", "Porto"]}
       description="Make room for a slow lunch between city days. Adjust the route rather than starting your plan again." />
-      <ItineraryExample title="Across two neighboring countries" places={["Japan", "Tokyo", "South Korea", "Seoul"]}
-        description="Begin with a country, then explore cities within it. Countries and their distinct cities can share one ordered route." /></section>
+      <ItineraryExample title="Across two neighboring countries" places={["Tokyo", "Kyoto", "Seoul"]}
+        description="Begin with a country, then choose its cities. Let AI suggest a connected journey across Japan and South Korea." /></section>
     <section className="marketing-start"><h2>Where is your next holiday taking you?</h2><Button size="lg" asChild><Link href="/trips/new">Plan your holiday</Link></Button>
       <p>No account needed to explore a plan. Examples are illustrative; prices, inventory and supplier availability require current checks.</p></section>
-  </main><footer className="marketing-footer">Onholidai · A plan you can review, refine and choose.</footer></div>;
+  </main><footer className="marketing-footer">OnHolidai · A plan you can review, refine and choose.</footer></div>;
 }

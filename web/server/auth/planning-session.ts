@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import type { Kysely, Selectable } from "kysely";
+import { sql, type Kysely, type Selectable } from "kysely";
 import type { Database } from "@/server/db/database";
 import type { GuestPlanningSessionTable } from "@/server/db/types";
 import { inTransaction } from "@/server/db/transaction";
@@ -31,8 +31,13 @@ export async function renewPlanningSession(database: Kysely<Database>, credentia
     const row = await transaction.selectFrom("guestPlanningSessions").selectAll()
       .where("credentialDigest", "=", digestPlanningCredential(credential)).forUpdate().executeTakeFirst();
     if (!row || !validPlanningSession(row, now)) return null;
-    return transaction.updateTable("guestPlanningSessions").set({ lastActivityAt: now,
-      expiresAt: new Date(now.getTime() + PLANNING_IDLE_MS) }).where("id", "=", row.id).returningAll().executeTakeFirstOrThrow();
+    // Requests capture their timestamp before waiting for this row lock. Their
+    // lock order may differ from arrival order; an older request must neither
+    // move activity backwards nor shorten a newer request's idle window.
+    return transaction.updateTable("guestPlanningSessions").set({
+      lastActivityAt: sql<Date>`GREATEST(${now}, last_activity_at)`,
+      expiresAt: sql<Date>`GREATEST(${new Date(now.getTime() + PLANNING_IDLE_MS)}, expires_at)`,
+    }).where("id", "=", row.id).returningAll().executeTakeFirstOrThrow();
   });
 }
 export async function createPlanningSession(database: Kysely<Database>, options: { now?: () => Date; random?: () => Buffer } = {}) {

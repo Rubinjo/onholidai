@@ -1,10 +1,11 @@
 import type { CustomerSnapshot } from "@/domain/pricing/projections";
+import { displayPreference } from "@/components/trip-setup/preference-scale";
 
 export function DayPlan({ days, version }: { days: CustomerSnapshot["itineraryDays"]; version?: number }) {
   return <section aria-label="Day-by-day itinerary" {...(version ? { "data-trip-version": version } : {})}>
     <h2>Day-by-day itinerary</h2>{!days.length && <p>Prepare a detailed itinerary to review morning, afternoon and evening plans.</p>}
     {days.map((day) => <article key={day.date}><h3>{day.date} — {day.timezone}</h3>
-      <p>Pace preference {day.paceAssessment}/100. All times are local to {day.timezone} unless an offset is shown.</p>
+      <p>Pace preference {displayPreference(day.paceAssessment)}/10. All times are local to {day.timezone} unless an offset is shown.</p>
       {day.mandatoryTravelException && <p role="note">Travel-day exception: {day.mandatoryTravelException}</p>}
       {[{ title: "Morning", start: 0, end: 12 }, { title: "Afternoon", start: 12, end: 18 }, { title: "Evening", start: 18, end: 24 }].map((period) => {
         const items = day.items.filter((item) => Number(item.start.slice(11, 13)) >= period.start && Number(item.start.slice(11, 13)) < period.end);

@@ -1,5 +1,38 @@
 # Quickstart Validation: Platform UX, Guest Planning & Account Creation
 
+## Phase 9 redesigned journey
+
+See [Phase 9 evidence](evidence/phase9.md) for current results and incomplete gates.
+Start signed out: choose a country on the globe, replace it with cities, search with
+Enter or the icon, reorder manually or select Let AI arrange, and verify reset retains
+the mode. Add multiple confirmed departure alternatives for the same party. Select
+non-contiguous calendar ranges, adjust the three duration handles and 1–10 preferences,
+then submit directly to the three-pane workspace. No intermediate estimate page or
+Sheet should appear. Accept/reject proposals only in chat; history/undo stay on the left.
+To research a new order/origin recommendation after an edit, use Research route options.
+
+Verify the shared globe editor in the middle pane and collapsed details on the left.
+Clean fields follow accepted changes; concurrent unsaved fields remain tied to their
+original version until explicit reload/review. Check unavailable map/geometry and
+transport labels without inferring verified routes. Guest notice must disappear when
+authenticated. Finish a supported itinerary, explicitly link it through free sign-up,
+sign out and sign in again: linking must not create booking consent or provider writes.
+
+The standalone `pnpm --dir web booking:worker` now registers Node hooks and composes its
+own application. Configure `DATABASE_URL` with the worker role and the reviewed Temporal
+address/namespace/task queue. Local actual-entry startup is tested; do not infer a
+deployed rollout or enable live transactions without the separate release evidence.
+
+For production-mode browser verification, use HTTPS so every engine receives the
+unchanged Secure/__Host- planning cookie. A local-only fixture can set
+`BETTER_AUTH_URL=https://localhost:3443`, serve the production app on port 3000 and run
+`node scripts/local-https-proxy.mjs` from the repository root with `LOCAL_TLS_CERT` and
+`LOCAL_TLS_KEY` pointing to a freshly generated temporary certificate/key. Use
+`PLAYWRIGHT_BASE_URL=https://localhost:3443`; opt into that self-signed test certificate
+only with `PLAYWRIGHT_IGNORE_HTTPS_ERRORS=true`. Do not install the test key/certificate
+in the repository, change production cookie flags, or use certificate bypass for live
+services. Default browser runs still validate certificates.
+
 Guest setup, planning, linking, registration and marketing are implemented and verified against a local stack (Node.js 24, pnpm 12, Docker with PostgreSQL/PostGIS and Temporal, and the deterministic agent). See [implementation status](evidence/implementation-status.md), [spec](spec.md), [data model](data-model.md) and [contracts](contracts/README.md) for the executed commands, results and remaining gaps.
 
 Deploy web and booking worker from the same reviewed revision after fresh/upgrade checks for migrations 011/012. No deployment/migration was run here. Guest defaults are two active runs, ten new runs/session-hour and twenty sessions/network-hour. GUEST_TRUST_PROXY_IP defaults false (shared conservative bucket); enable only behind an edge that overwrites x-real-ip. GUEST_NETWORK_SECRET optionally separates the digest key. Keep cookie/Origin/ownership/account-booking protections active.

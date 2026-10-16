@@ -242,7 +242,7 @@ export const travelPlaceSchema = z
 export const travelSegmentSchema = z
   .object({
     ...segmentGuidanceFields,
-    mode: z.enum(["walk", "public_transport", "drive", "flight", "rail", "transfer", "ferry", "other"]),
+    mode: z.enum(["walk", "public_transport", "bus", "drive", "flight", "rail", "transfer", "ferry", "other"]),
     origin: travelPlaceSchema,
     destination: travelPlaceSchema,
     plannedDeparture: offsetDateTimeSchema,
@@ -487,6 +487,8 @@ export const tripWarningSchema = z
 
 const snapshotFields = {
   departureOrigin: departureOriginSchema,
+  departureOrigins: z.array(departureOriginSchema).max(8).optional(),
+  destinationOrder: z.enum(["manual", "ai"]).optional(),
   availabilityWindows: z.array(availabilityWindowSchema).min(1).max(32),
   duration: durationPreferenceSchema,
   travellerParty: travellerPartySchema,
@@ -504,6 +506,10 @@ type SnapshotForValidation = Omit<z.infer<z.ZodObject<typeof snapshotFields>>, "
 };
 
 function validateSnapshot(snapshot: SnapshotForValidation, context: z.RefinementCtx): void {
+  if (snapshot.departureOrigins?.length) {
+    if (!unique(snapshot.departureOrigins.map((origin) => origin.placeId))) addIssue(context, ["departureOrigins"], "Departure alternatives must be unique");
+    if (!snapshot.departureOrigins.some((origin) => origin.placeId === snapshot.departureOrigin?.placeId)) addIssue(context, ["departureOrigin"], "Selected departure must be a confirmed alternative");
+  }
   if (!unique(snapshot.availabilityWindows.map((window) => window.id))) {
     addIssue(context, ["availabilityWindows"], "Availability window IDs must be unique");
   }
@@ -635,7 +641,7 @@ export const tripSchema = z
 export const draftOperationSchema = z
   .object({
     operation: z.enum(["add", "replace", "remove", "reorder"]),
-    target: z.string().regex(/^\/((departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components|price|warnings)(\/.*)?)?$/),
+    target: z.string().regex(/^\/((departureOrigin|departureOrigins|destinationOrder|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components|price|warnings)(\/.*)?)?$/),
     value: z.unknown(),
   })
   .strict();

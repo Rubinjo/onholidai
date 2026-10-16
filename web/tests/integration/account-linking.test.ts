@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
 import { sql } from "kysely";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hasIsolatedDatabaseConfiguration, withIsolatedTestDatabase } from "../helpers/database";
 import { createPlanningSession } from "../../server/auth/planning-session";
 import { allocateWizardPrincipal } from "../../server/db/planning-principal-repository";
@@ -9,6 +9,10 @@ import { linkTrip } from "../../server/auth/link-trip";
 import { resolvePlanningActor } from "../../server/auth/planning-actor";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { RunRepository, runContext } from "../../server/agent-client/run-repository";
+import { guestApiFixture, registerFixtureAccount, type GuestApiFixture } from "../helpers/guest-api";
+import { previewEdit } from "../../domain/trip/edit";
+import { POST as editRoute } from "../../app/api/v1/trips/[tripId]/commands/edit/route";
+import { SetupDraftRepository } from "../../server/db/setup-draft-repository";
 vi.mock("server-only", () => ({}));
 describe.skipIf(!hasIsolatedDatabaseConfiguration())("selected principal linking", () => {
   it("serializes competing claims, retains version and revokes former guest authority without booking", async () => {
@@ -47,5 +51,36 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("selected principal linking
       const replay = await linkTrip(database, { accountUserId: owner.accountUserId, guestSessionId: null }, intentId, { requestId: randomUUID() }, new Date(Date.now() + 31 * 86400000));
       expect(replay.tripId).toBe(tripId); expect(replay.replayed).toBe(true);
     });
+  });
+});
+
+describe.skipIf(!hasIsolatedDatabaseConfiguration())("linking overlaps browser edits and research", () => {
+  let state: GuestApiFixture;
+  beforeEach(async () => { state = await guestApiFixture(); }, 120000);
+  afterEach(async () => { await state?.cleanup(); });
+  it("preserves an acknowledged edit or denies it after linking, revokes callbacks and never duplicates consent", async () => {
+    const database = state.fixture.database, owner = state.run.ownerUserId, account = await registerFixtureAccount(state);
+    const before = await database.selectFrom("tripVersions").select("snapshot").where("tripId", "=", state.trip.tripId).executeTakeFirstOrThrow();
+    const input = { requestId: randomUUID(), expectedVersion: 1, operations: [{ operation: "replace", target: "/preferences/pace", value: 60 }] };
+    const review = await previewEdit(database, owner, state.trip.tripId, input, state.application.planningProviders);
+    const now = new Date(), intentId = randomUUID();
+    await database.insertInto("bookingIntents").values({ id: intentId, tripId: state.trip.tripId, planningOwnerId: owner, guestSessionId: state.session.id, requestId: randomUUID(), fingerprint: "c".repeat(64), action: "review_booking", state: "pending", createdAt: now, expiresAt: new Date(now.getTime() + 1800000), consumedAt: null, consumedByUserId: null }).execute();
+    const draftRepository = new SetupDraftRepository(database, { accountUserId: null, guestSessionId: state.session.id });
+    const save = draftRepository.save(state.draft.draftId, { requestId: randomUUID(), expectedRevision: state.draft.revision, currentStep: "review", payload: state.draft.payload }).catch((failure: unknown) => failure);
+    const [edited, linked] = await Promise.all([
+      editRoute(state.request(`/api/v1/trips/${state.trip.tripId}/commands/edit`, state.credential, { ...input, impactFingerprint: review.impactFingerprint }), { params: Promise.resolve({ tripId: state.trip.tripId }) }),
+      linkTrip(database, { accountUserId: account.id, guestSessionId: state.session.id }, intentId, { requestId: randomUUID() }),
+    ]);
+    expect([200, 404]).toContain(edited.status); expect(await save).toMatchObject({ status: expect.any(Number) });
+    const trip = await database.selectFrom("trips").selectAll().where("id", "=", state.trip.tripId).executeTakeFirstOrThrow();
+    expect(trip.currentVersion).toBe(edited.status === 200 ? 2 : 1);
+    expect(linked.tripId).toBe(state.trip.tripId);
+    expect((await database.selectFrom("tripVersions").select("snapshot").where("tripId", "=", trip.id).where("version", "=", 1).executeTakeFirstOrThrow()).snapshot).toEqual(before.snapshot);
+    expect(await resolvePlanningActor(database, owner, { accountUserId: account.id, guestSessionId: null })).toMatchObject({ kind: "account", planningOwnerId: owner });
+    await expect(new RunRepository(database).readScoped(runContext(state.run), state.run.id)).rejects.toMatchObject({ code: "planning_run_access_revoked" });
+    await expect(resolvePlanningActor(database, owner, { accountUserId: null, guestSessionId: state.session.id })).rejects.toMatchObject({ status: 404 });
+    expect(await database.selectFrom("planningAccountLinks").selectAll().execute()).toHaveLength(1);
+    expect(await database.selectFrom("bookingAuthorizations").selectAll().execute()).toHaveLength(0);
+    expect(await database.selectFrom("bookingTransactions").selectAll().execute()).toHaveLength(0);
   });
 });

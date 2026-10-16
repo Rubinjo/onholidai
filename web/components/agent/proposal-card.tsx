@@ -19,13 +19,15 @@ export function ProposalCard({ proposal, tripId, version, onCommit, onDismiss }:
   }
   const stale = proposal.baseTripVersion !== version || expired || !["proposed"].includes(proposal.status);
   return <article aria-label="Proposal review"><h3>Review proposed changes</h3><p>{proposal.rationale}</p><p>Affected: {proposal.affectedFacts.join(", ")}</p>
+    <p>Proposed version {proposal.baseTripVersion + 1}. Departure and return: {proposal.previewSnapshot?.departureOrigin?.name ?? "Needs review"}.</p>
     {proposal.priceImpact && <p>Estimated total: {proposal.priceImpact.beforeMinor} → {proposal.priceImpact.afterMinor} minor units {proposal.priceImpact.currency}; change {proposal.priceImpact.deltaMinor}.</p>}
     <ol>{proposal.previewSnapshot?.destinations.map((entry) => <li key={entry.id}>{entry.name}: {entry.plannedNights} nights, {entry.arrivalDate} to {entry.departureDate}</li>)}</ol>
     {proposal.purpose === "finalization" && proposal.previewSnapshot && <DayPlan days={proposal.previewSnapshot.itineraryDays} />}
     <h4>Transport, stays and activities</h4><ul>{proposal.previewSnapshot?.components.map((entry) => <li key={entry.id}>{entry.type}: {entry.serviceStart} to {entry.serviceEnd}; {entry.price.status}, {entry.price.finalCustomerMinor} minor units {entry.price.currency}.</li>)}</ul>
     <h4>Availability and requirements</h4><ul>{proposal.previewSnapshot?.availabilityWindows.map((entry) => <li key={entry.id}>{entry.preference}: {entry.startDate} to {entry.endDate}</li>)}{proposal.previewSnapshot?.constraints.filter((entry) => entry.status !== "removed").map((entry) => <li key={entry.id}>{entry.priority}: {entry.statement}; {entry.status}.</li>)}</ul>
-    <ul>{proposal.tradeoffs?.map((entry) => <li key={entry}>{entry}</li>)}{proposal.warnings?.map((entry) => <li key={entry}>{entry}</li>)}</ul>
+    <ul>{proposal.tradeoffs?.map((entry, index) => <li key={`tradeoff-${index}`}>{entry}</li>)}{proposal.warnings?.map((entry, index) => <li key={`warning-${index}`}>{entry}</li>)}</ul>
     <p>Expires {proposal.expiresAt}. Nothing has been applied.</p>{stale && <p role="alert">This proposal is stale or unavailable. Request a fresh proposal.</p>}<p role="alert">{error}</p>
+    <p role="status">{busy ? "Saving your decision…" : ""}</p>
     <button type="button" disabled={busy || stale} onClick={() => void act("accept")}>Accept proposal</button><button type="button" disabled={busy || proposal.status !== "proposed"} onClick={() => void act("reject")}>Reject proposal</button>
   </article>;
 }

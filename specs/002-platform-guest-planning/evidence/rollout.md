@@ -22,8 +22,22 @@ Deployment ordering, still requiring a coordinated release:
 To disable guest entry, withdraw public bootstrap/draft entry at the deployment edge while
 preserving ownership, account booking guards, accepted history and link receipts.
 
-**Blocked:** the compose `booking-worker` crash-loops because
-`web/server/workflows/alias-loader.mjs` exports a `resolve` hook but never calls
-`module.register`, so `@/*` specifiers reach Node as bare package names
-(`Cannot find package '@/server'`). This predates this feature (introduced with the booking
-worker) and is reported rather than changed here.
+## Phase 9 local worker verification — 2026-10-16
+
+The earlier loader/startup blocker is repaired: the preload registers its Node resolve
+hook (without recursive self-registration), resolves alias/directory/TypeScript imports,
+and the entrypoint explicitly composes and closes its application rather than assuming
+Next.js instrumentation ran. The package command includes `--conditions=react-server`
+and `--experimental-transform-types` for the standalone server-only TypeScript process.
+
+`web/tests/integration/worker-entry.test.ts` launches the actual package-command
+entrypoint as a subprocess against an isolated worker-role PostGIS database and a real
+Temporal test server, and observes the worker's RUNNING state. It passed. The full web
+suite also passed all seven real Temporal durability scenarios and the registered
+account!=principal booking regression (317 tests overall, no skips).
+
+This verifies local startup, not deployment compatibility. The coordinated deployed
+web/agent/worker rollout and deployment-edge guest-entry withdrawal rehearsal still
+need an actual deployment environment. T102 remains open for those steps. Do not enable
+live linked-principal bookings on the strength of this local smoke test alone; keep
+accepted snapshots, link receipts, revoked grants and booking evidence on disable.

@@ -7,7 +7,7 @@ import { Destinations } from "./destinations";
 import { Availability } from "./availability";
 import { PartyPreferences } from "./party-preferences";
 import { Constraints } from "./constraints";
-import { planningError, planningJson } from "./http";
+import { planningError } from "./http";
 import { useSetupDraft } from "./use-setup-draft";
 import { SetupProgress, setupSteps } from "./setup-progress";
 import { SetupSummary } from "./setup-summary";
@@ -81,12 +81,9 @@ export function SetupForm() {
       customerSnapshotSchema.parse({ ...facts, itineraryDays: [], components: [], warnings: [],
         price: { currency, finalCustomerMinor: 0, taxesMinor: 0, feesMinor: 0, status: "estimated", checkedAt: new Date().toISOString() } });
       const submitted = z.object({ tripId: z.uuid(), version: z.number().int().positive(), researchRequestId: z.uuid() }).passthrough().parse(await draft.submit());
-      try {
-        const run = z.object({ id: z.uuid() }).passthrough().parse(await planningJson(`/api/v1/trips/${submitted.tripId}/agent-runs`, {
-          requestId: submitted.researchRequestId, baseTripVersion: submitted.version, conversationId: null,
-          message: "Estimate my reviewed settings. Do not apply anything until I explicitly accept.", purpose: "initial_estimate" }));
-        router.push(`/trips/${submitted.tripId}?runId=${run.id}`);
-      } catch { router.push(`/trips/${submitted.tripId}`); }
+      // The submitted draft durably records the authorized research request.
+      // Navigate immediately; the workspace starts or recovers that same request.
+      router.push(`/trips/${submitted.tripId}`);
     } catch (failure) {
       setError(failure instanceof z.ZodError ? `Check ${failure.issues[0]?.path.join(" / ")}: ${failure.issues[0]?.message}`
         : failure instanceof SetupFieldError ? failure.message : planningError(failure));
@@ -99,7 +96,7 @@ export function SetupForm() {
   const origin = p.departureOrigin?.confirmedByUser ? { ...p.departureOrigin, confirmedByUser: true as const } : null;
   return <><SetupProgress step={step} /><div className="setup-layout">
     <form ref={formRef} onSubmit={(event) => void next(event)} aria-busy={busy} className="setup-form"
-      onInvalid={(event) => { if (event.target instanceof HTMLElement) { event.target.setAttribute("aria-invalid", "true"); event.target.setAttribute("aria-describedby", "setup-validation-error"); event.target.dataset.setupError = "true"; } setError("Check the highlighted field before continuing."); }}
+      onInvalid={(event) => { if (event.target instanceof HTMLElement) { const section = event.target.closest("details"); if (section) section.open = true; event.target.setAttribute("aria-invalid", "true"); event.target.setAttribute("aria-describedby", "setup-validation-error"); event.target.dataset.setupError = "true"; } setError("Check the highlighted field before continuing."); }}
       onInput={(event) => { if (event.target instanceof HTMLElement && event.target.dataset.setupError) { event.target.removeAttribute("aria-invalid"); event.target.removeAttribute("aria-describedby"); delete event.target.dataset.setupError; } }}>
       <h1 ref={heading} tabIndex={-1}>{headings[step]}</h1>
       <p id="setup-validation-error" ref={errorRef} tabIndex={-1} role="alert">{error || draft.error}</p>
@@ -108,6 +105,8 @@ export function SetupForm() {
       <fieldset key={step} disabled={busy} className="setup-fields"><legend className="sr-only">{headings[step]}</legend>
         {(step === "destinations" || step === "origin") && <Destinations mode={step} globe={step === "destinations"}
           origin={origin} destinations={p.destinations} onOrigin={(departureOrigin) => draft.update({ ...p, departureOrigin })}
+          origins={p.departureOrigins ?? (origin ? [origin] : [])} order={p.destinationOrder ?? "manual"} onOrder={(destinationOrder) => draft.update({ ...p, destinationOrder })}
+          onOrigins={(departureOrigins) => draft.update({ ...p, departureOrigins, departureOrigin: departureOrigins.find((entry) => entry.placeId === origin?.placeId) ?? departureOrigins[0] ?? null })}
           onDestinations={(destinations) => draft.update({ ...p, destinations })} />}
         {step === "dates" && <Availability windows={p.availabilityWindows}
           duration={{ minimumDays: p.duration.minimumDays ?? 0, idealDays: p.duration.idealDays ?? 0, maximumDays: p.duration.maximumDays ?? 0 }}

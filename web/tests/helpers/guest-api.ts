@@ -30,3 +30,9 @@ export type GuestApiFixture = Awaited<ReturnType<typeof guestApiFixture>>;
 export async function unrelatedGuest(fixture: IsolatedTestDatabase) {
   return (await createPlanningSession(fixture.database)).credential;
 }
+export async function registerFixtureAccount(state: GuestApiFixture) {
+  const response = await state.application.auth.api.signUpEmail({ body: { name: "Synthetic traveller", email: `${crypto.randomUUID()}@example.invalid`, password: "Synthetic-test-password-42!" }, asResponse: true });
+  if (!response.ok) throw new Error("Could not register the synthetic test account");
+  const body = await response.json() as { user: { id: string } };
+  return { id: body.user.id, cookie: response.headers.getSetCookie().map((cookie) => cookie.split(";")[0]).join("; ") };
+}

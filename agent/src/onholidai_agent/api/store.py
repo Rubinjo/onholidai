@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import Protocol
 
 import httpx
@@ -48,7 +49,14 @@ class WebRunStore:
             request.actor.base_trip_version,
         )
         token = create_service_token(
-            secret=self.secret, audience="web", context=context, scopes=[scope]
+            secret=self.secret,
+            audience="web",
+            context=context,
+            scopes=[scope],
+            # Python's precise wall clock can cross a second just before Node's
+            # Date.now() on Windows. Backdate issuance, not verification: expiry
+            # is shortened by one second and future-token rejection stays strict.
+            issued_at=int(time.time()) - 1,
         )
         return {
             "authorization": f"Bearer {token}",

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Onholidai",
+  title: "OnHolidai",
   description: "Plan a private multi-destination holiday with AI. Start without an account, review estimated proposals, and approve every change.",
 };
 

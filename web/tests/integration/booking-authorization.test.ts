@@ -37,6 +37,7 @@ describe("exact-term authorization invalidation", () => {
     totalPrice: { currency: "GBP", minorUnits: 12500 }, nonReversibleActions: [],
   };
   const materialMutations: Record<string, (terms: typeof base) => unknown> = {
+    departureOrigin: () => ({ ...base, departureOrigin: { ...base.departureOrigin, placeId: "airport:ams", name: "Amsterdam Schiphol", countryCode: "NL", timezone: "Europe/Amsterdam", airportCode: "AMS" } }),
     price: () => ({ ...base, components: [{ ...base.components[0], finalCustomerMinor: 13000, taxesMinor: 2000 }],
       totalPrice: { currency: "GBP", minorUnits: 13000 } }),
     dates: () => ({ ...base, components: [{ ...base.components[0], serviceStart: "2030-05-02T10:00:00Z" }] }),

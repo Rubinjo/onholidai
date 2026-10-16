@@ -49,7 +49,7 @@ const jsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([z.string(), z.
 
 export const proposalOperationSchema = z.object({
   operation: z.enum(["add", "replace", "remove", "reorder"]),
-  target: text(500).regex(/^\/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(\/[^/]+)*$/)
+  target: text(500).regex(/^\/(departureOrigin|departureOrigins|destinationOrder|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(\/[^/]+)*$/)
     .refine((target) => !target.split("/").some((part) => protectedKeys.has(part)), "Protected operation target"),
   value: jsonValueSchema,
 }).strict().superRefine((operation, context) => {

@@ -315,6 +315,7 @@
                       "enum": [
                         "walk",
                         "public_transport",
+                        "bus",
                         "drive",
                         "flight",
                         "rail",

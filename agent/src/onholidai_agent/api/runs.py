@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import time
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -53,7 +54,19 @@ def authorize(http: Request, request: CreateAgentRunRequest) -> None:
         )
         if any(scope not in claims.scopes for scope in request.actor.scopes):
             raise ServiceTokenError("Scope amplification")
-    except ServiceTokenError:
+    except ServiceTokenError as error:
+        # Fixed categories only: never log a token, claim value or request body.
+        reason = str(error)
+        category = (
+            "future"
+            if reason == "Service token is not yet valid"
+            else "expired"
+            if reason == "Service token has expired"
+            else "scope"
+            if "scope" in reason.casefold()
+            else "invalid"
+        )
+        logging.getLogger(__name__).warning("Service authorization rejected (%s)", category)
         raise HTTPException(401, detail="invalid_service_token") from None
 
 

@@ -3,7 +3,7 @@ import { lockPlanningAccess, lockPlanningTrip } from "@/server/db/planning-acces
 import { AnswerClarificationRequestSchema } from "@contracts/agent-api/generated.zod";
 import { apiResponse, planningUser, requestJson } from "@/server/api";
 import { RunRepository, runContext } from "@/server/agent-client/run-repository";
-import { createServiceToken } from "@/server/agent-client/credentials";
+import { createAgentServiceToken } from "@/server/agent-client/credentials";
 import { publicRun } from "@/server/agent-client/results";
 import { ProblemError } from "@/server/errors";
 export async function POST(request: Request, route: { params: Promise<{ runId: string }> }) {
@@ -17,7 +17,7 @@ export async function POST(request: Request, route: { params: Promise<{ runId: s
       return new RunRepository(transaction).resume(userId, runId, input);
     });
     const context = runContext(run);
-    const token = createServiceToken({ ...context, audience: "agent", secret: application.config.SERVICE_TOKEN_SECRET,
+    const token = createAgentServiceToken({ ...context, secret: application.config.SERVICE_TOKEN_SECRET,
       scopes: ["trip:read", "proposal:create"] });
     const response = await fetch(new URL(`/internal/v1/agent-runs/${runId}/clarifications`, application.config.AGENT_BASE_URL), { method: "POST",
       headers: { "Content-Type": "application/json", authorization: `Bearer ${token}`, "x-user-id": userId,

@@ -6,7 +6,7 @@ import { searchPlanningOffers } from "@/server/supply/read";
 import { readOwnedTripVersion } from "@/domain/trip/read";
 import { projectCustomerSnapshot } from "@/domain/pricing/projections";
 import { RunRepository, runConflict } from "@/server/agent-client/run-repository";
-const querySchema = z.object({ startDate: z.iso.date(), endDate: z.iso.date(), destinationIds: z.array(z.uuid()).min(1).max(8) }).strict();
+const querySchema = z.object({ startDate: z.iso.date(), endDate: z.iso.date(), destinationIds: z.array(z.uuid()).min(1).max(8), departurePlaceId: z.string().min(1).max(256).optional() }).strict();
 export async function POST(request: Request, route: { params: Promise<{ tripId: string }> }) {
   return internalPlanningApiResponse(request, async (application) => {
     const { tripId } = await route.params;
@@ -22,12 +22,15 @@ export async function POST(request: Request, route: { params: Promise<{ tripId: 
     if (trip.currentVersion !== base || !query.destinationIds.every((id) => snapshot.destinations.some((destination) => destination.id === id))
       || !snapshot.availabilityWindows.some((window) => window.startDate <= query.startDate && window.endDate >= query.endDate)) runConflict();
     const started = performance.now();
-    const result = await searchPlanningOffers(application.planningProviders, { ...query, componentTypes: ["flight", "accommodation", "activity", "rail"],
-      currency: snapshot.price.currency, departureOrigin: snapshot.departureOrigin, travellerParty: snapshot.travellerParty });
+    const departureOrigin = query.departurePlaceId ? (snapshot.departureOrigins ?? [snapshot.departureOrigin]).find((origin) => origin.placeId === query.departurePlaceId) : snapshot.departureOrigin;
+    if (!departureOrigin) runConflict();
+    const { departurePlaceId: _departure, ...searchQuery } = query; void _departure;
+    const result = await searchPlanningOffers(application.planningProviders, { ...searchQuery, componentTypes: ["flight", "accommodation", "activity", "rail"],
+      currency: snapshot.price.currency, departureOrigin, travellerParty: snapshot.travellerParty });
     await inTransaction(application.database, async (transaction) => {
       for (const offer of result.offers) await transaction.insertInto("planningOfferRecords").values({ runId: run.id,
         componentId: offer.component.id, offer: { ...offer }, query: { ...query, currency: snapshot.price.currency,
-          departureOrigin: snapshot.departureOrigin, travellerParty: snapshot.travellerParty } }).execute();
+          departureOrigin, travellerParty: snapshot.travellerParty } }).execute();
       await transaction.insertInto("auditEvents").values({ id: randomUUID(), actorType: "service", actorId: actor.userId,
         action: "estimate.source.search", targetType: "agent_run", targetId: run.id, requestId: actor.requestId,
         traceId: null, outcome: result.offers.length ? "succeeded" : "failed",

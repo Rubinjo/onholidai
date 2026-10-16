@@ -9,12 +9,12 @@ test("guest setup is public and acknowledged destination changes survive refresh
   // earlier cannot be reverted by the controlled input hydrating afterwards.
   await expect(page.getByRole("status").filter({ hasText: "Saved" }).first()).toBeVisible();
   await page.getByLabel("Destination search").fill("Tokyo");
-  await page.getByRole("button", { name: "Search destinations" }).click();
+  await page.getByLabel("Destination search").press("Enter");
   // Wait for the committed save acknowledgement; "Saved" alone also describes the
   // freshly opened draft, so reloading on it races the debounced write.
   const acknowledged = page.waitForResponse((response) => response.request().method() === "PATCH"
     && /\/api\/v1\/setup-drafts\//.test(response.url()) && response.ok());
-  await page.getByRole("button", { name: /Add Tokyo/ }).click();
+  await page.getByRole("option", { name: /Tokyo/ }).click();
   await acknowledged;
   await expect(page.getByRole("status").filter({ hasText: "Saved" }).first()).toBeVisible();
   await page.reload();
@@ -70,21 +70,21 @@ test("reordered, replaced and removed destinations persist through a guest accep
   await page.getByRole("button", { name: "Move Kyoto earlier" }).click();
   await page.getByRole("button", { name: "Replace Tokyo" }).click();
   await searchDestinations(page, "Seoul");
-  await page.getByRole("button", { name: /Replace with Seoul, KR/ }).click();
+  await page.getByRole("option", { name: /Seoul.*KR/ }).click();
   await addDestination(page, "Amsterdam", "NL");
   await page.getByRole("button", { name: "Remove Amsterdam" }).click();
   const selected = page.getByRole("list", { name: "Selected destinations" });
-  await expect(selected.getByRole("listitem")).toHaveCount(3);
-  expect(await selected.innerText()).toMatch(/Japan[\s\S]*Kyoto[\s\S]*Seoul/);
+  await expect(selected.getByRole("listitem")).toHaveCount(2);
+  expect(await selected.innerText()).toMatch(/Kyoto[\s\S]*Seoul/);
 
   const acknowledged = page.waitForResponse((response) => response.request().method() === "PATCH"
     && /\/api\/v1\/setup-drafts\//.test(response.url()) && response.ok());
   await continueStep(page);
   await acknowledged;
   await finishSetup(page);
-  await expect(page.getByRole("heading", { name: "Proposed estimate" })).toBeVisible({ timeout: 35000 });
-  await expect(page.getByText("Nothing has been applied yet.")).toBeVisible();
-  await page.getByRole("button", { name: "Accept this estimated draft" }).click();
+  await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review proposed changes" })).toBeVisible({ timeout: 35000 });
+  await page.getByRole("button", { name: "Accept proposal" }).click();
   await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible({ timeout: 35000 });
   const url = page.url();
   await page.reload();

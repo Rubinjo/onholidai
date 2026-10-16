@@ -96,6 +96,12 @@ export function createServiceToken(options: CreateServiceTokenOptions): string {
   return `${signingInput}.${signature}`;
 }
 
+// Match the Python callback transport's bounded issuance margin. Validators stay
+// strict; actual validity is one second shorter, never extended by clock leeway.
+export function createAgentServiceToken(options: Omit<CreateServiceTokenOptions, "audience" | "issuedAt">): string {
+  return createServiceToken({ ...options, audience: "agent", issuedAt: Math.floor(Date.now() / 1000) - 1 });
+}
+
 export function createServiceAuthorization(
   options: CreateServiceTokenOptions,
 ): Readonly<{ authorization: `Bearer ${string}` }> {

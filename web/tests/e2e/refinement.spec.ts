@@ -1,5 +1,4 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { routeMapToggle } from "../helpers/setup-wizard";
 
 // Both journeys commit and undo changes on their seeded trip, so each needs its own
 // freshly seeded fixture; the seed script prints the two trip ids to export.
@@ -22,9 +21,9 @@ async function enterMessage(field: Locator, submit: Locator, message: string): P
 }
 
 async function requestProposal(page: Page, message: string): Promise<void> {
-  await enterMessage(page.getByLabel("Discuss a trip change"),
-    page.getByRole("button", { name: "Request a proposal" }), message);
-  await page.getByRole("button", { name: "Request a proposal" }).click();
+  await enterMessage(page.getByLabel("Ask your travel assistant"),
+    page.getByRole("button", { name: "Send message" }), message);
+  await page.getByRole("button", { name: "Send message" }).click();
 }
 
 test("@us2 @accessibility review, conflict, history and undo keep the committed panes coherent", async ({ page, browser }) => {
@@ -39,6 +38,7 @@ test("@us2 @accessibility review, conflict, history and undo keep the committed 
   try {
     const other = await competitor.newPage();
     await other.goto(`/trips/${process.env.US2_TRIP_ID}`);
+    await other.getByText("Travellers and travel style", { exact: true }).first().click();
     const adultsField = other.getByLabel("Adults", { exact: true });
     await expect(adultsField).toHaveValue(/\d+/);
     const adults = Number(await adultsField.inputValue());
@@ -74,7 +74,7 @@ test("@us2 @accessibility review, conflict, history and undo keep the committed 
   await expect(page.getByText(/^Version \d+:/).first()).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Version history" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Agent conversation" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your travel assistant" })).toBeVisible();
 });
 
 test("@us2 @accessibility focused clarification resumes with original intent and map failure preserves the list", async ({ page }) => {
@@ -83,7 +83,7 @@ test("@us2 @accessibility focused clarification resumes with original intent and
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.route("**/maps/countries.geojson", (route) => route.abort());
   await page.goto(`/trips/${process.env.US2_REFINEMENT_TRIP_ID}`);
-  await routeMapToggle(page).click();
+  await page.getByText("Route, stays and transport details", { exact: true }).click();
   await expect(page.getByRole("region", { name: "Accessible route" })).toBeVisible();
   await requestProposal(page, "Add two nights there");
   const answer = page.getByLabel("Which destination should receive the extra nights?");
@@ -95,8 +95,8 @@ test("@us2 @accessibility focused clarification resumes with original intent and
   await page.setViewportSize({ width: 400, height: 800 });
   await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
   await expect(page.getByRole("button", { name: "Finalize your trip to enable booking" })).toBeDisabled();
-  await page.getByLabel("Discuss a trip change").fill("Set pace to 25");
-  await page.getByLabel("Discuss a trip change").focus();
+  await page.getByLabel("Ask your travel assistant").fill("Set pace to 25");
+  await page.getByLabel("Ask your travel assistant").focus();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Request a proposal" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Send message" })).toBeFocused();
 });

@@ -8,8 +8,9 @@ test("@accessibility @cross-cutting workspace remains navigable with reduced mot
     await page.setViewportSize({ width, height: 844 });
     await page.goto(`/trips/${process.env.US2_TRIP_ID}`);
     await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible();
+    await page.getByText("Route, stays and transport details", { exact: true }).click();
     await expect(page.getByRole("region", { name: "Accessible route" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Agent conversation" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Your travel assistant" })).toBeVisible();
     await expect(page.getByRole("contentinfo", { name: "Current total and booking" })).toBeVisible();
     await expect(page.locator("body").evaluate((body) => body.scrollWidth <= body.clientWidth)).resolves.toBe(true);
     // WebKit keeps Safari's default of tabbing through form controls only, so the

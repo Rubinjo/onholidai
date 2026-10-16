@@ -109,3 +109,24 @@ Remaining gate: coordinated web/worker deployment is still unconfirmed because t
 `booking-worker` cannot start (pre-existing `alias-loader.mjs` hook registration), so booking
 for linked principals is not enabled and T068 stays open.
 
+## Phase 9 update — 2026-10-16
+
+The local standalone worker blocker above is now repaired and its actual entrypoint
+smoke test passes; deployed rollout remains unverified (see `rollout.md`).
+
+The real HTTP denial matrix now separately exercises unrelated guests, unrelated signed-in
+accounts, expired owner cookies, old guest proof after linking, and identifiers without
+proof. It covers private trip/history/events/conversation/edit/undo/finalize/proposal/
+run/clarification handlers, private cache headers and lack of booking side effects.
+Owner reads and fresh guest browser mutations also execute. The booking intent/link
+contracts exercise same-origin guards, private response headers, real account cookies,
+30-minute unused-intent expiry, consumption/replay and old-guest denial. Browser sign-up,
+explicit same-trip link, sign-out denial and sign-in recovery preserve the snapshot and
+version. These additions are included in the 317-test green web suite and focused
+22-journey Chromium run.
+
+The exhaustive valid-operation/internal-service/stream matrix and every dual-identity
+transaction recovery branch are still unfinished T098/T101, not inferred from predicate
+tests or startup success. The requested guest notice uses current authenticated session
+status and does not relax any booking authorization requirement.
+

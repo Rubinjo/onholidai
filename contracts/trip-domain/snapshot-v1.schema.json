@@ -60,6 +60,72 @@
       ],
       "additionalProperties": false
     },
+    "departureOrigins": {
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "city",
+              "airport"
+            ]
+          },
+          "placeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "countryCode": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "timezone": {
+            "type": "string",
+            "minLength": 1
+          },
+          "airportCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmedByUser": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "kind",
+          "placeId",
+          "name",
+          "countryCode",
+          "timezone",
+          "airportCode",
+          "confirmedByUser"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "destinationOrder": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "ai"
+      ]
+    },
     "availabilityWindows": {
       "minItems": 1,
       "maxItems": 32,
@@ -736,6 +802,7 @@
                           "enum": [
                             "walk",
                             "public_transport",
+                            "bus",
                             "drive",
                             "flight",
                             "rail",

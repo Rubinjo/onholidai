@@ -847,7 +847,7 @@
           },
           "target": {
             "maxLength": 500,
-            "pattern": "^/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$",
+            "pattern": "^/(departureOrigin|departureOrigins|destinationOrder|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$",
             "title": "Target",
             "type": "string",
             "x-protected-target": true

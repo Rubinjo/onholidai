@@ -1438,7 +1438,7 @@ components:
           enum: ["add","replace","remove","reorder"]
         target:
           type: "string"
-          pattern: "^/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$"
+          pattern: "^/(departureOrigin|departureOrigins|destinationOrder|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$"
         value: {}
     FinalizeCommand:
       type: object
@@ -1517,6 +1517,16 @@ components:
       additionalProperties: false
       required: ["departureOrigin","availabilityWindows","duration","travellerParty","preferences","constraints","destinations","itineraryDays","components","price","warnings"]
       properties:
+        destinationOrder:
+          type: "string"
+          enum: ["manual", "ai"]
+          description: "Absent on legacy versions; manual preserves the traveller's order. AI proposes a reviewable order."
+        departureOrigins:
+          type: "array"
+          maxItems: 8
+          description: "Confirmed alternative starting points for the same travelling party; selected departureOrigin must belong to this list when nonempty."
+          items:
+            $ref: "#/components/schemas/DepartureOrigin"
         availabilityWindows:
           type: "array"
           minItems: 1

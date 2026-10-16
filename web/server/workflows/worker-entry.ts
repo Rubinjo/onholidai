@@ -1,7 +1,13 @@
 import "server-only";
-import { getApplication } from "@/server/application";
+import { createApplication } from "@/server/application";
 import { TransactionProviderRegistry } from "@/server/supply/transactions";
 import { runBookingWorker } from "@/workers/booking/index";
 
-const application = getApplication();
-await runBookingWorker(application.database, new TransactionProviderRegistry());
+// This process does not execute Next.js instrumentation. Compose its dependencies
+// explicitly and close the pools if startup fails or the worker shuts down.
+const application = createApplication(process.env);
+try {
+  await runBookingWorker(application.database, new TransactionProviderRegistry());
+} finally {
+  await application.shutdown();
+}

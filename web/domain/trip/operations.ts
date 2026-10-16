@@ -37,7 +37,7 @@ export function applyDraftOperations(base: TripSnapshot, raw: readonly unknown[]
       }
     } else {
       const object = parent as Record<string, unknown>;
-      if (!Object.hasOwn(object, key)) invalidOperation();
+      if (!Object.hasOwn(object, key) && !(operation.operation === "add" && ["destinationOrder", "departureOrigins"].includes(key))) invalidOperation();
       if (operation.operation === "remove") delete object[key];
       else if (operation.operation === "reorder") {
         const list = object[key];

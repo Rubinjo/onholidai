@@ -10,8 +10,8 @@ export function previewDraftEdit(base: TripSnapshot, version: number, operations
     throw new ProblemError({ title: "Booked components require a separate workflow", status: 409, code: "protected_booking" });
   }
   const candidate = applyDraftOperations(base, operations, false);
-  const changed = Object.keys(base).filter((key) => canonicalJson(base[key as keyof TripSnapshot]) !== canonicalJson(candidate[key as keyof TripSnapshot]));
-  const scheduleChanged = changed.some((key) => ["destinations", "duration", "availabilityWindows"].includes(key));
+  const changed = [...new Set([...Object.keys(base), ...Object.keys(candidate)])].filter((key) => JSON.stringify(base[key as keyof TripSnapshot]) !== JSON.stringify(candidate[key as keyof TripSnapshot]));
+  const scheduleChanged = changed.some((key) => ["destinations", "destinationOrder", "duration", "availabilityWindows"].includes(key));
   if (scheduleChanged) {
     const routedExplicitly = operations.some((entry) => (entry as { target?: string }).target === "/destinations")
       && candidate.destinations.every((destination) => destination.arrivalDate && destination.departureDate)
@@ -28,7 +28,7 @@ export function previewDraftEdit(base: TripSnapshot, version: number, operations
     }
     candidate.itineraryDays = [];
   }
-  const researchRequired = changed.some((key) => ["departureOrigin", "destinations", "duration", "availabilityWindows", "travellerParty", "preferences", "constraints", "components"].includes(key));
+  const researchRequired = changed.some((key) => ["departureOrigin", "departureOrigins", "destinationOrder", "destinations", "duration", "availabilityWindows", "travellerParty", "preferences", "constraints", "components"].includes(key));
   if (researchRequired) {
     candidate.itineraryDays = [];
     candidate.components = candidate.components.map((component) => ({ ...component, itineraryItemIds: [], offerStatus: "expired", price: { ...component.price, status: "expired" } }));

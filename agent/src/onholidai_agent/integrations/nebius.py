@@ -36,6 +36,19 @@ class NebiusClient:
 
 class DeterministicModel:
     async def complete(self, **_kwargs: object) -> str:
+        messages = _kwargs.get("messages")
+        if isinstance(messages, list) and any(
+            isinstance(message, dict)
+            and "Answer the traveller's question" in str(message.get("content", ""))
+            for message in messages
+        ):
+            return (
+                "Two options to explore: keep your current route and ask about its daily "
+                "plans, or request a slower pace with longer stays and fewer transfers. "
+                "Tell me what matters most and I can prepare a proposal for your review. "
+                "This is a deterministic planning example, not verified travel advice. "
+                "No trip changes, reservations or payments have been made."
+            )
         return "Synthetic read-only estimate. Review dates, route and every unresolved requirement."
 
 

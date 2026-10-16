@@ -7,6 +7,8 @@ const nullableNumber = z.number().int().min(1).max(365).nullable();
 export const setupDraftPayloadSchema = z.object({
   title: z.string().max(120), currency: currencySchema,
   departureOrigin: z.object({ ...departureOriginSchema.shape, confirmedByUser: z.boolean() }).strict().nullable(),
+  departureOrigins: z.array(departureOriginSchema).max(8).optional(),
+  destinationOrder: z.enum(["manual", "ai"]).optional(),
   destinations: z.array(destinationSchema).max(8),
   availabilityWindows: z.array(z.object({ id: z.uuid(), startDate: z.union([z.literal(""), z.iso.date()]),
     endDate: z.union([z.literal(""), z.iso.date()]), preference: z.enum(["preferred", "flexible"]),
@@ -25,6 +27,7 @@ export const setupDraftPayloadSchema = z.object({
     if (new Set(entries.map((entry) => entry.id)).size !== entries.length) context.addIssue({ code: "custom", message: "Repeated entry ID" });
   }
   const places = new Set<string>();
+  if (payload.departureOrigins && new Set(payload.departureOrigins.map((origin) => origin.placeId)).size !== payload.departureOrigins.length) context.addIssue({ code: "custom", path: ["departureOrigins"], message: "Departure alternatives must be unique" });
   for (const destination of payload.destinations) {
     for (const [provider, placeId] of Object.entries(destination.providerPlaceIds)) {
       const key = `${provider}:${placeId}`;
@@ -36,7 +39,7 @@ export const setupDraftPayloadSchema = z.object({
 export type SetupDraftPayload = z.infer<typeof setupDraftPayloadSchema>;
 export type SetupStep = z.infer<typeof setupStepSchema>;
 export function emptySetupDraft(): SetupDraftPayload {
-  return { title: "", currency: "EUR", departureOrigin: null, destinations: [], availabilityWindows: [],
+  return { title: "", currency: "EUR", departureOrigin: null, departureOrigins: [], destinationOrder: "manual", destinations: [], availabilityWindows: [],
     duration: { minimumDays: null, idealDays: null, maximumDays: null }, travellerParty: { adults: null, children: [] },
     preferences: { pace: 50, spend: 50, discovery: 50, independence: 50, setting: 50 }, constraints: [] };
 }

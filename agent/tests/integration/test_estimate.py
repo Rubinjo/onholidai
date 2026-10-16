@@ -114,3 +114,83 @@ def test_alternative_supplier_quotes_are_not_added_together_as_booked_components
     selected = cast(list[dict[str, object]], operation.value)
     assert len(selected) == 2
     assert {item["type"] for item in selected} == {"flight", "accommodation"}
+
+
+def test_departure_comparison_proposes_the_supported_cheaper_origin_without_changing_the_trip():
+    import asyncio
+    from typing import cast
+
+    class OriginAlternatives(Sources):
+        async def search(
+            self, request: CreateAgentRunRequest, query: dict[str, object]
+        ) -> dict[str, object]:
+            price = 5000 if query.get("departurePlaceId") == "ams" else 10000
+            return {
+                "offers": [
+                    {
+                        "component": {
+                            "id": f"a0000000-a000-4000-8000-a{index:011}",
+                            "type": kind,
+                            "bookingStatus": "unbooked",
+                            "price": {"currency": "EUR", "finalCustomerMinor": price},
+                        }
+                    }
+                    for index, kind in enumerate(["flight", "accommodation"], 1)
+                ]
+            }
+
+    source = OriginAlternatives()
+    snapshot = cast(dict[str, object], source.trip["snapshot"])
+    snapshot["departureOrigin"] = {"placeId": "lhr", "name": "London", "confirmedByUser": True}
+    snapshot["departureOrigins"] = [
+        snapshot["departureOrigin"],
+        {"placeId": "ams", "name": "Amsterdam", "confirmedByUser": True},
+    ]
+    before = deepcopy(source.trip)
+    result = asyncio.run(estimate(request(), source)).root
+    assert result.kind == "proposal"
+    origin = next(
+        operation
+        for operation in result.proposal.operations
+        if operation.target == "/departureOrigin"
+    )
+    assert cast(dict[str, object], origin.value)["placeId"] == "ams"
+    assert "Compared 2 departure alternatives" in result.proposal.rationale
+    assert source.trip == before
+
+
+def test_unavailable_baseline_does_not_hide_a_supported_departure_alternative():
+    import asyncio
+    from typing import cast
+
+    class PartialSources(Sources):
+        async def search(
+            self, request: CreateAgentRunRequest, query: dict[str, object]
+        ) -> dict[str, object]:
+            if query.get("departurePlaceId") != "ams":
+                return {"offers": []}
+            return {
+                "offers": [
+                    {
+                        "component": {
+                            "id": f"a0000000-a000-4000-8000-a{index:011}",
+                            "type": kind,
+                            "bookingStatus": "unbooked",
+                            "price": {"currency": "EUR", "finalCustomerMinor": 10000},
+                        }
+                    }
+                    for index, kind in enumerate(["flight", "accommodation"], 1)
+                ]
+            }
+
+    source = PartialSources()
+    snapshot = cast(dict[str, object], source.trip["snapshot"])
+    snapshot["departureOrigin"] = {"placeId": "lhr", "name": "London", "confirmedByUser": True}
+    snapshot["departureOrigins"] = [
+        snapshot["departureOrigin"],
+        {"placeId": "ams", "name": "Amsterdam", "confirmedByUser": True},
+    ]
+    result = asyncio.run(estimate(request(), source)).root
+    assert result.kind == "proposal"
+    assert "unavailable or not comparable" in result.proposal.rationale
+    assert "Compared 1 departure alternatives" in result.proposal.rationale

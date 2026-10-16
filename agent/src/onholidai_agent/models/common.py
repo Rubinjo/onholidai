@@ -19,7 +19,7 @@ UUID_PATTERN = (
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
 )
 DRAFT_TARGET_PATTERN = (
-    r"^/(departureOrigin|availabilityWindows|duration|travellerParty|preferences|constraints|"
+    r"^/(departureOrigin|departureOrigins|destinationOrder|availabilityWindows|duration|travellerParty|preferences|constraints|"
     r"destinations|itineraryDays|components)(/.*)?$"
 )
 PROTECTED_KEYS = [

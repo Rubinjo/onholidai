@@ -39,13 +39,14 @@ export async function createBookingIntent(database: Kysely<Database>, identity: 
     const hash = fingerprint({ ...input, action: "review_booking", guestSessionId: actor.guestSessionId });
     let intent = await transaction.selectFrom("bookingIntents").selectAll().where("guestSessionId", "=", actor.guestSessionId)
       .where("requestId", "=", input.requestId).executeTakeFirst();
+    const replayed = Boolean(intent);
     if (intent && intent.fingerprint !== hash) throw new IdempotencyFingerprintConflictError();
     if (intent && (intent.state !== "pending" || intent.expiresAt <= now)) throw planningProblems.bookingIntentExpired();
     if (!intent) intent = await transaction.insertInto("bookingIntents").values({ id: randomUUID(), tripId: trip.id,
       planningOwnerId: actor.planningOwnerId, guestSessionId: actor.guestSessionId, requestId: input.requestId, fingerprint: hash,
       action: "review_booking", state: "pending", createdAt: now, expiresAt: new Date(now.getTime() + 1800000),
       consumedByUserId: null, consumedAt: null }).returningAll().executeTakeFirstOrThrow();
-    return { intentId: intent.id, expiresAt: intent.expiresAt.toISOString(), signInPath: `/sign-in?intentId=${intent.id}`,
+    return { intentId: intent.id, replayed, expiresAt: intent.expiresAt.toISOString(), signInPath: `/sign-in?intentId=${intent.id}`,
       signUpPath: `/sign-up?intentId=${intent.id}`, returnToPlanningPath: `/trips/${trip.id}` };
   });
 }

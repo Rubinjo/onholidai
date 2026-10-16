@@ -2,11 +2,12 @@ import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createServiceAuthorization,
   createServiceToken,
+  createAgentServiceToken,
   type ServiceTokenContext,
   verifyServiceToken,
 } from "../../server/agent-client/credentials";
@@ -27,6 +28,16 @@ const fixture = JSON.parse(
     "utf8",
   ),
 ) as TokenFixture;
+
+it("shortens outgoing agent token issuance at a cross-runtime second boundary without weakening verification", () => {
+  const clock = vi.spyOn(Date, "now").mockReturnValue((fixture.issuedAt + 1) * 1000 + 1);
+  try {
+    const token = createAgentServiceToken({ ...fixture.context, secret: fixture.secret, scopes: fixture.scopes });
+    const claims = verifyServiceToken(token, { secret: fixture.secret, expectedAudience: "agent", expectedContext: fixture.context, requiredScopes: fixture.scopes, now: fixture.issuedAt });
+    expect(claims.iat).toBe(fixture.issuedAt);
+    expect(claims.exp).toBe(fixture.issuedAt + 60);
+  } finally { clock.mockRestore(); }
+});
 
 function fixtureToken(): string {
   return createServiceToken({

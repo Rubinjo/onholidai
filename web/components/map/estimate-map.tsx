@@ -1,53 +1,84 @@
 "use client";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { GeoJSONSource, Map as LibreMap, Marker } from "maplibre-gl";
 import type { TripSnapshot } from "@/domain/trip/schema";
 type Segment = NonNullable<TripSnapshot["itineraryDays"][number]["items"][number]["travelSegment"]>;
 const noSegments: Segment[] = [];
-// MapLibre derives its worker URL from the bundler chunk location, where no worker
-// file exists, so every map failed with "Worker failed to load". Point it at the
-// vendored copy served from /public/maplibre instead.
+const noActivities: Record<string, string[]> = {};
 const workerUrl = "/maplibre/maplibre-gl-worker.mjs";
-export function EstimateMap({ destinations, segments = noSegments, fill = false }: {
-  destinations: TripSnapshot["destinations"]; segments?: Segment[]; fill?: boolean;
+const modes: Record<Segment["mode"], string> = { flight: "✈ Plane", rail: "▰ Train", bus: "▣ Bus", public_transport: "Public transport (mode not specified)", drive: "▱ Car", transfer: "▱ Transfer", walk: "Walk", ferry: "Ferry", other: "Transport not specified" };
+export function EstimateMap({ destinations, segments = noSegments, activities = noActivities, fill = false }: {
+  destinations: TripSnapshot["destinations"]; segments?: Segment[]; activities?: Record<string, string[]>; fill?: boolean;
 }) {
-  const [visible, setVisible] = useState(false), [failed, setFailed] = useState(false), container = useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = useState(false), [retry, setRetry] = useState(0);
+  const container = useRef<HTMLDivElement>(null), map = useRef<LibreMap | null>(null), markers = useRef<Marker[]>([]);
+  const markerFactory = useRef<((element: HTMLElement) => Marker) | null>(null);
+  const current = useRef({ destinations, segments, activities });
+  const update = useCallback(() => {
+    const instance = map.current;
+    if (!instance?.getSource("route")) return;
+    const data = current.current;
+    markers.current.forEach((marker) => marker.remove()); markers.current = [];
+    const points = data.destinations.flatMap((place) => place.location ? [[place.location.longitude, place.location.latitude] as [number, number]] : []);
+    (instance.getSource("route") as GeoJSONSource).setData({ type: "FeatureCollection", features: points.length > 1 ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: points } }] : [] });
+    (instance.getSource("segments") as GeoJSONSource).setData({ type: "FeatureCollection", features: data.segments.flatMap((segment) => segment.routeGeometry && segment.routeGeometry.length > 1 ? [{
+      type: "Feature" as const, properties: { mode: segment.mode, verified: segment.verificationStatus },
+      geometry: { type: "LineString" as const, coordinates: segment.routeGeometry.map((point) => [point.longitude, point.latitude]) }
+    }] : []) });
+    instance.setFilter("selected-countries", ["in", ["coalesce", ["get", "ISO_A2_EH"], ["get", "ISO_A2"]], ["literal", [...new Set(data.destinations.map((place) => place.countryCode))]]]);
+    for (const place of data.destinations) if (place.location) {
+      const label = document.createElement("div"); label.className = "map-stop";
+      const name = document.createElement("strong"); name.textContent = `${place.routePosition + 1}. ${place.name}`;
+      const stay = document.createElement("span"); stay.textContent = place.plannedNights ? `${place.plannedNights} nights` : "Stay to be planned";
+      const activity = document.createElement("small"); activity.textContent = data.activities[place.id]?.slice(0, 2).join(" · ") || "Activities to be planned";
+      label.append(name, stay, activity);
+      const marker = markerFactory.current?.(label).setLngLat([place.location.longitude, place.location.latitude]).addTo(instance);
+      if (marker) markers.current.push(marker);
+    }
+    for (const segment of data.segments) if (segment.routeGeometry?.length) {
+      const midpoint = segment.routeGeometry[Math.floor(segment.routeGeometry.length / 2)];
+      const label = document.createElement("span"); label.className = "map-transport"; label.textContent = modes[segment.mode];
+      label.title = `${segment.origin.name} to ${segment.destination.name}; ${segment.verificationStatus}`;
+      const marker = markerFactory.current?.(label).setLngLat([midpoint.longitude, midpoint.latitude]).addTo(instance);
+      if (marker) markers.current.push(marker);
+    }
+    if (points.length > 1) {
+      const west = Math.min(...points.map((point) => point[0])), east = Math.max(...points.map((point) => point[0]));
+      const south = Math.min(...points.map((point) => point[1])), north = Math.max(...points.map((point) => point[1]));
+      instance.fitBounds([[west, south], [east, north]], { padding: 75, maxZoom: 5, animate: false });
+    } else if (points[0]) instance.jumpTo({ center: points[0], zoom: 3 });
+  }, []);
+  useEffect(() => { current.current = { destinations, segments, activities }; update(); }, [destinations, segments, activities, update]);
   useEffect(() => {
-    if (!visible || !container.current) return;
-    let stopped = false;
-    let map: import("maplibre-gl").Map | undefined;
+    let stopped = false, observer: ResizeObserver | undefined;
     void import("maplibre-gl").then((library) => {
       if (stopped || !container.current) return;
       library.setWorkerUrl(workerUrl);
-      map = new library.Map({ container: container.current, style: { version: 8, sources: {}, layers: [{ id: "background", type: "background", paint: { "background-color": "#e7eff5" } }] }, center: [0, 20], zoom: 1, attributionControl: false });
-      map.on("error", () => { if (!stopped) setFailed(true); });
-      const points = destinations.flatMap((destination) => destination.location ? [[destination.location.longitude, destination.location.latitude] as [number, number]] : []);
-      map.on("load", () => {
-        if (!map || stopped) return;
-        map.addSource("countries", { type: "geojson", data: "/maps/countries.geojson" });
-        map.addLayer({ id: "countries", type: "fill", source: "countries", paint: { "fill-color": "#f6f3ed", "fill-outline-color": "#667782" } });
-        map.addLayer({ id: "selected-countries", type: "fill", source: "countries", filter: ["in", ["coalesce", ["get", "ISO_A2_EH"], ["get", "ISO_A2"]], ["literal", [...new Set(destinations.map((entry) => entry.countryCode))]]], paint: { "fill-color": "#d2e5cc", "fill-outline-color": "#345230" } });
-        for (const destination of destinations) if (destination.location) {
-          const label = document.createElement("span"); label.textContent = `${destination.routePosition + 1}. ${destination.name}`; label.className = "map-label";
-          new library.Marker({ element: label }).setLngLat([destination.location.longitude, destination.location.latitude]).addTo(map);
-        }
-        if (points.length > 1) {
-          map.addSource("route", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: points } } });
-          map.addLayer({ id: "route", type: "line", source: "route", paint: { "line-color": "#164f71", "line-width": 3 } });
-          const bounds = points.reduce((box, point) => box.extend(point), new library.LngLatBounds(points[0], points[0]));
-          map.fitBounds(bounds, { padding: 50, animate: false });
-        }
-        for (const [index, segment] of segments.entries()) if (segment.routeGeometry && segment.routeGeometry.length > 1) {
-          map.addSource(`segment-${index}`, { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: segment.routeGeometry.map((point) => [point.longitude, point.latitude]) } } });
-          map.addLayer({ id: `segment-${index}`, type: "line", source: `segment-${index}`, paint: { "line-color": "#8b3d21", "line-width": 4, "line-dasharray": segment.verificationStatus === "verified" ? [1, 0] : [2, 2] } });
-        }
+      const instance = new library.Map({ container: container.current, style: { version: 8, sources: {}, layers: [{ id: "background", type: "background", paint: { "background-color": "#deedf0" } }] }, center: [20, 25], zoom: 1, attributionControl: false });
+      map.current = instance; instance.getCanvas().tabIndex = -1;
+      instance.on("error", () => { if (!stopped) setFailed(true); });
+      instance.on("load", () => {
+        if (stopped) return;
+        instance.setProjection({ type: "globe" });
+        instance.addSource("countries", { type: "geojson", data: "/maps/countries.geojson" });
+        instance.addLayer({ id: "countries", type: "fill", source: "countries", paint: { "fill-color": "#f7f8f6", "fill-outline-color": "#708078" } });
+        instance.addLayer({ id: "selected-countries", type: "fill", source: "countries", paint: { "fill-color": "#a9d4bf" } });
+        for (const name of ["route", "segments"]) instance.addSource(name, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        instance.addLayer({ id: "route", type: "line", source: "route", paint: { "line-color": "#12664f", "line-width": 2, "line-dasharray": [2, 3] } });
+        instance.addLayer({ id: "transport", type: "line", source: "segments", paint: { "line-color": ["match", ["get", "mode"], "flight", "#164f71", "rail", "#12664f", "drive", "#785519", "bus", "#674d89", "public_transport", "#674d89", "#4f5c56"], "line-width": 4, "line-dasharray": ["case", ["==", ["get", "verified"], "verified"], ["literal", [1, 0]], ["literal", [2, 2]]] } });
+        markerFactory.current = (element) => new library.Marker({ element });
+        update();
       });
+      observer = new ResizeObserver(() => instance.resize()); observer.observe(container.current);
     }).catch(() => { if (!stopped) setFailed(true); });
-    return () => { stopped = true; map?.remove(); };
-  }, [visible, destinations, segments]);
-  return <section aria-label="Optional route map" className={fill ? "map-section map-section--fill" : "map-section"}>
-    <button type="button" onClick={() => { setFailed(false); setVisible(!visible); }}>{visible ? "Hide route map" : "Show optional route map"}</button>
-    {visible && <><div ref={container} className="map-section__canvas" aria-hidden="true" /><p>Made with Natural Earth. Selected countries and numbered destinations match the route list. Connecting lines are a planning diagram; sourced segments, when available, retain their verification status.</p></>}
-    {failed && <p role="status">Map unavailable. Use the route list; hide and reopen the map to retry.</p>}
+    return () => { stopped = true; observer?.disconnect(); markers.current.forEach((marker) => marker.remove()); map.current?.remove(); map.current = null; };
+  }, [retry, update]);
+  return <section aria-label="Route map" className={fill ? "map-section map-section--fill" : "map-section"}>
+    <div ref={container} className="map-section__canvas" aria-hidden="true" />
+    <p>Made with Natural Earth. Dotted connections illustrate the journey. Transport labels and sourced paths retain their verification status.</p>
+    <ul className="map-leg-key" aria-label="Transport between destinations">{segments.map((segment, index) => <li key={index}>{modes[segment.mode]}: {segment.origin.name} to {segment.destination.name} · {segment.durationMinutes} min · {segment.verificationStatus}{!segment.routeGeometry?.length && " · route geometry unavailable"}</li>)}</ul>
+    {!segments.length && <p>Transport between stops is not yet specified.</p>}
+    {failed && <div role="status">Map unavailable. Your route details remain accessible.<button type="button" onClick={() => { setFailed(false); setRetry((value) => value + 1); }}>Retry route map</button></div>}
   </section>;
 }
