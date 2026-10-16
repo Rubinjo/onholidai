@@ -1,14 +1,28 @@
 import { expect, test } from "@playwright/test";
 import { mockSetup } from "../helpers/mock-setup";
-import { addDestination, confirmOrigin, continueStep, enterValue, openBuilder } from "../helpers/setup-wizard";
+import { addDestination, calendarDate, confirmOrigin, continueStep, enterValue, openBuilder, selectAvailability } from "../helpers/setup-wizard";
 test.use({ storageState: { cookies: [], origins: [] } });
 for (const width of [320, 390, 768, 1440]) test(`fixture-backed controls at ${width}px preserve choices and respond promptly`, async ({ page }) => {
   await page.setViewportSize({ width, height: 960 }); await mockSetup(page); await openBuilder(page);
   const timings: { action: string; milliseconds: number }[] = [];
-  const started = await page.evaluate(() => performance.now());
-  await page.getByRole("button", { name: "Let AI arrange" }).click();
-  await expect(page.getByRole("button", { name: "Let AI arrange" })).toHaveAttribute("aria-pressed", "true");
-  timings.push({ action: "order toggle", milliseconds: await page.evaluate(() => performance.now()) - started });
+  const toggle = page.getByRole("button", { name: "Let AI arrange" });
+  // Measure input-to-painted-state in the browser; automation scrolling and
+  // protocol round trips are not application acknowledgement time.
+  await toggle.evaluate((button) => {
+    button.addEventListener("click", () => {
+      const started = performance.now();
+      const observer = new MutationObserver(() => {
+        if (button.getAttribute("aria-pressed") === "true") {
+          observer.disconnect(); requestAnimationFrame(() => { button.dataset.acknowledgement = String(performance.now() - started); });
+        }
+      });
+      observer.observe(button, { attributes: true, attributeFilter: ["aria-pressed"] });
+    }, { once: true, capture: true });
+  });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(toggle).toHaveAttribute("data-acknowledgement", /\d/);
+  timings.push({ action: "order toggle click-to-paint", milliseconds: Number(await toggle.getAttribute("data-acknowledgement")) });
   await addDestination(page, "Japan", "JP"); await addDestination(page, "Tokyo", "JP");
   await expect(page.getByRole("button", { name: "Remove Japan" })).toHaveCount(0);
   await addDestination(page, "Kyoto", "JP");
@@ -19,13 +33,15 @@ for (const width of [320, 390, 768, 1440]) test(`fixture-backed controls at ${wi
   await expect(page.locator(".departure-cards li")).toHaveCount(2);
   await continueStep(page);
   await expect(page.locator(".availability-calendar")).toBeVisible();
-  await enterValue(page.getByLabel("Start date 1"), "2030-05-01"); await enterValue(page.getByLabel("End date 1"), "2030-05-25");
+  await selectAvailability(page, "2030-05-01", "2030-05-25");
   await enterValue(page.getByRole("slider", { name: "Minimum days" }), "5");
   await enterValue(page.getByRole("slider", { name: "Ideal days" }), "7");
   await enterValue(page.getByRole("slider", { name: "Maximum days" }), "9");
-  await page.getByRole("button", { name: "Add availability window" }).click();
-  await enterValue(page.getByLabel("Start date 2"), "2030-06-01"); await enterValue(page.getByLabel("End date 2"), "2030-06-25");
+  await expect(page.locator(".duration-slider__selection")).toHaveCSS("background-color", "rgb(8, 76, 58)");
+  expect(await page.locator(".duration-slider__selection").evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(0);
+  await selectAvailability(page, "2030-06-01", "2030-06-25");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(await page.locator(".availability-calendar").evaluate((calendar) => calendar.scrollWidth <= calendar.clientWidth)).toBe(true);
   for (const timing of timings) expect(timing.milliseconds).toBeLessThanOrEqual(1000);
   await test.info().attach("input-timings.json", { body: JSON.stringify(timings), contentType: "application/json" });
   await page.screenshot({ path: test.info().outputPath(`dates-${width}.png`), fullPage: true });
@@ -37,6 +53,53 @@ test("reset ignores pending search, keeps order mode and restores the empty rout
   await expect(page.getByRole("list", { name: "Selected destinations" }).getByRole("listitem")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Let AI arrange" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Continue", exact: true }).click(); await expect(page.getByLabel("Destination search")).toBeFocused();
+});
+
+test("calendar merges, subtracts, caps duration and persists a complete reset", async ({ page }) => {
+  await mockSetup(page); await openBuilder(page); await addDestination(page, "Tokyo", "JP");
+  await continueStep(page); await confirmOrigin(page); await continueStep(page);
+  await selectAvailability(page, "2030-05-01", "2030-05-10");
+  await selectAvailability(page, "2030-05-08", "2030-05-15");
+  await expect(page.locator(".availability-window")).toHaveCount(1);
+  await expect(page.getByRole("slider", { name: "Maximum days" })).toHaveAttribute("max", "15");
+  await (await calendarDate(page, "2030-05-05")).click({ button: "right" });
+  await expect(page.locator(".availability-window")).toHaveCount(2);
+  await (await calendarDate(page, "2030-05-12")).click({ button: "right" });
+  await expect(page.locator(".availability-window").first()).toContainText("1 May 2030 – 4 May 2030");
+  await expect(page.locator(".availability-window").last()).toContainText("13 May 2030 – 15 May 2030");
+  await expect(page.getByRole("slider", { name: "Maximum days" })).toHaveAttribute("max", "4");
+  await expect(page.getByRole("slider", { name: "Maximum days" })).toHaveValue("4");
+  await page.getByRole("button", { name: "Remove dates" }).click();
+  await (await calendarDate(page, "2030-05-01")).press("Enter");
+  await (await calendarDate(page, "2030-05-04")).press("Enter");
+  await expect(page.locator(".availability-window")).toHaveCount(1);
+  await page.getByLabel("Date preference 1").selectOption("flexible");
+  const resetSaved = page.waitForResponse((response) => response.request().method() === "PATCH" && response.request().postDataJSON()?.payload?.availabilityWindows?.length === 0 && response.ok());
+  await page.getByRole("button", { name: "Reset calendar" }).click();
+  await expect(page.locator(".availability-window")).toHaveCount(0);
+  await expect(page.getByRole("slider", { name: "Maximum days" })).toBeDisabled();
+  await resetSaved;
+  await expect(page.getByRole("status").filter({ hasText: "Saved" }).first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "When can you travel?" })).toBeVisible();
+  await expect(page.locator(".availability-window")).toHaveCount(0);
+});
+
+test("six availability windows cycle five shades and preference sliders use integer defaults", async ({ page }) => {
+  await mockSetup(page); await openBuilder(page); await addDestination(page, "Tokyo", "JP");
+  await continueStep(page); await confirmOrigin(page); await continueStep(page);
+  for (let index = 0; index < 6; index++) {
+    const first = String(index * 4 + 1).padStart(2, "0"), last = String(index * 4 + 3).padStart(2, "0");
+    await selectAvailability(page, `2030-05-${first}`, `2030-05-${last}`);
+  }
+  const rows = page.locator(".availability-window");
+  await expect(rows).toHaveCount(6);
+  await expect(rows.nth(0)).toHaveClass(/calendar-window--0/); await expect(rows.nth(5)).toHaveClass(/calendar-window--0/);
+  await continueStep(page); await enterValue(page.getByLabel("Adults", { exact: true }), "2"); await continueStep(page);
+  for (const slider of await page.getByRole("slider").all()) {
+    await expect(slider).toHaveAttribute("step", "1"); await expect(slider).toHaveValue("5");
+    await slider.focus(); await slider.press("ArrowRight"); await expect(slider).toHaveValue("6");
+  }
 });
 
 test("route cards reorder with pointer drag and a supported mobile touch gesture", async ({ page, browserName }) => {

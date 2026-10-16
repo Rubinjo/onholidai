@@ -108,10 +108,9 @@ export function SetupForm() {
           origins={p.departureOrigins ?? (origin ? [origin] : [])} order={p.destinationOrder ?? "manual"} onOrder={(destinationOrder) => draft.update({ ...p, destinationOrder })}
           onOrigins={(departureOrigins) => draft.update({ ...p, departureOrigins, departureOrigin: departureOrigins.find((entry) => entry.placeId === origin?.placeId) ?? departureOrigins[0] ?? null })}
           onDestinations={(destinations) => draft.update({ ...p, destinations })} />}
-        {step === "dates" && <Availability windows={p.availabilityWindows}
+        {step === "dates" && <Availability windows={p.availabilityWindows} timezone={p.departureOrigin?.timezone}
           duration={{ minimumDays: p.duration.minimumDays ?? 0, idealDays: p.duration.idealDays ?? 0, maximumDays: p.duration.maximumDays ?? 0 }}
-          onWindows={(availabilityWindows) => draft.update({ ...p, availabilityWindows })}
-          onDuration={(duration) => draft.update({ ...p, duration: { minimumDays: duration.minimumDays || null, idealDays: duration.idealDays || null, maximumDays: duration.maximumDays || null } })} />}
+          onChange={({ windows: availabilityWindows, duration }) => draft.update({ ...p, availabilityWindows, duration: { minimumDays: duration.minimumDays || null, idealDays: duration.idealDays || null, maximumDays: duration.maximumDays || null } })} />}
         {(step === "travellers" || step === "preferences") && <div className={step === "travellers" ? "setup-party-only" : "setup-style-only"}><PartyPreferences
           party={{ adults: p.travellerParty.adults ?? 0, children: p.travellerParty.children.map((child) => ({ ...child, ageAtTripStart: child.ageAtTripStart ?? -1 })) }}
           preferences={p.preferences} onParty={(party) => draft.update({ ...p, travellerParty: { adults: party.adults || null,

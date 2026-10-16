@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChangeProposal } from "@/domain/trip/proposal";
 import { planningJson, planningError } from "@/components/trip-setup/http";
 import { DayPlan } from "@/components/trip-workspace/day-plan";
+import { Button } from "@/components/ui/button";
 export function ProposalCard({ proposal, tripId, version, onCommit, onDismiss }: { proposal: ChangeProposal; tripId: string; version: number; onCommit: (raw: unknown) => void; onDismiss: () => void }) {
   const request = useRef(crypto.randomUUID()), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [expired, setExpired] = useState(false);
@@ -28,6 +29,6 @@ export function ProposalCard({ proposal, tripId, version, onCommit, onDismiss }:
     <ul>{proposal.tradeoffs?.map((entry, index) => <li key={`tradeoff-${index}`}>{entry}</li>)}{proposal.warnings?.map((entry, index) => <li key={`warning-${index}`}>{entry}</li>)}</ul>
     <p>Expires {proposal.expiresAt}. Nothing has been applied.</p>{stale && <p role="alert">This proposal is stale or unavailable. Request a fresh proposal.</p>}<p role="alert">{error}</p>
     <p role="status">{busy ? "Saving your decision…" : ""}</p>
-    <button type="button" disabled={busy || stale} onClick={() => void act("accept")}>Accept proposal</button><button type="button" disabled={busy || proposal.status !== "proposed"} onClick={() => void act("reject")}>Reject proposal</button>
+    <div className="planning-actions"><Button disabled={busy || stale} onClick={() => void act("accept")}>Accept proposal</Button><Button variant="outline" disabled={busy || proposal.status !== "proposed"} onClick={() => void act("reject")}>Reject proposal</Button></div>
   </article>;
 }

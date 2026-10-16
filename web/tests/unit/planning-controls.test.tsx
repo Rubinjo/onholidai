@@ -6,6 +6,7 @@ import { DurationSlider } from "../../components/trip-setup/duration-slider";
 import { PartyPreferences } from "../../components/trip-setup/party-preferences";
 import { displayPreference, storedPreference } from "../../components/trip-setup/preference-scale";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
+import { emptySetupDraft } from "../../components/trip-setup/draft-schema";
 import type { TripSnapshot } from "../../domain/trip/schema";
 const api = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock("../../components/trip-setup/http", () => ({ planningJson: api.read, planningError: () => "Search unavailable. Retry." }));
@@ -92,6 +93,20 @@ describe("observable planning controls", () => {
     render(<PartyPreferences party={snapshot.travellerParty} preferences={snapshot.preferences} onParty={() => {}} onPreferences={change} mode="preferences" />);
     for (const slider of screen.getAllByRole("slider")) { expect(slider).toHaveAttribute("min", "1"); expect(slider).toHaveAttribute("max", "10"); }
     expect(change).not.toHaveBeenCalled();
-    for (let value = 0; value <= 100; value++) expect(storedPreference(displayPreference(value))).toBe(value);
+    for (const slider of screen.getAllByRole("slider")) expect(slider).toHaveAttribute("step", "1");
+    for (let value = 1; value <= 10; value++) expect(displayPreference(storedPreference(value))).toBe(value);
+    for (let value = 0; value <= 100; value++) expect(Number.isInteger(displayPreference(value))).toBe(true);
+  });
+  it("starts fresh sliders at five and edits only the chosen legacy preference", () => {
+    const fresh = emptySetupDraft();
+    expect(Object.values(fresh.preferences).map(displayPreference)).toEqual([5, 5, 5, 5, 5]);
+    const snapshot = createSyntheticTripSnapshot(), change = vi.fn();
+    const preferences = { pace: 53, spend: 11, discovery: 78, independence: 99, setting: 0 };
+    const view = render(<PartyPreferences party={snapshot.travellerParty} preferences={preferences} onParty={() => {}} onPreferences={change} mode="preferences" />);
+    view.rerender(<PartyPreferences party={snapshot.travellerParty} preferences={preferences} onParty={() => {}} onPreferences={change} mode="preferences" />);
+    expect(change).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("slider", { name: /^Pace: relaxed to full days/ }), { target: { value: "7" } });
+    expect(change).toHaveBeenCalledWith({ ...preferences, pace: storedPreference(7) });
+    expect(preferences.pace).toBe(53);
   });
 });

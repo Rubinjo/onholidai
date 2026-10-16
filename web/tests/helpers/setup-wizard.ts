@@ -58,6 +58,18 @@ export async function confirmOrigin(page: Page, origin = "Amsterdam", originLabe
   await page.getByRole("option", { name: new RegExp("^" + originLabel.replace(", ", " ") + "\\b") }).click();
 }
 
+export async function calendarDate(page: Page, date: string): Promise<Locator> {
+  const [year, month] = date.split("-");
+  await page.getByLabel("Choose the Year").selectOption(year);
+  await page.getByLabel("Choose the Month").selectOption(String(Number(month) - 1));
+  return page.locator(`[data-calendar-date="${date}"]`);
+}
+export async function selectAvailability(page: Page, start: string, end: string): Promise<void> {
+  await page.getByRole("button", { name: "Add dates", exact: true }).click();
+  await (await calendarDate(page, start)).click();
+  await (await calendarDate(page, end)).click();
+}
+
 // Walks the steps after destinations, which callers may already have arranged.
 export async function finishSetup(page: Page, options: {
   origin?: string; originLabel?: string; start?: string; end?: string; title?: string;
@@ -65,8 +77,7 @@ export async function finishSetup(page: Page, options: {
   await continueStep(page);
   await confirmOrigin(page, options.origin, options.originLabel);
   await continueStep(page);
-  await enterValue(page.getByLabel("Start date 1"), options.start ?? "2030-05-01");
-  await enterValue(page.getByLabel("End date 1"), options.end ?? "2030-05-20");
+  await selectAvailability(page, options.start ?? "2030-05-01", options.end ?? "2030-05-20");
   await enterValue(page.getByLabel("Minimum days", { exact: true }), "5");
   await enterValue(page.getByLabel("Ideal days", { exact: true }), "7");
   await enterValue(page.getByLabel("Maximum days", { exact: true }), "8");

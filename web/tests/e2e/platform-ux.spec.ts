@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { mockSetup } from "../helpers/mock-setup";
-import { addDestination, confirmOrigin, continueStep, enterValue, openBuilder } from "../helpers/setup-wizard";
+import { addDestination, confirmOrigin, continueStep, enterValue, openBuilder, selectAvailability } from "../helpers/setup-wizard";
 import { acknowledge, type InputTiming } from "../helpers/input-timing";
 test.use({ storageState: { cookies: [], origins: [] } });
 for (const width of [320, 390, 768, 1440]) {
@@ -38,14 +38,16 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await confirmOrigin(page); await continueStep(page);
     const days = page.locator(".rdp-day_button");
     await acknowledge(page, samples, "calendar range start", () => days.nth(1).click(), () => expect(page.locator(".rdp-footer")).toContainText("Choose an end date"));
-    await acknowledge(page, samples, "calendar range end", () => days.nth(15).click(), () => expect(page.locator(".availability-window summary").first()).not.toContainText("Choose dates"));
+    await acknowledge(page, samples, "calendar range end", () => days.nth(15).click(), () => expect(page.locator(".availability-window").first()).not.toContainText("Choose dates"));
     const minimum = page.getByRole("slider", { name: "Minimum days" }); await minimum.focus();
     await acknowledge(page, samples, "duration handle", () => minimum.press("ArrowRight"), () => expect(minimum).toHaveValue("2"));
-    await enterValue(page.getByLabel("Start date 1"), "2030-05-01"); await enterValue(page.getByLabel("End date 1"), "2030-05-25");
+    await page.getByRole("button", { name: "Reset calendar" }).click();
+    await selectAvailability(page, "2030-05-01", "2030-05-25");
     await enterValue(page.getByRole("slider", { name: "Ideal days" }), "7"); await enterValue(page.getByRole("slider", { name: "Maximum days" }), "9");
     await continueStep(page); await enterValue(page.getByLabel("Adults", { exact: true }), "2"); await continueStep(page);
     const pace = page.getByRole("slider", { name: "Pace: relaxed to full days" }); await pace.focus();
-    await acknowledge(page, samples, "travel preference", () => pace.press("ArrowRight"), () => expect(pace).not.toHaveValue("5.5"));
+    await expect(pace).toHaveValue("5");
+    await acknowledge(page, samples, "travel preference", () => pace.press("ArrowRight"), () => expect(pace).toHaveValue("6"));
     await test.info().attach("input-timings.json", { body: JSON.stringify({ reducedMotion, samples }), contentType: "application/json" });
   });
 }

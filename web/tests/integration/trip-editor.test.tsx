@@ -25,13 +25,13 @@ describe("trip editor impact review", () => {
   it("reviews only the settings that changed", async () => {
     api.preview.mockResolvedValue({ impactFingerprint: "a".repeat(64), affectedFacts: ["preferences"], priceImpact: null, scheduleImpact: null, operations: [], warnings: [] });
     render(<TripEditor trip={envelope()} onCommit={() => {}} />);
-    fireEvent.change(screen.getByLabelText("Pace", { exact: false }), { target: { value: "6.4" } });
+    fireEvent.change(screen.getByLabelText("Pace", { exact: false }), { target: { value: "7" } });
     fireEvent.click(screen.getByRole("button", { name: "Review edit impacts" }));
     await waitFor(() => expect(api.preview).toHaveBeenCalled());
     const [path, input] = api.preview.mock.calls[0] as [string, { operations: { target: string; value: unknown }[] }];
     expect(path).toBe("/api/v1/trips/10000000-0000-4000-8000-000000000090/commands/edit-preview");
     expect(input.operations).toHaveLength(1);
     expect(input.operations[0].target).toBe("/preferences");
-    expect((input.operations[0].value as { pace: number }).pace).toBe(60);
+    expect((input.operations[0].value as { pace: number }).pace).toBe(67);
   });
 });

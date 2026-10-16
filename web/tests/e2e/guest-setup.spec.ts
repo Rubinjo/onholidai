@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addDestination, confirmOrigin, continueStep, enterValue, finishSetup, openBuilder, searchDestinations } from "../helpers/setup-wizard";
+import { addDestination, confirmOrigin, continueStep, enterValue, finishSetup, openBuilder, searchDestinations, selectAvailability } from "../helpers/setup-wizard";
 test.use({ storageState: { cookies: [], origins: [] } });
 test("guest setup is public and acknowledged destination changes survive refresh", async ({ page }) => {
   await page.goto("/trips/new");
@@ -45,11 +45,10 @@ test("the builder blocks an invalid step and reports the field to correct", asyn
   await continueStep(page);
   // Required date and duration controls report through native validation, which the
   // form surfaces once, and the offending fields are marked.
-  await expect(page.getByRole("alert").filter({ hasText: "Check the highlighted field before continuing." })).toBeVisible();
-  await expect(page.getByLabel("End date 1")).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("alert").filter({ hasText: "Enter ordered start and end dates for every window." })).toBeVisible();
+  await expect(page.locator('[data-setup-field="availabilityWindows"]')).toHaveAttribute("aria-invalid", "true");
 
-  await enterValue(page.getByLabel("Start date 1"), "2030-05-01");
-  await enterValue(page.getByLabel("End date 1"), "2030-05-20");
+  await selectAvailability(page, "2030-05-01", "2030-05-20");
   await enterValue(page.getByLabel("Minimum days", { exact: true }), "5");
   await enterValue(page.getByLabel("Ideal days", { exact: true }), "7");
   await enterValue(page.getByLabel("Maximum days", { exact: true }), "8");

@@ -95,7 +95,7 @@ def test_preference_rationale_uses_public_scale_without_changing_legacy_operatio
     result = asyncio.run(refine(refinement_request("Set pace to 25"), RefinementSource()))
     assert result.root.kind == "proposal"
     assert result.root.proposal.operations[0].value == 25
-    assert "3.25/10" in result.root.proposal.rationale
+    assert "3/10" in result.root.proposal.rationale
     assert "/100" not in result.root.proposal.rationale
 
 

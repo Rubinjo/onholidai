@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addDestination, confirmOrigin, continueStep, enterValue, openBuilder } from "../helpers/setup-wizard";
+import { addDestination, confirmOrigin, continueStep, enterValue, openBuilder, selectAvailability } from "../helpers/setup-wizard";
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test("@accessibility @us1 setup remains labelled and usable without map", async ({ page, browserName }) => {
@@ -22,21 +22,14 @@ test("@accessibility @us1 setup remains labelled and usable without map", async 
   await confirmOrigin(page);
   await continueStep(page);
 
-  await page.getByText("Choose dates for window 1", { exact: false }).click();
-  await expect(page.getByLabel("Start date 1")).toBeVisible();
-  await expect(page.getByLabel("Availability timezone 1")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove dates" })).toBeVisible();
   await expect(page.getByLabel("Minimum days", { exact: true })).toBeVisible();
-  await enterValue(page.getByLabel("Start date 1"), "2030-05-01");
-  await enterValue(page.getByLabel("End date 1"), "2030-05-20");
+  await selectAvailability(page, "2030-05-01", "2030-05-20");
   await enterValue(page.getByLabel("Minimum days", { exact: true }), "5");
   await enterValue(page.getByLabel("Ideal days", { exact: true }), "7");
   await enterValue(page.getByLabel("Maximum days", { exact: true }), "8");
-  await page.getByRole("button", { name: "Add availability window" }).click();
-  await page.getByText("Choose dates for window 2", { exact: false }).click();
-  await expect(page.getByLabel("Start date 2")).toBeVisible();
-  await expect(page.getByLabel("End date 2")).toBeVisible();
-  await enterValue(page.getByLabel("Start date 2"), "2030-06-01");
-  await enterValue(page.getByLabel("End date 2"), "2030-06-20");
+  await selectAvailability(page, "2030-06-01", "2030-06-20");
+  await expect(page.getByLabel("Date preference 2")).toBeVisible();
   await continueStep(page);
 
   await enterValue(page.getByLabel("Adults", { exact: true }), "2");

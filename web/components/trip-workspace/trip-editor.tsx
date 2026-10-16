@@ -9,6 +9,7 @@ import { Availability } from "@/components/trip-setup/availability";
 import { PartyPreferences } from "@/components/trip-setup/party-preferences";
 import { Constraints } from "@/components/trip-setup/constraints";
 import { tripEnvelopeSchema } from "./use-trip";
+import { Button } from "@/components/ui/button";
 export function TripEditor({ trip, onCommit, draftState, onEditRoute }: { trip: TripEnvelope; onCommit: (raw: unknown) => void;
   draftState?: { snapshot: TripEnvelope["snapshot"]; update: (snapshot: TripEnvelope["snapshot"]) => void }; onEditRoute?: () => void;
 }) {
@@ -41,17 +42,17 @@ export function TripEditor({ trip, onCommit, draftState, onEditRoute }: { trip: 
   return <section aria-labelledby="details-heading" data-trip-version={trip.version}><h2 id="details-heading">Trip details</h2><p>Committed version {trip.version}. Edits require impact review.</p>
     <p>Saved travellers: {trip.snapshot.travellerParty.adults} adults; child ages at trip start: {trip.snapshot.travellerParty.children.map((child) => child.ageAtTripStart).join(", ") || "none"}.</p>
     {editingBase.version !== trip.version && <p role="alert">The trip changed while you were editing. Your unsaved inputs are preserved. Reload current details before making a new review.</p>}
-    <button type="button" disabled={busy} onClick={() => { setEditingBase(trip); setDraft(trip.snapshot); setReview(null); setCommand(null); }}>Reload current trip details</button>
+    <Button variant="outline" disabled={busy} onClick={() => { setEditingBase(trip); setDraft(trip.snapshot); setReview(null); setCommand(null); }}>Reload current trip details</Button>
     {trip.lifecycleState === "finalized" && <p>Undo finalization in version history to return to a draft before editing.</p>}
     <form onInvalid={(event) => { if (event.target instanceof HTMLElement) { let section = event.target.closest("details"); while (section) { section.open = true; section = section.parentElement?.closest("details") ?? null; } } }} onSubmit={(event) => { event.preventDefault(); void preview(); }}><fieldset disabled={busy || trip.lifecycleState !== "draft"}><legend>Edit draft settings</legend>
-      <details><summary>Destinations and departure locations</summary>{onEditRoute && <button type="button" onClick={onEditRoute}>Edit destinations on the globe</button>}<Destinations mode={onEditRoute ? "origin" : "both"} mapVisible={false} origin={draft.departureOrigin} destinations={draft.destinations} onOrigin={(departureOrigin) => setDraft({ ...draft, departureOrigin })}
+      <details><summary>Destinations and departure locations</summary>{onEditRoute && <Button variant="secondary" onClick={onEditRoute}>Edit destinations on the globe</Button>}<Destinations mode={onEditRoute ? "origin" : "both"} mapVisible={false} origin={draft.departureOrigin} destinations={draft.destinations} onOrigin={(departureOrigin) => setDraft({ ...draft, departureOrigin })}
         origins={draft.departureOrigins ?? (draft.departureOrigin ? [draft.departureOrigin] : [])} order={draft.destinationOrder ?? "manual"} onOrder={(destinationOrder) => setDraft({ ...draft, destinationOrder })}
         onOrigins={(departureOrigins) => setDraft({ ...draft, departureOrigins, departureOrigin: departureOrigins.find((entry) => entry.placeId === draft.departureOrigin?.placeId) ?? departureOrigins[0] ?? null })}
         onDestinations={(destinations) => setDraft({ ...draft, destinations: destinations.map((entry) => ({ ...entry, arrivalDate: null, departureDate: null, plannedNights: 0 })) })} /></details>
-      <details><summary>Dates and trip length</summary><Availability windows={draft.availabilityWindows} duration={draft.duration} onWindows={(availabilityWindows) => setDraft({ ...draft, availabilityWindows })} onDuration={(duration) => setDraft({ ...draft, duration })} /></details>
+      <details><summary>Dates and trip length</summary><Availability windows={draft.availabilityWindows} timezone={draft.departureOrigin?.timezone} duration={draft.duration} onChange={({ windows: availabilityWindows, duration }) => setDraft({ ...draft, availabilityWindows, duration })} /></details>
       <details><summary>Travellers and travel style</summary><PartyPreferences party={draft.travellerParty} preferences={draft.preferences} onParty={(travellerParty) => setDraft({ ...draft, travellerParty })} onPreferences={(preferences) => setDraft({ ...draft, preferences })} /></details>
       <details><summary>Requirements</summary><Constraints constraints={draft.constraints} onChange={(constraints) => setDraft({ ...draft, constraints })} /></details>
-      <button type="submit" disabled={editingBase.version !== trip.version}>Review edit impacts</button></fieldset></form><p role="alert">{error}</p>
+      <Button type="submit" disabled={editingBase.version !== trip.version}>Review edit impacts</Button></fieldset></form><p role="alert">{error}</p>
     {review && <EditImpact review={review} version={trip.version} busy={busy} onAccept={() => void apply()} onDiscard={() => setReview(null)} />}
   </section>;
 }

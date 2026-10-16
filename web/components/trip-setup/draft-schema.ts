@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { storedPreference } from "./preference-scale";
 import { currencySchema, departureOriginSchema, destinationSchema, preferenceProfileSchema,
   timezoneSchema, tripConstraintSchema } from "@/domain/trip/schema";
 
@@ -41,5 +42,5 @@ export type SetupStep = z.infer<typeof setupStepSchema>;
 export function emptySetupDraft(): SetupDraftPayload {
   return { title: "", currency: "EUR", departureOrigin: null, departureOrigins: [], destinationOrder: "manual", destinations: [], availabilityWindows: [],
     duration: { minimumDays: null, idealDays: null, maximumDays: null }, travellerParty: { adults: null, children: [] },
-    preferences: { pace: 50, spend: 50, discovery: 50, independence: 50, setting: 50 }, constraints: [] };
+    preferences: { pace: storedPreference(5), spend: storedPreference(5), discovery: storedPreference(5), independence: storedPreference(5), setting: storedPreference(5) }, constraints: [] };
 }

@@ -318,7 +318,7 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
                 "value": int(match.group(2)),
             }
         )
-        display_value = round(1 + int(match.group(2)) * 0.09, 2)
+        display_value = min(10, max(1, int(1 + int(match.group(2)) * 0.09 + 0.5)))
         rationale = (
             f"Set {match.group(1)} to {display_value:g}/10, preserving hard "
             "requirements and refreshing affected recommendations."
