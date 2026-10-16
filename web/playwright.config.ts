@@ -12,7 +12,10 @@ export default defineConfig({
   webServer: {
     command: "pnpm dev",
     url: `${baseURL}/api/health`,
-    env: { BETTER_AUTH_URL: baseURL },
+    // Browser suites open many guest planning sessions from one network. The
+    // conservative production default shares a single bucket per unknown network,
+    // so the test server raises only that bootstrap allowance.
+    env: { BETTER_AUTH_URL: baseURL, GUEST_MAX_SESSIONS_PER_HOUR: "200" },
     reuseExistingServer: true,
   },
   projects: [

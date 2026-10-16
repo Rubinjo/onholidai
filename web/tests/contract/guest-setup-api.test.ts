@@ -8,6 +8,7 @@ import { hasIsolatedDatabaseConfiguration } from "../helpers/database";
 import { guestApiFixture, unrelatedGuest, type GuestApiFixture } from "../helpers/guest-api";
 import { POST as allocate } from "../../app/api/v1/setup-drafts/route";
 import { GET as readDraft, PATCH as saveDraft } from "../../app/api/v1/setup-drafts/[draftId]/route";
+import { POST as bootstrapSession } from "../../app/api/v1/planning-session/route";
 vi.mock("server-only", () => ({}));
 
 describe("guest setup boundaries", () => {
@@ -33,6 +34,23 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("draft HTTP envelopes and o
   let state: GuestApiFixture;
   beforeEach(async () => { state = await guestApiFixture(); }, 120000);
   afterEach(async () => { await state?.cleanup(); });
+  it("bootstraps a protected guest session and renews the presented credential", async () => {
+    const allocated = await bootstrapSession(state.request("/api/v1/planning-session", "unused", { requestId: crypto.randomUUID() }));
+    expect(allocated.status).toBe(200);
+    expect(allocated.headers.get("cache-control")).toBe("private, no-store");
+    const cookie = allocated.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("SameSite=Lax");
+    const credential = cookie.split(";")[0].split("=")[1];
+    expect(credential).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const renewed = await bootstrapSession(state.request("/api/v1/planning-session", credential, { requestId: crypto.randomUUID() }));
+    expect(renewed.status).toBe(200);
+    expect(JSON.parse(await renewed.text()).kind).toBe("guest");
+    const crossOrigin = new Request("http://planning.test/api/v1/planning-session", { method: "POST",
+      headers: { origin: "https://attacker.invalid", "content-type": "application/json" },
+      body: JSON.stringify({ requestId: crypto.randomUUID() }) });
+    expect((await bootstrapSession(crossOrigin)).status).toBe(403);
+  });
   it("returns private allocation replay, denies inaccessible drafts and rejects cross-origin writes", async () => {
     const path = "/api/v1/setup-drafts", requestId = crypto.randomUUID();
     const first = await allocate(state.request(path, state.credential, { requestId }));

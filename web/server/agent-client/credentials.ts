@@ -173,7 +173,9 @@ export function verifyServiceToken(
     }
   }
 
-  const requiredScopes = validateScopes(
+  // An empty requirement is meaningful: signature, audience and context are still
+  // proven here, and the handler enforces its own scope through internalActor.
+  const requiredScopes = options.requiredScopes.length === 0 ? [] : validateScopes(
     options.requiredScopes,
     options.expectedAudience,
   );

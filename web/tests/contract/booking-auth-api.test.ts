@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment node
+import { describe, expect, it, vi } from "vitest";
 import { bookingIntentRequestSchema, linkRequestSchema, bookingContinuationPath } from "../../server/auth/booking-intent";
 import { safeAuthDestination } from "../../components/auth/safe-destination";
+vi.mock("server-only", () => ({}));
 describe("booking-only authentication contract", () => {
   it("accepts only fixed review intent and rejects browser-selected consent or redirects", () => {
     const input = { requestId: crypto.randomUUID(), tripId: crypto.randomUUID() };

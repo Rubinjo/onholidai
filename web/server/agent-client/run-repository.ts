@@ -5,7 +5,7 @@ import { z } from "zod";
 import { AgentEventSchema, AgentPersistenceReceiptSchema, AgentRunSchema,
   AnswerClarificationRequestSchema, PersistAgentEventRequestSchema, PersistAgentResultRequestSchema } from "../../../contracts/agent-api/generated.zod";
 import type { AgentEvent, AgentRun } from "../../../contracts/agent-api/generated";
-import { canonicalJson } from "@/domain/trip/commit";
+import { canonicalJson } from "@/domain/canonical-json";
 import type { Database } from "@/server/db/database";
 import type { AgentRunTable } from "@/server/db/types";
 import type { Selectable } from "kysely";

@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import type { Kysely } from "kysely";
 
 import { changeProposalSchema, type ChangeProposal } from "@/domain/trip/proposal";
-import { canonicalJson, TripVersionConflictError } from "@/domain/trip/commit";
+import { canonicalJson } from "@/domain/canonical-json";
+import { TripVersionConflictError } from "@/domain/trip/commit";
 import type { ServiceTokenContext } from "@/server/agent-client/credentials";
 import type { Database } from "@/server/db/database";
 import { inTransaction } from "@/server/db/transaction";

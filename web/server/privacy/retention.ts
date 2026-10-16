@@ -6,6 +6,7 @@ import type { AuthorizationSession } from "@/server/auth/authorize";
 import { requireInternalTeamRole } from "@/server/auth/authorize";
 
 import type { Database } from "@/server/db/database";
+import { inTransaction } from "@/server/db/transaction";
 
 export const RAW_CONVERSATION_RETENTION_DAYS = 90;
 export const TRIP_RECORD_RETENTION_MONTHS = 24;
@@ -79,7 +80,9 @@ export async function expireRawConversationMessages(
     throw new RangeError("batchSize must be between 1 and 5000");
   }
   await cleanupGuestQuotaMetadata(database, now);
-  return database.transaction().execute(async (transaction) => {
+  // Composes with the request transaction: the messages read that triggers retention
+  // already runs inside one, and Kysely rejects a nested transaction.
+  return inTransaction(database, async (transaction) => {
     const expired = await transaction.selectFrom("conversationMessages").select("id")
       .where("retentionExpiresAt", "<=", now)
       .where(sql<boolean>`COALESCE(content->>'kind', '') <> 'expired'`)

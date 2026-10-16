@@ -1,6 +1,6 @@
 # Quickstart Validation: Platform UX, Guest Planning & Account Creation
 
-Guest setup, planning, linking, registration and marketing are implemented. Newly authored tests are unrun and exhaustive coverage is partial. See [implementation status](evidence/implementation-status.md), [spec](spec.md), [data model](data-model.md) and [contracts](contracts/README.md). Commands below are future checks: Node.js, pnpm and Docker were skipped as requested.
+Guest setup, planning, linking, registration and marketing are implemented and verified against a local stack (Node.js 24, pnpm 12, Docker with PostgreSQL/PostGIS and Temporal, and the deterministic agent). See [implementation status](evidence/implementation-status.md), [spec](spec.md), [data model](data-model.md) and [contracts](contracts/README.md) for the executed commands, results and remaining gaps.
 
 Deploy web and booking worker from the same reviewed revision after fresh/upgrade checks for migrations 011/012. No deployment/migration was run here. Guest defaults are two active runs, ten new runs/session-hour and twenty sessions/network-hour. GUEST_TRUST_PROXY_IP defaults false (shared conservative bucket); enable only behind an edge that overwrites x-real-ip. GUEST_NETWORK_SECRET optionally separates the digest key. Keep cookie/Origin/ownership/account-booking protections active.
 
@@ -26,6 +26,39 @@ docker compose -f infra/compose/compose.yml --profile infrastructure --profile b
 ```
 
 Integration tests need TEST_DATABASE_ADMIN_URL, TEST_DATABASE_MIGRATION_URL, TEST_DATABASE_APP_URL and TEST_DATABASE_WORKER_URL as existing isolated helpers require. Missing configuration or skipped suites are not acceptance. Guest browser tests explicitly use new empty contexts and no inherited US1_STORAGE_STATE; existing account tests retain their fixtures. Do not print secrets.
+
+### Browser-run prerequisites
+
+Observed while running the suites; each is an environment property, not a product setting.
+
+- The isolated test database and the running app compete for PostgreSQL connections. Stop the
+  dev/production server before `pnpm --dir web test`, or expect connection timeouts.
+- Guest journeys share one per-network bootstrap allowance. `GUEST_MAX_SESSIONS_PER_HOUR` is
+  capped at 200 by the config schema, so repeated browser runs inside one hour exhaust it and
+  every bootstrap returns 429. Clear the ephemeral rows (or wait an hour) before re-running:
+  `DELETE FROM app.guest_bootstrap_buckets;` — they already expire after one hour by design.
+- `pnpm --dir web build` must run with `NODE_ENV=production`; a `development` override makes
+  prerendering the global error page fail. After a production build, delete `web/.next`
+  before starting `pnpm dev` again, otherwise the dev client can serve stale chunks and never
+  hydrate the draft.
+- A production build served over plain HTTP cannot hold its `Secure` `__Host-` guest cookie in
+  Safari/WebKit. Run the cross-browser matrix against the configured dev server, and verify the
+  production build separately.
+- The two refinement journeys commit and undo changes on their seeded trip, so seed one trip per
+  journey and run them on one project:
+
+  ```powershell
+  node scripts/seed-us2-fixture.mjs            # prints US2_TRIP_ID
+  node scripts/seed-us2-fixture.mjs            # prints the second trip for US2_REFINEMENT_TRIP_ID
+  $env:US1_STORAGE_STATE = ".playwright/us2-storage-state.json"
+  $env:US2_TRIP_ID = "<first>"
+  $env:US2_REFINEMENT_TRIP_ID = "<second>"
+  pnpm --dir web test:e2e
+  ```
+
+- The compose `booking-worker` cannot start yet: `web/server/workflows/alias-loader.mjs`
+  exports the hook but never calls `module.register`, so `@/*` specifiers reach Node as bare
+  package names. Planning-only verification does not need it.
 
 ## Check commands
 

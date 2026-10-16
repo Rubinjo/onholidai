@@ -12,8 +12,12 @@ test("@accessibility @cross-cutting workspace remains navigable with reduced mot
     await expect(page.getByRole("region", { name: "Agent conversation" })).toBeVisible();
     await expect(page.getByRole("contentinfo", { name: "Current total and booking" })).toBeVisible();
     await expect(page.locator("body").evaluate((body) => body.scrollWidth <= body.clientWidth)).resolves.toBe(true);
-    await page.keyboard.press("Tab");
-    await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
+    // WebKit keeps Safari's default of tabbing through form controls only, so the
+    // skip-link ordering assertion applies to engines that include links.
+    if (browserName !== "webkit") {
+      await page.keyboard.press("Tab");
+      await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
+    }
     await expect(page.locator("html")).toHaveCSS("scroll-behavior", "auto");
   }
   await test.info().attach("browser-version.txt", { body: `${browserName} ${browser.version()}`, contentType: "text/plain" });

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { canonicalJson } from "./commit";
+import { canonicalJson } from "@/domain/canonical-json";
 import { applyDraftOperations } from "./operations";
 import { tripSnapshotSchema, type TripSnapshot } from "./schema";
 import { projectCustomerSnapshot } from "@/domain/pricing/projections";

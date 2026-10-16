@@ -35,9 +35,14 @@ export function SetupForm() {
     else errorRef.current?.focus();
   }, []);
   const { payload: p, step } = draft, index = setupSteps.indexOf(step);
+  const announcedStep = useRef<SetupStep | null>(null);
   useEffect(() => {
     const field = pendingFieldFocus.current; pendingFieldFocus.current = null;
-    if (field) focusField(field); else heading.current?.focus();
+    const previous = announcedStep.current; announcedStep.current = step;
+    if (field) focusField(field);
+    // Move focus to the step heading only when the step actually changes. Focusing on
+    // initial load would override the document start and break skip-link behaviour.
+    else if (previous !== null && previous !== step) heading.current?.focus();
   }, [step, focusField]);
   function validateStep() {
     if (step === "destinations" && !p.destinations.length) throw new SetupFieldError("destinations", "Add at least one destination.");

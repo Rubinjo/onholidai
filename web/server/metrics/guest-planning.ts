@@ -15,7 +15,7 @@ export async function reserveBootstrap(transaction: Transaction<Database>, diges
     .where("networkDigest", "=", digest).where("startedAt", ">", cutoff).execute();
   if (rows.reduce((total, row) => total + row.sessionCount, 0) >= limit) throw planningProblems.guestResearchLimited(3600);
   await transaction.insertInto("guestBootstrapBuckets").values({ networkDigest: digest, startedAt: now, sessionCount: 1 })
-    .onConflict((conflict) => conflict.columns(["networkDigest", "startedAt"]).doUpdateSet({ sessionCount: sql<number>`session_count + 1` })).execute();
+    .onConflict((conflict) => conflict.columns(["networkDigest", "startedAt"]).doUpdateSet({ sessionCount: sql<number>`app.guest_bootstrap_buckets.session_count + 1` })).execute();
 }
 export async function checkGuestResearch(transaction: Transaction<Database>, sessionId: string,
   limits: { active: number; hourly: number }, now = new Date()): Promise<void> {

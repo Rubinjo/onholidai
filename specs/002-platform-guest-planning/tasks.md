@@ -76,9 +76,9 @@ Use existing `web/app`, `web/components`, `web/domain`, `web/server` and `web/te
 
 ### Tests
 
-- [ ] T021 [P] [US1] Write session/draft/filtered-places endpoint contract cases in `web/tests/contract/guest-setup-api.test.ts` for request/envelope/status shapes, partial versus full validation, same-origin/private headers, duplicate replay and inaccessible draft denial.
-- [ ] T022 [P] [US1] Write isolated draft revision/submit cases in `web/tests/integration/setup-drafts.test.ts` for account/guest dedicated principals, committed saves, tab conflicts, repeated submit, lost reservation response, one-trip attachment and terminal-run fresh-request retries.
-- [ ] T023 [P] [US1] Write initial-estimate guest browser cases in `web/tests/e2e/guest-setup.spec.ts` for country/city add/remove/reorder/replace, confirmed origin, step back/refresh, missing child age/date validation, explicit acceptance and full map-failure keyboard fallback.
+- [X] T021 [P] [US1] Write session/draft/filtered-places endpoint contract cases in `web/tests/contract/guest-setup-api.test.ts` for request/envelope/status shapes, partial versus full validation, same-origin/private headers, duplicate replay and inaccessible draft denial.
+- [X] T022 [P] [US1] Write isolated draft revision/submit cases in `web/tests/integration/setup-drafts.test.ts` for account/guest dedicated principals, committed saves, tab conflicts, repeated submit, lost reservation response, one-trip attachment and terminal-run fresh-request retries.
+- [X] T023 [P] [US1] Write initial-estimate guest browser cases in `web/tests/e2e/guest-setup.spec.ts` for country/city add/remove/reorder/replace, confirmed origin, step back/refresh, missing child age/date validation, explicit acceptance and full map-failure keyboard fallback.
 ### Implementation
 
 - [X] T024 [US1] Implement bounded incomplete-input schema in `web/components/trip-setup/draft-schema.ts`: preserve verbatim limits "title up to 120 characters, empty until review", "zero-to-eight canonical destinations", "up to 32 availability windows with empty dates", "nullable numeric duration inputs", "existing ten-traveller limit with missing child ages", "five integer 0–100 preferences", "up to 64 requirements, wording up to 1000 characters, empty until submit" and "Missing numeric value is null, not age zero"; require full existing domain schema only on submit.
@@ -97,7 +97,7 @@ Use existing `web/app`, `web/components`, `web/domain`, `web/server` and `web/te
 - [X] T037 [US1] Implement PostgreSQL session-wide research/creation limits in `web/server/metrics/guest-planning.ts` and `web/server/config.ts`, integrate `web/server/agent-client/run-repository.ts` and session bootstrap: two active/ten new runs-hour, twenty new sessions-hour per secret-hashed network key, replay free, atomic quota/run reservation, Retry-After, safe one-hour bucket expiry and no raw address/secret logging.
 - [X] T038 [US1] Add current-principal/unrevoked-run checks to every internal planning read/write via `web/server/api.ts`, `web/server/agent-client/run-repository.ts` and the internal trip/context/run route files listed in `evidence/route-access.md`; preserve signed owner/trip/request/version/audience/scopes, receipt fingerprints, no cursor-gap partial writes and legacy account grant compatibility.
 - [X] T039 [US1] Integrate submission→initial reservation→existing estimate review in `web/components/trip-setup/setup-form.tsx`, `web/components/trip-workspace/estimate-summary.tsx` and `web/server/agent-client/client.ts`; missing response replays original request, terminal failed/revoked research uses fresh persisted request on same trip, explicit acceptance only, safe guest expiry/quota/error recovery and unchanged customer pricing labels.
-- [ ] T040 [US1] Run US1 contract/integration/browser plus existing estimate/booking-denial/accessibility checks using `web/tests/e2e/guest-setup.spec.ts` and `web/tests/integration/estimate.test.ts`; record evidence including zero reservations/payments and same-browser reload in `specs/002-platform-guest-planning/evidence/us1.md`; keep unsupported guest booking gated.
+- [X] T040 [US1] Run US1 contract/integration/browser plus existing estimate/booking-denial/accessibility checks using `web/tests/e2e/guest-setup.spec.ts` and `web/tests/integration/estimate.test.ts`; record evidence including zero reservations/payments and same-browser reload in `specs/002-platform-guest-planning/evidence/us1.md`; keep unsupported guest booking gated.
 
 **Checkpoint**: US1 is complete only when its independent checks and relevant existing regressions pass; record actual evidence.
 
@@ -121,9 +121,9 @@ Use existing `web/app`, `web/components`, `web/domain`, `web/server` and `web/te
 - [X] T046 [US2] Recheck live guest/account authority before private event delivery in `web/app/api/v1/trips/[tripId]/events/route.ts` and `web/app/api/v1/agent-runs/[runId]/events/route.ts`; safely close on expiry/link/revoke, retain private/no-store and allow owner-scoped cursor recovery without stream-wide long-held locks.
 - [X] T047 [US2] Update `web/components/trip-workspace/workspace.tsx`, `use-trip.ts`, `use-trip-events.ts`, `web/components/agent/conversation.tsx` and `clarification.tsx` for guest expiry/retry/limit states and recorded evidence recovery without account gates, automatic proposal application or reset of entered/accepted data.
 - [X] T048 [US2] Adapt principal-aware customer exports/deletion/legal holds and partial-draft retention review in `web/server/privacy/export-delete.ts` and `retention.ts`; preserve "90-day raw messages and 24-month trip/partial-draft review", no expiry-triggered evidence deletion, account-only team roles and no cascading session cleanup.
-- [ ] T049 [US2] Add privacy/retention and research-limit replay/clock regression cases in `web/tests/integration/retention.test.ts` and `web/tests/integration/guest-planning.test.ts`; prove expired guest access leaves accepted versions and legal holds intact and concurrency counts release on terminal/interrupted runs.
+- [X] T049 [US2] Add privacy/retention and research-limit replay/clock regression cases in `web/tests/integration/retention.test.ts` and `web/tests/integration/guest-planning.test.ts`; prove expired guest access leaves accepted versions and legal holds intact and concurrency counts release on terminal/interrupted runs.
 - [X] T050 [US2] Audit and complete every planning-route/receipt access entry in `specs/002-platform-guest-planning/evidence/route-access.md` against implementation; leave booking/service diagnostic/provider boundaries protected and preserve legacy account behavior.
-- [ ] T051 [US2] Run US2 seeded integration/browser plus existing refinement/finalization/pricing/history suites in `web/tests/integration/refinement.test.ts`, `finalization.test.ts` and `pricing-disclosure.test.ts`; record ownership/outage/accessibility/version/zero-side-effect evidence in `specs/002-platform-guest-planning/evidence/us2.md`.
+- [X] T051 [US2] Run US2 seeded integration/browser plus existing refinement/finalization/pricing/history suites in `web/tests/integration/refinement.test.ts`, `finalization.test.ts` and `pricing-disclosure.test.ts`; record ownership/outage/accessibility/version/zero-side-effect evidence in `specs/002-platform-guest-planning/evidence/us2.md`.
 
 **Checkpoint**: US2 is complete only when its independent checks and relevant existing regressions pass; record actual evidence.
 
@@ -156,7 +156,7 @@ Use existing `web/app`, `web/components`, `web/domain`, `web/server` and `web/te
 - [X] T066 [US3] Update post-link owner UI/reconnect/research retries in `web/components/trip-workspace/use-trip.ts`, `use-trip-events.ts`, `estimate-summary.tsx` and `web/components/agent/conversation.tsx`; stop old guest streams, recover account evidence, fresh request for interrupted/revoked research on same trip, no proposal expiry reset or automatic acceptance.
 - [ ] T067 [US3] Extend account-linking/dual-identity regressions in `web/tests/integration/account-linking.test.ts`, `booking-planning-identity.test.ts` and `booking-authorization.test.ts` for simultaneous quota/link/callback locks, price/material edits while authenticating, duplicate/unknown outcomes and exact-term reauthorization.
 - [ ] T068 [US3] Complete route access/registration claims and migration deployment gate in `specs/002-platform-guest-planning/evidence/route-access.md` and `quickstart.md`; confirm compatible account/guest web and worker versions before enabling booking for linked principals.
-- [ ] T069 [US3] Run US3 contract/DB/browser plus Temporal/authorization/privacy/partial-failure regressions in `web/tests/integration/booking-workflows.test.ts` and `web/tests/e2e/booking-auth.spec.ts`; document same-trip linking, zero auth/link side effects and all booking operation results in `specs/002-platform-guest-planning/evidence/us3.md`.
+- [X] T069 [US3] Run US3 contract/DB/browser plus Temporal/authorization/privacy/partial-failure regressions in `web/tests/integration/booking-workflows.test.ts` and `web/tests/e2e/booking-auth.spec.ts`; document same-trip linking, zero auth/link side effects and all booking operation results in `specs/002-platform-guest-planning/evidence/us3.md`.
 
 **Checkpoint**: US3 is complete only when its independent checks and relevant existing regressions pass; record actual evidence.
 
@@ -176,7 +176,7 @@ Use existing `web/app`, `web/components`, `web/domain`, `web/server` and `web/te
 - [X] T071 [US4] Build reusable marketing hero/process/benefits and explicitly illustrative itinerary cards in `web/components/marketing/hero.tsx`, `process.tsx` and `itinerary-example.tsx` using shared shadcn/tokens; use examples instead of new imagery where sufficient, and document rights/alt text if imagery is added.
 - [X] T072 [US4] Replace minimal `web/app/page.tsx` with clear value proposition/prominent /trips/new CTA, how-it-works, travel examples, supported trust/benefit copy and account-free planning; remove stale booking copy and avoid savings/provider/endorsement guarantees without evidence.
 - [X] T073 [US4] Integrate simple planning/sign-in/free-sign-up navigation and coherent metadata in `web/components/marketing/navigation.tsx` and `web/app/layout.tsx`; preserve landmarks/skip link, avoid homepage guest initialization, gate unfinished auth links if developing this phase early.
-- [ ] T074 [US4] Run homepage/browser/keyboard checks using `web/tests/e2e/homepage.spec.ts`; record claim source/optional asset rights and measured SC-001 results when participants are available in `specs/002-platform-guest-planning/evidence/us4.md`, leaving unavailable participant evidence explicitly pending.
+- [X] T074 [US4] Run homepage/browser/keyboard checks using `web/tests/e2e/homepage.spec.ts`; record claim source/optional asset rights and measured SC-001 results when participants are available in `specs/002-platform-guest-planning/evidence/us4.md`, leaving unavailable participant evidence explicitly pending.
 
 **Checkpoint**: US4 is complete only when its independent checks and relevant existing regressions pass; record actual evidence.
 
@@ -211,9 +211,9 @@ Use existing `web/app`, `web/components`, `web/domain`, `web/server` and `web/te
 
 - [X] T081 Audit all FR-001–FR-029 and SC-001–SC-010 coverage against generated tests/evidence in `specs/002-platform-guest-planning/evidence/coverage.md`; trace every route/actor/constraint, preserve existing pricing/feasibility/domain rules and close code issues rather than treating a checklist as implementation evidence.
 - [ ] T082 Validate fresh/upgrade schema, guest/account direct/draft creation, existing snapshots/receipts/hashes and non-destructive feature-disable rollout using `web/tests/integration/migration-compatibility.test.ts`; record compatible web/agent/worker deployment and recovery steps in `specs/002-platform-guest-planning/evidence/rollout.md`.
-- [ ] T083 Run complete lint/type/unit/integration/contract/migration/Temporal/browser/build commands from `specs/002-platform-guest-planning/quickstart.md`, including original trip/booking regressions and agent checks when affected; record actual failures/skips/results in `specs/002-platform-guest-planning/evidence/release.md`, do not count missing isolated DB or browsers as success.
+- [X] T083 Run complete lint/type/unit/integration/contract/migration/Temporal/browser/build commands from `specs/002-platform-guest-planning/quickstart.md`, including original trip/booking regressions and agent checks when affected; record actual failures/skips/results in `specs/002-platform-guest-planning/evidence/release.md`, do not count missing isolated DB or browsers as success.
 - [ ] T084 Execute frozen participant tasks with the specified cohort when available and record anonymized actual timings/denominators/ratings for SC-001/002/003/007/010 in `specs/002-platform-guest-planning/evidence/usability.md`; if participants are unavailable, leave this task unchecked and report the outstanding release gate instead of fabricating completion.
-- [ ] T085 Verify customer pricing/private data minimization and session/network-bucket/raw-message cleanup through `web/tests/integration/booking-privacy.test.ts`, `pricing-disclosure.test.ts` and `retention.test.ts`; record no guest credential/address leak, no diagnostic cost exposure and no expiry-triggered accepted-history deletion in `specs/002-platform-guest-planning/evidence/privacy.md`.
+- [X] T085 Verify customer pricing/private data minimization and session/network-bucket/raw-message cleanup through `web/tests/integration/booking-privacy.test.ts`, `pricing-disclosure.test.ts` and `retention.test.ts`; record no guest credential/address leak, no diagnostic cost exposure and no expiry-triggered accepted-history deletion in `specs/002-platform-guest-planning/evidence/privacy.md`.
 - [X] T086 Reconcile final implemented commands/contracts and documented safe defaults in `specs/002-platform-guest-planning/quickstart.md`, `contracts/planning-api.md`, `contracts/ui-contract.md` and `README.md`; summarize measured readiness and any explicit outstanding acceptance gates without expanding feature scope.
 
 **Checkpoint**: Complete the stated gate before advancing; do not mark unfinished implementation or missing external evidence complete.
@@ -291,9 +291,30 @@ Every stated acceptance scenario must be covered by the corresponding story test
 
 ## Implementation Strategy
 
-### Current handoff (2026-10-15)
+### Current handoff (2026-10-15, verification pass)
 
-Story implementation is delivered; checked tasks represent source work, not runtime acceptance. Newly authored test files cover a subset of the comprehensive scenarios requested in T021–T023, T041–T043, T049, T052–T054, T067 and T075; those tasks remain unchecked until their full matrices are completed. Execution gates T040/T051/T069/T074/T080/T082/T083/T085 were skipped as requested because Node.js, pnpm and Docker are unavailable. T068 still requires coordinated deployment confirmation; T079 requires manual assistive-technology checks; T084 requires real participants. See evidence/implementation-status.md and evidence/coverage.md. No skipped gate is counted as passed.
+Story source is delivered and now executes on the reviewed lockfile with Node.js 24.21.0,
+pnpm 12.11.2, Docker Desktop 29.6.1, an isolated PostgreSQL/PostGIS instance and the real
+deterministic agent. Verified: web lint/typecheck, repo lint/typecheck (including ruff and
+pyright), `pnpm --dir web test` with **283 tests passing and no skips**, `pnpm --dir web
+test:e2e` with **82 browser journeys passing across five projects**, the production build,
+75 agent tests and the cross-language contract checks. See
+evidence/implementation-status.md and evidence/release.md for commands and results.
+
+Eight defects were found by running the stack and fixed: the dropped
+`internalPlanningApiResponse` options (typecheck failure), an ambiguous `session_count`
+upsert that made every guest bootstrap return 500, a key-order-sensitive payload comparison
+that looped autosave and lost drafts, initial-load focus stealing from the skip link, an
+empty `requiredScopes` list that returned 401 on every agent→web callback, a nested
+transaction that broke conversation history, a fieldset min-content overflow, and a lost
+price-bar landmark. Each is covered by the passing suites above.
+
+T021–T023 and T049 were completed, and the execution gates T040/T051/T069/T074/T083/T085
+now have real results rather than skips. Still open: T041–T043, T052–T054, T067, T075 (their
+suites exist and pass but the exhaustive scenario lists are not fully covered — see
+evidence/coverage.md), T068 (blocked by a pre-existing booking-worker entrypoint defect),
+T079 (manual assistive-technology review), T080 (SC-010 timing) and T084 (participants).
+
 
 ### MVP first (US1)
 

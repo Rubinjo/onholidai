@@ -5,7 +5,10 @@ import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
 const api = vi.hoisted(() => ({ read: vi.fn() }));
-vi.mock("../../components/trip-setup/http", () => ({ planningJson: api.read, planningError: () => "Safe conflict" }));
+vi.mock("../../components/trip-setup/http", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../components/trip-setup/http")>(),
+  planningJson: api.read, planningError: () => "Safe conflict",
+}));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("committed workspace convergence", () => {

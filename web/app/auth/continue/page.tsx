@@ -12,8 +12,11 @@ export default async function ContinuePage({ searchParams }: { searchParams: Pro
   const request = new Request(application.config.BETTER_AUTH_URL, { headers: await headers() });
   const context = await planningContext(application, request);
   if (!context.identity.accountUserId) redirect(`/sign-in?intentId=${encodeURIComponent(intentId)}`);
+  let reference;
   try {
-    const reference = await continuationReference(application.database, context.identity, intentId);
-    return <main className="auth-page"><BookingContinuation intentId={intentId} returnPath={reference.returnPath} /></main>;
-  } catch { return <main className="auth-page"><h1>Private continuation unavailable</h1><p>Return to the browser where you planned the trip. Signing in alone does not claim guest plans.</p><Link href="/trips/new">Start a new plan</Link></main>; }
+    reference = await continuationReference(application.database, context.identity, intentId);
+  } catch {
+    return <main className="auth-page"><h1>Private continuation unavailable</h1><p>Return to the browser where you planned the trip. Signing in alone does not claim guest plans.</p><Link href="/trips/new">Start a new plan</Link></main>;
+  }
+  return <main className="auth-page"><BookingContinuation intentId={intentId} returnPath={reference.returnPath} /></main>;
 }

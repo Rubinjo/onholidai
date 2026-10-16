@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type TripEnvelope, useTrip } from "./use-trip";
 import { useTripEvents } from "./use-trip-events";
@@ -17,7 +18,7 @@ function WorkspacePanes({ initialTrip, initialRunId }: { initialTrip: TripEnvelo
   const query = useTrip(initialTrip), trip = query.data;
   useTripEvents(initialTrip.tripId);
   if (query.error instanceof PlanningRequestError && [401, 403, 404].includes(query.error.status)) return <main className="planning-page"><h1>Private plan unavailable</h1>
-    <p role="alert">{planningError(query.error)}</p><a href="/sign-in">Sign in to your account</a><p><a href="/trips/new">Start a new plan</a></p></main>;
+    <p role="alert">{planningError(query.error)}</p><Link href="/sign-in">Sign in to your account</Link><p><Link href="/trips/new">Start a new plan</Link></p></main>;
   return <main className="planning-page planning-workspace"><h1>Your living trip</h1>{query.error && <p role="alert">{planningError(query.error)} Showing saved version {trip.version}. <button type="button" onClick={() => void query.refetch()}>Retry trip refresh</button></p>}
     {/* The price bar stays last in the DOM for the documented focus order and is
         placed in the middle column by the grid, which owns price and booking. */}

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emptySetupDraft, type SetupDraftPayload, type SetupStep } from "./draft-schema";
 import { setupDraftEnvelopeSchema } from "@/server/db/planning-schema";
+import { canonicalJson } from "@/domain/canonical-json";
 import { planningError, planningJson, PlanningRequestError } from "./http";
 type Envelope = ReturnType<typeof setupDraftEnvelopeSchema.parse>;
 type Save = { requestId: string; expectedRevision: number; currentStep: SetupStep; payload: SetupDraftPayload };
@@ -57,7 +58,7 @@ export function useSetupDraft() {
           server.current = saved; pending.current = null;
           // An uncertain response may have acknowledged an older snapshot. Only
           // mark the current input committed when it exactly matches that save.
-          if (JSON.stringify(saved.payload) === JSON.stringify(latest.current.payload) && saved.currentStep === latest.current.step) {
+          if (canonicalJson(saved.payload) === canonicalJson(latest.current.payload) && saved.currentStep === latest.current.step) {
             committedInput.current = revisionOfInput.current;
           } else if (inputRevision === revisionOfInput.current) committedInput.current = -1;
           setError(""); setStatus(committedInput.current === revisionOfInput.current ? "Saved" : "Unsaved changes");

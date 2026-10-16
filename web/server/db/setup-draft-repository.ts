@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Kysely, Selectable } from "kysely";
 import { z } from "zod";
 import { emptySetupDraft } from "@/components/trip-setup/draft-schema";
-import { canonicalJson } from "@/domain/trip/commit";
+import { canonicalJson } from "@/domain/canonical-json";
 import { createTrip } from "@/domain/trip/create";
 import { resolvePlanningActor, planningNotFound, type PlanningIdentity } from "@/server/auth/planning-actor";
 import { validPlanningSession } from "@/server/auth/planning-session";

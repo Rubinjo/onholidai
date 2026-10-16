@@ -95,3 +95,17 @@ New bootstrap/draft endpoints require same-origin mutation and server-derived au
 
 Privacy helpers accept proven PlanningActor or registered owner/team roles. Static route audit is not runtime access-matrix evidence; deployment and exhaustive tests remain open.
 
+## Runtime access verification — 2026-10-15
+
+The static audit above is now backed by executed checks on a migrated local stack:
+
+- `web/tests/contract/guest-planning-api.test.ts` proves that possessing a trip, version or run identifier is not authority and that unrelated proof is rejected before payload validation on every private route family.
+- `web/tests/contract/guest-setup-api.test.ts` proves the bootstrap/draft endpoints require same-origin mutation, deliver an HttpOnly private cookie, replay a duplicate allocation to the same draft and deny an unrelated guest.
+- `web/tests/integration/guest-planning.test.ts` proves acknowledgment data survives authority revocation, that session-wide concurrency releases terminal work, and that replay is free.
+- `web/tests/integration/account-linking.test.ts` and `booking-planning-identity.test.ts` prove one selected owner after a link race, retained version/history, revoked former guest authority and zero booking records or provider writes.
+- `web/tests/integration/migration-compatibility.test.ts` (22 cases) proves fresh and 001–010 upgrade paths keep legacy identities and add the new guest foreign keys.
+
+Remaining gate: coordinated web/worker deployment is still unconfirmed because the compose
+`booking-worker` cannot start (pre-existing `alias-loader.mjs` hook registration), so booking
+for linked principals is not enabled and T068 stays open.
+

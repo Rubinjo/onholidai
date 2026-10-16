@@ -25,7 +25,7 @@ describe("trip editor impact review", () => {
   it("reviews only the settings that changed", async () => {
     api.preview.mockResolvedValue({ impactFingerprint: "a".repeat(64), affectedFacts: ["preferences"], priceImpact: null, scheduleImpact: null, operations: [], warnings: [] });
     render(<TripEditor trip={envelope()} onCommit={() => {}} />);
-    fireEvent.change(screen.getByLabelText("Pace"), { target: { value: "60" } });
+    fireEvent.change(screen.getByLabelText("Pace", { exact: false }), { target: { value: "60" } });
     fireEvent.click(screen.getByRole("button", { name: "Review edit impacts" }));
     await waitFor(() => expect(api.preview).toHaveBeenCalled());
     const [path, input] = api.preview.mock.calls[0] as [string, { operations: { target: string; value: unknown }[] }];

@@ -287,6 +287,8 @@ summary {
 }
 .trip-workspace__pane { display: flex; flex-direction: column; gap: 1rem; min-height: 0; min-width: 0; overflow-y: auto; overscroll-behavior: contain; }
 .trip-workspace__pane > * { min-width: 0; overflow-wrap: anywhere; }
+/* Fieldset keeps a UA min-content floor, which would overflow the narrowest panes. */
+.trip-workspace__pane fieldset { min-width: 0; }
 .trip-workspace__pane--details { grid-area: details; }
 .trip-workspace__pane--route { grid-area: route; gap: .75rem; overflow: hidden; }
 .trip-workspace__pane--conversation { grid-area: conversation; }

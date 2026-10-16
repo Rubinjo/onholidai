@@ -4,6 +4,7 @@ import type { Kysely, Transaction } from "kysely";
 import { z } from "zod";
 
 import { draftOperationSchema, tripSnapshotSchema, tripVersionSchema } from "@/domain/trip/schema";
+import { canonicalJson } from "@/domain/canonical-json";
 import { ProblemError } from "@/server/errors";
 import type { Database } from "@/server/db/database";
 import { inTransaction } from "@/server/db/transaction";
@@ -100,18 +101,6 @@ function defaultRepositoryFactory(transaction: Transaction<Database>): CommitRep
     idempotency: new IdempotencyRepository(transaction),
     trips: new TripRepository(transaction),
   };
-}
-
-export function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    const object = value as Record<string, unknown>;
-    return `{${Object.keys(object).filter((key) => object[key] !== undefined).sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
-  }
-  const encoded = JSON.stringify(value);
-  if (encoded === undefined) throw new Error("Mutation values must be JSON serializable");
-  return encoded;
 }
 
 export async function commitTripMutation(
