@@ -24,6 +24,70 @@ def question(text: str, reason: str = "scope") -> AgentResult:
     )
 
 
+def preserve_manual_destination_order(
+    snapshot: dict[str, object],
+    operations: list[dict[str, object]],
+    message: str,
+) -> list[dict[str, object]]:
+    explicit_reorder = re.search(
+        r"\b(?:re-?order|rearrang\w*|change\s+(?:the\s+)?(?:route|stop|destination)\s+order|"
+        r"order\s+(?:the\s+)?(?:route|stops|destinations|cities)|put\s+.+?\s+(?:first|last|before|after))\b",
+        message.casefold(),
+    )
+    if snapshot.get("destinationOrder", "manual") != "manual" or explicit_reorder:
+        return operations
+    current = snapshot.get("destinations")
+    if not isinstance(current, list):
+        return operations
+    current_ids: list[str] = []
+    for item in cast(list[object], current):
+        if not isinstance(item, dict):
+            continue
+        destination_id = cast(dict[str, object], item).get("id")
+        if isinstance(destination_id, str):
+            current_ids.append(destination_id)
+    positions = {destination_id: index for index, destination_id in enumerate(current_ids)}
+    result: list[dict[str, object]] = []
+    for operation in operations:
+        value = operation.get("value")
+        if operation.get("target") != "/destinations" or not isinstance(value, list):
+            result.append(operation)
+            continue
+        value_items = cast(list[object], value)
+        if operation.get("operation") == "reorder" and all(
+            isinstance(destination_id, str) for destination_id in value_items
+        ):
+            requested = cast(list[str], value_items)
+            selected = set(requested)
+            preserved = [
+                destination_id for destination_id in current_ids if destination_id in selected
+            ]
+            added = [
+                destination_id for destination_id in requested if destination_id not in positions
+            ]
+            result.append({**operation, "value": [*preserved, *added]})
+            continue
+        if operation.get("operation") != "replace" or not all(
+            isinstance(item, dict)
+            and isinstance(cast(dict[str, object], item).get("id"), str)
+            for item in value_items
+        ):
+            result.append(operation)
+            continue
+        entries = [cast(dict[str, object], item) for item in value_items]
+        existing = sorted(
+            (entry for entry in entries if cast(str, entry["id"]) in positions),
+            key=lambda entry: positions[cast(str, entry["id"])],
+        )
+        added_entries = [entry for entry in entries if cast(str, entry["id"]) not in positions]
+        ordered = [*existing, *added_entries]
+        result.append({
+            **operation,
+            "value": [{**entry, "routePosition": index} for index, entry in enumerate(ordered)],
+        })
+    return result
+
+
 async def refine(request: CreateAgentRunRequest, sources: TripReader) -> AgentResult:
     import langsmith
     from langgraph.graph import END, START, StateGraph  # pyright: ignore[reportMissingTypeStubs]
@@ -385,6 +449,7 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
                     },
                 }
             )
+    operations = preserve_manual_destination_order(snapshot, operations, message)
     return propose_trip_changes(request, operations, rationale, warnings)
 
 

@@ -25,4 +25,10 @@ describe("route policy and alternative departures", () => {
     expect(tripSnapshotSchema.safeParse({ ...snapshot, departureOrigins: [{ ...origin, confirmedByUser: false }] }).success).toBe(false);
     expect(tripSnapshotSchema.safeParse({ ...snapshot, departureOrigins: [{ ...origin, placeId: "other" }] }).success).toBe(false);
   });
+  it("retains optional confirmed-origin coordinates and reads legacy empty alternatives", () => {
+    const snapshot = createSyntheticTripSnapshot();
+    const origin = { ...snapshot.departureOrigin!, location: { latitude: 38.72, longitude: -9.14 } };
+    expect(tripSnapshotSchema.parse({ ...snapshot, departureOrigin: origin, departureOrigins: [origin] }).departureOrigin).toEqual(origin);
+    expect(tripSnapshotSchema.parse({ ...snapshot, departureOrigins: [] }).departureOrigins).toEqual([]);
+  });
 });

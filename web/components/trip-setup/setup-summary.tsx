@@ -6,7 +6,7 @@ export function SetupSummary({ payload }: { payload: SetupDraftPayload }) {
       <ol>{payload.destinations.map((destination) => <li key={destination.id}>{destination.name}</li>)}</ol>
       {!payload.destinations.length && <p>Add a country or city to start your route.</p>}
       <p>{payload.destinationOrder === "ai" ? "AI will propose the destination order" : "Your chosen destination order"}</p>
-      <dl><dt>Departure alternatives</dt><dd>{(payload.departureOrigins ?? (payload.departureOrigin ? [payload.departureOrigin] : [])).map((origin) => origin.name).join(", ") || "Choose your starting point"}</dd>
+      <dl><dt>Departure alternatives</dt><dd>{(payload.departureOrigins?.length ? payload.departureOrigins : (payload.departureOrigin ? [payload.departureOrigin] : [])).map((origin) => origin.name).join(", ") || "Choose your starting point"}</dd>
         <dt>Duration</dt><dd>{payload.duration.idealDays === null ? "Choose your dates" : `${payload.duration.idealDays} days preferred`}</dd>
         <dt>Travellers</dt><dd>{payload.travellerParty.adults ?? "Not set"} adults, {payload.travellerParty.children.length} children</dd>
         <dt>Currency</dt><dd>{payload.currency}</dd></dl>

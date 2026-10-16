@@ -15,9 +15,23 @@ const japan = { placeId: "jp", kind: "country", name: "Japan", countryCode: "JP"
 const tokyo = { ...japan, placeId: "tokyo", kind: "city", name: "Tokyo", location: { latitude: 35, longitude: 139 } };
 function Route() {
   const [destinations, setDestinations] = useState<TripSnapshot["destinations"]>([]), [order, setOrder] = useState<"manual" | "ai">("manual");
-  return <Destinations globe origin={null} onOrigin={() => {}} destinations={destinations} onDestinations={setDestinations} order={order} onOrder={setOrder} />;
+  const [origins, setOrigins] = useState<NonNullable<TripSnapshot["departureOrigins"]>>([]);
+  return <><output data-testid="selected-origins">{JSON.stringify(origins)}</output><Destinations globe origin={origins[0] ?? null}
+    origins={origins} onOrigin={(origin) => setOrigins(origin ? [origin] : [])} onOrigins={setOrigins}
+    destinations={destinations} onDestinations={setDestinations} order={order} onOrder={setOrder} /></>;
 }
 describe("observable planning controls", () => {
+  it("retains confirmed departure coordinates from the resolved place", async () => {
+    const departure = { ...tokyo, kind: "airport" as const, placeId: "airport:tokyo", airportCode: "HND" };
+    api.read.mockResolvedValue({ candidates: [departure] });
+    render(<Route />);
+    const search = screen.getByRole("combobox", { name: "Departure search" });
+    fireEvent.change(search, { target: { value: "Tokyo" } }); fireEvent.keyDown(search, { key: "Enter" });
+    fireEvent.click(await screen.findByRole("option", { name: /Tokyo/ }));
+    expect(JSON.parse(screen.getByTestId("selected-origins").textContent!)).toMatchObject([
+      { placeId: "airport:tokyo", countryCode: "JP", timezone: "Asia/Tokyo", location: { latitude: 35, longitude: 139 } },
+    ]);
+  });
   it("selects a country directly and replaces it with a searched city; reset retains the mode", async () => {
     api.read.mockImplementation((path: string) => Promise.resolve({ candidates: path.includes("kind=country") ? [japan] : [tokyo] }));
     render(<Route />);

@@ -159,6 +159,71 @@ def test_departure_comparison_proposes_the_supported_cheaper_origin_without_chan
     assert source.trip == before
 
 
+def test_ai_estimate_proposes_origin_aware_order_for_review_without_changing_saved_order():
+    import asyncio
+    from typing import cast
+
+    class RouteSources(Sources):
+        def __init__(self):
+            super().__init__()
+            self.search_queries: list[dict[str, object]] = []
+
+        async def search(
+            self, request: CreateAgentRunRequest, query: dict[str, object]
+        ) -> dict[str, object]:
+            self.search_queries.append(query)
+            return {
+                "offers": [
+                    {
+                        "component": {
+                            "id": f"a0000000-a000-4000-8000-a{index:011}",
+                            "type": kind,
+                            "bookingStatus": "unbooked",
+                            "price": {"currency": "EUR", "finalCustomerMinor": 10000},
+                        }
+                    }
+                    for index, kind in enumerate(["flight", "accommodation"], 1)
+                ]
+            }
+
+    source = RouteSources()
+    snapshot = cast(dict[str, object], source.trip["snapshot"])
+    west = {"placeId": "home-west", "name": "West", "confirmedByUser": True,
+            "location": {"latitude": 0, "longitude": 0}}
+    east = {"placeId": "home-east", "name": "East", "confirmedByUser": True,
+            "location": {"latitude": 20, "longitude": 20}}
+    stops = [
+        {"id": f"10000000-0000-4000-8000-{index:012}", "name": name, "kind": "city",
+         "location": {"latitude": 0, "longitude": longitude}, "routePosition": index,
+         "arrivalDate": None, "departureDate": None, "plannedNights": 0}
+        for index, (name, longitude) in enumerate(
+            [("A", 0), ("C", 20), ("B", 10), ("D", 30)], 5
+        )
+    ]
+    original_order = [stop["id"] for stop in stops]
+    snapshot.update({
+        "departureOrigin": west,
+        "departureOrigins": [west, east],
+        "destinationOrder": "ai",
+        "destinations": stops,
+    })
+    before = deepcopy(source.trip)
+
+    result = asyncio.run(estimate(request(), source)).root
+    assert result.kind == "proposal"
+    routed = next(
+        operation.value
+        for operation in result.proposal.operations
+        if operation.target == "/destinations"
+    )
+    proposed_order = [stop["id"] for stop in cast(list[dict[str, object]], routed)]
+    assert proposed_order != original_order
+    assert len(source.search_queries) >= 2
+    assert all(query["destinationIds"] == proposed_order for query in source.search_queries)
+    assert "return to the same location" in result.proposal.rationale
+    assert source.trip == before
+
+
 def test_unavailable_baseline_does_not_hide_a_supported_departure_alternative():
     import asyncio
     from typing import cast

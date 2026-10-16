@@ -12,6 +12,21 @@ selected guest principal --link once--> account
 booking records --> account + trip (existing account FKs)
 ```
 
+## Route policy and departure alternatives
+
+`destinationOrder` is an optional snapshot fact for legacy compatibility: `manual` preserves
+the supplied route order, while `ai` permits a proposed reorder that still requires review.
+`departureOrigins` is an optional list of one to eight distinct, traveller-confirmed city or
+airport identities for the same party; when nonempty, the selected `departureOrigin` must be
+one of them. Legacy empty lists read as the selected origin, and draft submission normalizes
+that case for new trips.
+Optional coordinates are bounded geographic inputs only. AI route ordering considers the
+outbound and return legs for every alternative when all required coordinates are available;
+otherwise it preserves the supplied order. The selected origin, destination sequence, dates,
+stays and prices remain subject to proposal review and current booking-term authorization.
+Legacy snapshots may omit both additions or retain an empty alternatives list without changing
+accepted history.
+
 Default account principal may own many legacy/direct-created trips. Every wizard draft allocates its own non-default principal: guest-origin with session authority, or account-origin already linked to the current account. Each draft principal owns that one draft/resulting trip, enabling a unique draft-owner constraint and selected-trip-only linking without limiting an account to one wizard trip.
 
 ## PlanningPrincipal: planning_principals

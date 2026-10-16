@@ -20,19 +20,26 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("guest recovery and revocat
   it("persists reviewed route policy and departure alternatives and restores exact legacy facts on undo", async () => {
     const { session } = await createPlanningSession(fixture.database), identity = { accountUserId: null, guestSessionId: session.id };
     const drafts = new SetupDraftRepository(fixture.database, identity), { draft } = await drafts.allocate(randomUUID());
-    const saved = await drafts.save(draft.draftId, { requestId: randomUUID(), expectedRevision: 1, currentStep: "review", payload: validSetupPayload() });
+    const payload = validSetupPayload(), selectedOrigin = payload.departureOrigin!;
+    payload.departureOrigin = { ...selectedOrigin, location: { latitude: 51.5072, longitude: -0.1276 } };
+    const saved = await drafts.save(draft.draftId, { requestId: randomUUID(), expectedRevision: 1, currentStep: "review", payload });
     const trip = await drafts.submit(draft.draftId, { expectedRevision: saved.revision });
     const owner = (await fixture.database.selectFrom("trips").select("ownerUserId").where("id", "=", trip.tripId).executeTakeFirstOrThrow()).ownerUserId;
     const before = await readTrip(fixture.database, owner, trip.tripId);
     const origin = before.snapshot.departureOrigin!;
+    expect(origin.location).toEqual({ latitude: 51.5072, longitude: -0.1276 });
+    expect(before.snapshot.departureOrigins).toEqual([origin]);
     const command = { requestId: randomUUID(), expectedVersion: 1, operations: [
       { operation: "replace", target: "/destinationOrder", value: "ai" },
-      { operation: "replace", target: "/departureOrigins", value: [origin, { ...origin, placeId: "synthetic-ams", name: "Amsterdam Schiphol", countryCode: "NL", timezone: "Europe/Amsterdam", airportCode: "AMS" }] },
+      { operation: "replace", target: "/departureOrigins", value: [origin, { ...origin, placeId: "synthetic-ams", name: "Amsterdam Schiphol", countryCode: "NL", timezone: "Europe/Amsterdam", airportCode: "AMS", location: { latitude: 52.3086, longitude: 4.7639 } }] },
     ] };
     const review = await previewEdit(fixture.database, owner, trip.tripId, command, createPlanningProviders("deterministic"));
     expect((await readTrip(fixture.database, owner, trip.tripId)).version).toBe(1);
     const accepted = await applyEdit(fixture.database, owner, trip.tripId, { ...command, impactFingerprint: review.impactFingerprint });
     expect(accepted.version).toBe(2); expect(accepted.snapshot.departureOrigins).toHaveLength(2); expect(accepted.snapshot.destinationOrder).toBe("ai");
+    expect(accepted.snapshot.departureOrigins?.map((entry) => entry.location)).toEqual([
+      { latitude: 51.5072, longitude: -0.1276 }, { latitude: 52.3086, longitude: 4.7639 },
+    ]);
     await expect(applyEdit(fixture.database, owner, trip.tripId, { ...command, requestId: randomUUID(), impactFingerprint: review.impactFingerprint })).rejects.toMatchObject({ status: 409 });
     expect((await readTrip(fixture.database, owner, trip.tripId)).snapshot).toEqual(accepted.snapshot);
     const restored = await undoDraft(fixture.database, owner, trip.tripId, { requestId: randomUUID(), expectedVersion: 2, restoreVersion: 1 });

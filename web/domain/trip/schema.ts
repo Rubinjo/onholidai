@@ -58,6 +58,12 @@ export const currencySchema = z
   .refine(isIsoCurrency, "Expected a recognized ISO 4217 currency code");
 
 export const timezoneSchema = z.string().min(1).refine(isIanaTimezone, "Expected a valid IANA timezone");
+export const geographyPointSchema = z
+  .object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+  })
+  .strict();
 
 export const moneySchema = z
   .object({
@@ -74,6 +80,7 @@ export const departureOriginSchema = z
     countryCode: z.string().regex(/^[A-Z]{2}$/),
     timezone: timezoneSchema,
     airportCode: z.string().regex(/^[A-Z]{3}$/).nullable(),
+    location: geographyPointSchema.nullable().optional(),
     confirmedByUser: z.literal(true),
   })
   .strict()
@@ -191,13 +198,6 @@ export const tripConstraintSchema = z
       addIssue(context, ["confirmedByUser"], "Material inferred constraints require user confirmation");
     }
   });
-
-export const geographyPointSchema = z
-  .object({
-    latitude: z.number().min(-90).max(90),
-    longitude: z.number().min(-180).max(180),
-  })
-  .strict();
 
 export const destinationSchema = z
   .object({

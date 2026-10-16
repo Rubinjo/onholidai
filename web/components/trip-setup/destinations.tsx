@@ -29,7 +29,7 @@ export function Destinations({ origin, origins, destinations, onOrigin, onOrigin
   const request = useRef(0), drag = useRef<number | null>(null);
   const [candidates, setCandidates] = useState<PlaceCandidate[]>([]), [error, setError] = useState(""), [busy, setBusy] = useState(false), [replaceId, setReplaceId] = useState<string>();
   const [searchKey, setSearchKey] = useState(0), [countryChoices, setCountryChoices] = useState<PlaceCandidate[]>([]), [moving, setMoving] = useState("");
-  const departures = origins ?? (origin ? [origin] : []);
+  const departures = origins?.length ? origins : origin ? [origin] : [];
   function choose(place: PlaceCandidate) {
     request.current++; setBusy(false); setCountryChoices([]);
     try { onDestinations(selectDestination(destinations, place, replaceId)); setReplaceId(undefined); setError(""); }
@@ -62,7 +62,7 @@ export function Destinations({ origin, origins, destinations, onOrigin, onOrigin
         if (departures.some((entry) => entry.placeId === place.placeId)) { setError("That departure is already selected."); return; }
         if (departures.length >= 8) { setError("Choose at most eight departure alternatives."); return; }
         const next: Origin = { kind: place.kind === "airport" ? "airport" : "city", placeId: place.placeId, name: place.name,
-          countryCode: place.countryCode, timezone: place.timezone, airportCode: place.airportCode, confirmedByUser: true };
+          countryCode: place.countryCode, timezone: place.timezone, airportCode: place.airportCode, location: place.location, confirmedByUser: true };
         if (onOrigins) onOrigins([...departures, next]); else onOrigin(next); setError("");
       }} />
       <ul className="departure-cards">{departures.map((place) => <li key={place.placeId}><strong>{place.name}</strong><span>{place.countryCode} · {place.timezone}</span><Button variant="ghost" aria-label={`Remove departure ${place.name}`} onClick={() => {

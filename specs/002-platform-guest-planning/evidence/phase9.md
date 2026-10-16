@@ -136,11 +136,40 @@ temporary directory and a loopback-only proxy (`scripts/local-https-proxy.mjs`).
 `PLAYWRIGHT_IGNORE_HTTPS_ERRORS=true` is an explicit test-certificate opt-in, defaulting
 off; production cookie flags, origin checks and service-token verification stay strict.
 
+## Continuation verification — 2026-10-16
+
+- AI route ordering now evaluates the round trip from every confirmed departure
+  alternative when geographic coordinates are available. Missing geography preserves
+  the submitted order rather than implying an unsupported route. Manual refinement
+  preserves the accepted stop order unless the traveller explicitly requests a reorder;
+  newly proposed stops are appended for review.
+- Confirmed-origin coordinates remain optional for legacy snapshots and drafts. Updated
+  coverage exercises origin-aware route choice, missing-coordinate fallback, manual
+  refinement/reorder policy, origin persistence, and legacy normalization.
+
+| Check | Result |
+| --- | --- |
+| Full agent pytest suite | 88 passed |
+| Agent Ruff | Passed |
+| Pyright on changed agent modules and the new refinement test | Passed |
+| Web focused Vitest: planning controls/options and guest-planning/booking-authorization integration | 23 passed, 7 database-dependent cases skipped |
+| Web TypeScript and targeted ESLint | Passed |
+| Source/promoted contract validation and snapshot contract drift | Passed |
+
+The web database-dependent cases were skipped because isolated
+`TEST_DATABASE_*_URL` configuration was unavailable; they are not counted as passes.
+Repository-wide Pyright still reports three diagnostics in the unrelated,
+unmodified `agent/src/onholidai_agent/integrations/nebius.py`; the changed agent modules
+and new refinement test are clean. No database-backed matrix, human review, participant
+cohort, or coordinated deployment gate is claimed complete by these local checks.
+
 ## Remaining acceptance/release work
 
-- T087/T088: implementation and targeted state/agent/edit/undo tests exist, but the full
-  frozen downstream order/origin matrix (finalization, changed-origin authorization and
-  booking revalidation combinations) has not been exhausted.
+- T087/T088: route-order and origin-selection implementation plus targeted state/agent/
+  edit/undo tests exist, but the full frozen downstream order/origin matrix
+  (finalization, changed-origin authorization and booking revalidation combinations)
+  has not been exhausted. Database-dependent changed-origin authorization tests remain
+  unexecuted in this environment.
 - T098/T099: actual unrelated guest/account, expired credential, post-link old credential
   and ID-only HTTP denials plus fresh guest chat/history/undo journeys now run. Exhaustive
   valid-operation/stream/internal-service and interrupted/replayed recovery matrices

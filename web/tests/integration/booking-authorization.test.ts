@@ -1,13 +1,17 @@
 // @vitest-environment node
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { TransactionProviderRegistry } from "../../server/supply/transactions";
 import { withEphemeralPaymentToken } from "../../server/supply/payment";
 import { assertAuthorizationTerms, bookingTermsSchema, hashBookingTerms } from "../../domain/booking/authorization";
 import { startBooking } from "../../domain/booking/start";
+import { startBookingRevalidation } from "../../domain/booking/revalidate";
+import { commitTripMutation } from "../../domain/trip/commit";
 import { seedAuthorizedBooking } from "../helpers/booking";
 import { hasIsolatedDatabaseConfiguration, withIsolatedTestDatabase } from "../helpers/database";
 
 vi.mock("server-only", () => ({}));
+vi.mock("../../server/workflows/client", () => ({ startWorkflow: vi.fn(async () => undefined) }));
 
 const describeWithDatabase = hasIsolatedDatabaseConfiguration() ? describe : describe.skip;
 
@@ -73,6 +77,38 @@ describe("exact-term authorization invalidation", () => {
 });
 
 describeWithDatabase("durable booking authorization scope", () => {
+  it("requires fresh authorization after accepting a changed departure alternative", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedAuthorizedBooking(database, { startTransaction: false });
+      const previousOrigin = seeded.snapshot.departureOrigin!;
+      const selectedOrigin = { ...previousOrigin, placeId: "airport:ams", name: "Amsterdam Schiphol",
+        countryCode: "NL", timezone: "Europe/Amsterdam", airportCode: "AMS" };
+      const requestId = crypto.randomUUID();
+      const nextSnapshot = { ...seeded.snapshot, departureOrigin: selectedOrigin,
+        departureOrigins: [previousOrigin, selectedOrigin] };
+      const next = await commitTripMutation(database, {
+        tripId: seeded.tripId, ownerUserId: seeded.userId, expectedVersion: seeded.tripVersion,
+        lifecycleState: "finalized", requestId, idempotencyKey: `accepted-origin:${requestId}`,
+        requestFingerprint: createHash("sha256").update(requestId).digest("hex"),
+        snapshot: nextSnapshot, initiatingActor: "user", proposalId: null,
+        changeSummary: ["accepted_departure_alternative"],
+        inverseOperation: { operation: "replace", target: "/", value: seeded.snapshot },
+        nonReversibleReason: null, outboxEventId: crypto.randomUUID(), auditEventId: crypto.randomUUID(),
+      });
+
+      await expect(startBooking(database, seeded.userId, seeded.tripId, {
+        requestId: crypto.randomUUID(), authorizationId: seeded.authorizationId,
+      })).rejects.toMatchObject({ status: 409, code: "booking_authorization_stale" });
+      await expect(startBookingRevalidation(database, seeded.userId, seeded.tripId, {
+        requestId: crypto.randomUUID(), expectedVersion: seeded.tripVersion,
+      })).rejects.toMatchObject({ status: 409, code: "booking_trip_not_available" });
+      expect(await startBookingRevalidation(database, seeded.userId, seeded.tripId, {
+        requestId: crypto.randomUUID(), expectedVersion: next.version,
+      })).toMatchObject({ status: "accepted" });
+      expect(await database.selectFrom("bookingTransactions").select("id").where("tripId", "=", seeded.tripId).execute()).toEqual([]);
+    });
+  }, 30_000);
+
   it("rejects an expired authorization before any provider write or transaction row", async () => {
     await withIsolatedTestDatabase(async ({ database }) => {
       const seeded = await seedAuthorizedBooking(database, { expiresInMs: -60_000, startTransaction: false });

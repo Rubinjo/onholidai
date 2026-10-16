@@ -5,7 +5,9 @@
 See [Phase 9 evidence](evidence/phase9.md) for current results and incomplete gates.
 Start signed out: choose a country on the globe, replace it with cities, search with
 Enter or the icon, reorder manually or select Let AI arrange, and verify reset retains
-the mode. Add multiple confirmed departure alternatives for the same party. Select
+the mode. AI's proposed route accounts for outbound and return geography across all
+confirmed departure alternatives when their coordinates are available; otherwise it
+preserves the supplied order. Add multiple confirmed departure alternatives for the same party. Select
 non-contiguous calendar ranges, adjust the three duration handles and 1–10 preferences,
 then submit directly to the three-pane workspace. No intermediate estimate page or
 Sheet should appear. Accept/reject proposals only in chat; history/undo stay on the left.

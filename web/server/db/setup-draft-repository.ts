@@ -95,8 +95,11 @@ export class SetupDraftRepository {
         researchRequestId: draft.researchRequestId, nextPath: `/trips/${draft.submittedTripId}`, replayed: true };
       if (draft.revision !== input.expectedRevision) throw planningProblems.draftRevisionConflict(draft.revision);
       const { title, currency, ...facts } = draft.payload;
+      const normalizedFacts = facts.departureOrigin && !facts.departureOrigins?.length
+        ? { ...facts, departureOrigins: [facts.departureOrigin] }
+        : facts;
       const trip = await createTrip(transaction, actor.planningOwnerId, { requestId: draft.creationRequestId, title, currency,
-        snapshot: { ...facts, itineraryDays: [], components: [], warnings: [], price: { currency,
+        snapshot: { ...normalizedFacts, itineraryDays: [], components: [], warnings: [], price: { currency,
           finalCustomerMinor: 0, taxesMinor: 0, feesMinor: 0, status: "estimated", checkedAt: this.now().toISOString() } } });
       await transaction.updateTable("setupDrafts").set({ submittedTripId: trip.tripId,
         revision: draft.revision + 1, updatedAt: this.now() }).where("id", "=", draftId).execute();

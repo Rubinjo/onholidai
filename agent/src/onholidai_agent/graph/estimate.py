@@ -98,10 +98,10 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         advice = redact_for_langsmith(await sources.model.complete(context), production=False)
         model_advice = advice[:1000]
     snapshot = cast(dict[str, object], trip["snapshot"])
-    origin = snapshot.get("departureOrigin")
+    origin_value = snapshot.get("departureOrigin")
     if (
-        not isinstance(origin, dict)
-        or cast(dict[str, object], origin).get("confirmedByUser") is not True
+        not isinstance(origin_value, dict)
+        or cast(dict[str, object], origin_value).get("confirmedByUser") is not True
     ):
         return AgentResult.model_validate(
             {
@@ -114,6 +114,7 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
                 },
             }
         )
+    origin = cast(dict[str, object], origin_value)
     duration = cast(dict[str, int], snapshot["duration"])
     windows = cast(list[dict[str, str]], snapshot["availabilityWindows"])
     feasible = [
@@ -148,7 +149,16 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         end = start + timedelta(days=duration["idealDays"] - 1)
         if end > date.fromisoformat(window["endDate"]):
             raise ValueError("infeasible_duration")
-    destinations = arrange_destinations(destinations, snapshot.get("destinationOrder", "manual"))
+    raw_alternatives = snapshot.get("departureOrigins")
+    alternatives = (
+        cast(list[dict[str, object]], raw_alternatives)
+        if isinstance(raw_alternatives, list)
+        else []
+    )
+    route_origins = alternatives or [origin]
+    destinations = arrange_destinations(
+        destinations, snapshot.get("destinationOrder", "manual"), route_origins
+    )
     if duration["idealDays"] - 1 < len(destinations):
         return AgentResult.model_validate(
             {
@@ -169,13 +179,12 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         "endDate": end.isoformat(),
         "destinationIds": [item["id"] for item in destinations],
     }
-    alternatives = cast(list[dict[str, object]], snapshot.get("departureOrigins", []))
+    found: dict[str, object] = {"offers": []}
     try:
         found = await research(sources, request, query)
     except (ValueError, TimeoutError, httpx.HTTPError):
         if len(alternatives) <= 1:
             raise
-        found = {"offers": []}
     offers = cast(list[dict[str, object]], found.get("offers", []))
     if not offers and len(alternatives) <= 1:
         raise ValueError("source_unavailable")
@@ -224,15 +233,18 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
                 for item in items
             )
 
-        reference = coverage(offers) if offers else next(
-            (coverage(selected) for _, selected in comparisons if selected), []
-        )
+        reference = coverage(offers) if offers else []
+        if not reference:
+            for _, selected in comparisons:
+                if selected:
+                    reference = coverage(selected)
+                    break
         comparable = [
             (alternative, selected)
             for alternative, selected in comparisons
             if selected and coverage(selected) == reference
         ]
-        available = ([(cast(dict[str, object], origin), offers)] if offers else []) + comparable
+        available = ([(origin, offers)] if offers else []) + comparable
         if not available:
             raise ValueError("source_unavailable")
         chosen_origin, chosen_offers = min(
@@ -297,8 +309,8 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
     if snapshot.get("destinationOrder") == "ai":
         rationale += (
             " Destination order is an AI-proposed geographic circuit; departure/return "
-            "connections and transport feasibility still require verification. "
-            "Missing coordinates preserve the supplied order."
+            "legs and transport feasibility still require verification. Missing destination "
+            "or confirmed-departure coordinates preserve the supplied order."
         )
     source_facts = cast(list[dict[str, object]], found.get("researchFacts", []))
     if source_facts:
