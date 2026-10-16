@@ -32,7 +32,9 @@ export function DestinationGlobe({ destinations, candidates = [], onCountry, onC
     for (const place of unique) {
       const element = document.createElement("button"); element.type = "button"; element.className = "globe-city"; element.textContent = place.name; element.tabIndex = -1;
       element.onclick = (event) => { event.stopPropagation(); const resolved = actions.current.candidates.find((entry) => entry.placeId === place.placeId); if (resolved) actions.current.onCity?.(resolved); };
-      const marker = markerFactory.current?.(element).setLngLat([place.location!.longitude, place.location!.latitude]).addTo(instance);
+      // Keep button layout/hit-area styles off the element MapLibre positions.
+      const anchor = document.createElement("div"); anchor.className = "globe-city-anchor"; anchor.append(element);
+      const marker = markerFactory.current?.(anchor).setLngLat([place.location!.longitude, place.location!.latitude]).addTo(instance);
       if (marker) markers.current.push(marker);
     }
     const points = selections.current.flatMap((place) => place.location ? [[place.location.longitude, place.location.latitude]] : []);
@@ -61,7 +63,7 @@ export function DestinationGlobe({ destinations, candidates = [], onCountry, onC
         instance.addLayer({ id: "city-hover", type: "circle", source: "cities", filter: ["==", ["get", "placeId"], ""], paint: { "circle-radius": 10, "circle-color": "#084c3a", "circle-stroke-color": "#ffffff", "circle-stroke-width": 3 } });
         instance.addSource("journey", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
         instance.addLayer({ id: "journey", type: "line", source: "journey", paint: { "line-color": "#12664f", "line-width": 2, "line-dasharray": [2, 3] } });
-        markerFactory.current = (element) => new library.Marker({ element, anchor: "top", offset: [0, 8] });
+        markerFactory.current = (element) => new library.Marker({ element, anchor: "top", offset: [0, 8], subpixelPositioning: true, opacityWhenCovered: 0 });
         updateSources(); setLoaded(true);
       });
       instance.on("click", (event) => {

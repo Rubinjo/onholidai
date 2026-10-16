@@ -437,6 +437,9 @@ summary {
 .departure-cards li span { font-size: .85rem; color: var(--text-muted); }
 .planning-page button.globe-city, .globe-city { position: relative; padding: .1rem .25rem; margin: 0; border: 0; color: var(--accent-strong); background: #ffffffeb; border-radius: .25rem; font-size: .8rem; min-height: 1.35rem; cursor: pointer; }
 .globe-city::before { content: ""; position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); min-width: 44px; min-height: 44px; width: 100%; }
+.globe-city-anchor { line-height: 0; }
+.globe-city-anchor.maplibregl-marker-covered { visibility: hidden; pointer-events: none; }
+.planning-page button.globe-city { display: block; line-height: 1.2; }
 .globe-city:hover, .globe-city:focus-visible { color: white; background: var(--accent); outline: 3px solid #a9d4bf; }
 .globe-city-options { display: flex; flex-wrap: wrap; gap: .5rem; }
 .availability-calendar { margin-block: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: .7rem; background: var(--surface); overflow-x: auto; }
@@ -464,7 +467,8 @@ summary {
 .rdp-dropdowns { gap: .75rem; }
 .planning-page select.rdp-dropdown { margin: 0; padding: 0; }
 .planning-page button.rdp-day_button { margin: 0; padding: 0; }
-.rdp-nav { display: flex; justify-content: space-between; }
+.availability-calendar .rdp-nav { position: static; display: flex; justify-content: space-between; height: auto; min-height: 44px; margin-block: .25rem .5rem; }
+.planning-page .availability-calendar button.rdp-button_previous, .planning-page .availability-calendar button.rdp-button_next { margin: 0; padding: 0; width: 44px; height: 44px; flex: 0 0 44px; }
 .rdp-selected .rdp-day_button, .rdp-range_start .rdp-day_button { background: var(--accent); color: white; }
 .rdp-range_start .rdp-day_button { outline: 2px dashed var(--text); outline-offset: -3px; }
 .rdp-outside { opacity: .5; }

@@ -1,4 +1,4 @@
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { DestinationGlobe } from "../../components/map/destination-globe";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
@@ -32,4 +32,13 @@ it("handles selected and candidate city hits before the country underneath", asy
   view.rerender(<DestinationGlobe destinations={[selected]} candidates={[candidate]} onCountry={country} onCity={city} />);
   act(click); expect(city).toHaveBeenCalledWith(candidate); expect(country).not.toHaveBeenCalled();
   runtime.cityId = null; act(click); expect(country).toHaveBeenCalledWith("JP", "Japan");
+});
+it("selects a city through its label and removes labels when the globe unmounts", async () => {
+  const city = vi.fn();
+  const candidate = { placeId: "tokyo", kind: "city" as const, name: "Tokyo", countryCode: "JP", timezone: "Asia/Tokyo", airportCode: null, location: { latitude: 35, longitude: 139 } };
+  const view = render(<DestinationGlobe destinations={[]} candidates={[candidate]} onCountry={() => {}} onCity={city} />);
+  await waitFor(() => expect(view.container.querySelector("button.globe-city")).toBeTruthy());
+  fireEvent.click(view.container.querySelector(".globe-city")!);
+  expect(city).toHaveBeenCalledWith(candidate);
+  view.unmount(); expect(document.querySelector("button.globe-city")).toBeNull();
 });

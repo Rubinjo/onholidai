@@ -9,6 +9,7 @@ test("homepage explains public planning without initializing a private draft", a
   await expect(page.getByRole("img", { name: "One holiday, shaped around you" })).toBeVisible();
   await expect(page.locator(".journey-globe__bubble").first()).toContainText("“Look for a nice coffee stop”");
   await expect(page.locator(".journey-globe__bubble").last()).toContainText("“Can we add one more night?”");
+  await expect(page.locator(".journey-globe__bubble tspan")).toHaveCount(0);
   const contained = await page.locator(".journey-globe__bubble").evaluateAll((bubbles) => bubbles.every((bubble) => {
     const box = bubble.querySelector("rect")!.getBBox();
     return Array.from(bubble.querySelectorAll("text")).every((text) => {

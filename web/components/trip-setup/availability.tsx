@@ -71,7 +71,7 @@ export function Availability({ windows, duration, onChange, timezone = "UTC" }: 
         const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-calendar-date]") : null;
         if (target?.dataset.calendarDate) { event.preventDefault(); remove(target.dataset.calendarDate); }
       }}>
-      <DayPicker mode={undefined} captionLayout="dropdown" startMonth={new Date(1900, 0)} endMonth={new Date(2200, 11)} components={{ DayButton: CalendarDay }} defaultMonth={windows.find(completeWindow)?.startDate ? parseISO(windows.find(completeWindow)!.startDate) : undefined}
+      <DayPicker mode={undefined} captionLayout="dropdown" navLayout="after" startMonth={new Date(1900, 0)} endMonth={new Date(2200, 11)} components={{ DayButton: CalendarDay }} defaultMonth={windows.find(completeWindow)?.startDate ? parseISO(windows.find(completeWindow)!.startDate) : undefined}
         onDayClick={choose} modifiers={{ ...modifiers, ...Object.fromEntries(windows.map((window, index) => [`availability_${index}`, (day: Date) => {
           const date = format(day, "yyyy-MM-dd"); return completeWindow(window) && date >= window.startDate && date <= window.endDate;
         }])), range_start: start ? parseISO(start) : removal ? parseISO(removal.start) : [] }}

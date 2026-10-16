@@ -2,6 +2,31 @@ import { expect, test } from "@playwright/test";
 import { mockSetup } from "../helpers/mock-setup";
 import { addDestination, calendarDate, confirmOrigin, continueStep, enterValue, openBuilder, selectAvailability } from "../helpers/setup-wizard";
 test.use({ storageState: { cookies: [], origins: [] } });
+test("city labels retain the map projection's anchor during zoom and drag", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Real WebGL projection regression runs in Chromium");
+  await mockSetup(page); await openBuilder(page); await addDestination(page, "Tokyo", "JP"); await addDestination(page, "Kyoto", "JP");
+  const anchor = page.locator(".globe-city-anchor").first();
+  await expect(anchor).toBeAttached();
+  await expect(anchor).toHaveCSS("position", "absolute");
+  const distanceFromProjection = () => anchor.evaluate((element) => {
+    const translate = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec((element as HTMLElement).style.transform);
+    if (!translate) return Infinity;
+    const box = element.getBoundingClientRect(), parent = element.parentElement!.getBoundingClientRect();
+    return Math.max(Math.abs(box.left + box.width / 2 - parent.left - Number(translate[1])), Math.abs(box.top - parent.top - Number(translate[2])));
+  });
+  await expect.poll(distanceFromProjection).toBeLessThan(1);
+  const canvas = page.locator(".destination-globe__canvas canvas");
+  const beforeZoom = await anchor.getAttribute("style");
+  await canvas.hover(); await page.mouse.wheel(0, 600);
+  await expect.poll(() => anchor.getAttribute("style")).not.toBe(beforeZoom);
+  await expect.poll(distanceFromProjection).toBeLessThan(1);
+  const beforeDrag = await anchor.getAttribute("style");
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 35, { steps: 8 }); await page.mouse.up();
+  await expect.poll(() => anchor.getAttribute("style")).not.toBe(beforeDrag);
+  await expect.poll(distanceFromProjection).toBeLessThan(1);
+});
 for (const width of [320, 390, 768, 1440]) test(`fixture-backed controls at ${width}px preserve choices and respond promptly`, async ({ page }) => {
   await page.setViewportSize({ width, height: 960 }); await mockSetup(page); await openBuilder(page);
   const timings: { action: string; milliseconds: number }[] = [];
@@ -33,6 +58,12 @@ for (const width of [320, 390, 768, 1440]) test(`fixture-backed controls at ${wi
   await expect(page.locator(".departure-cards li")).toHaveCount(2);
   await continueStep(page);
   await expect(page.locator(".availability-calendar")).toBeVisible();
+  const controlsSeparated = await page.locator(".availability-calendar").evaluate((calendar) => {
+    const selectors = [".rdp-months_dropdown", ".rdp-years_dropdown", ".rdp-button_previous", ".rdp-button_next"];
+    const boxes = selectors.map((selector) => calendar.querySelector(selector)!.getBoundingClientRect());
+    return boxes.every((box, index) => boxes.slice(index + 1).every((other) => box.right <= other.left || other.right <= box.left || box.bottom <= other.top || other.bottom <= box.top));
+  });
+  expect(controlsSeparated).toBe(true);
   await selectAvailability(page, "2030-05-01", "2030-05-25");
   await enterValue(page.getByRole("slider", { name: "Minimum days" }), "5");
   await enterValue(page.getByRole("slider", { name: "Ideal days" }), "7");
