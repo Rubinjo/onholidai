@@ -2,6 +2,10 @@
 
 Extend the current booking routes/domain/Temporal workflow. No new checkout, orchestrator, transaction MCP surface or component-selection booking API.
 
+Current execution scope is Duffel flights/accommodation and Viator activities. Resolve by immutable provider plus component type, never type-only accommodation-to-Booking.com routing. Duffel uses its separate worker-only write key; Viator uses its shared upstream key in the trusted worker, with actual booking entitlement and trusted prerequisites required independently. No fresh writes target deferred Booking.com/Trainline or replaced GetYourGuide. Preserve legacy attribution, commitments and existing approved status reconciliation without requiring their onboarding for current trips.
+
+A complete supported flight/stay/activity trip must not depend on rail data or deferred-provider access. A genuinely required unresolved rail leg still blocks the entire attempt; deferral is not a completeness waiver. Current Duffel stay quotes must establish selected room/rate/occupancy, mandatory costs and payment timing; unknown costs or unsupported payment schedules cannot be omitted from exact review. Read-key permission and no-hold semantics are required for discovery/revalidation; no privileged fallback.
+
 ## Read/review
 
 Add owner-scoped `GET /api/v1/trips/{tripId}/bookings` to the existing POST route. Use the current account/booking actor, trip lock/access rules and safe projection. Return current trip version, current complete coverage report, active/latest whole-trip attempt and continuation history, confirmed commitments and safe per-component outcomes; bound/paginate history. It must restore a durable attempt on reload before offering a new authorization. The accepted trip remains available if supplier reads fail.

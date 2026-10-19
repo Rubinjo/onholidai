@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, JsonValue, ValidationError
 
 from onholidai_agent.models.api import AgentEvent, CreateAgentRunRequest, PersistAgentResultRequest
 from onholidai_agent.models.contracts import exported_files
-from onholidai_agent.models.tools import ToolCall
+from onholidai_agent.models.tools import SUPPLIER_TOOL_INPUTS, ToolCall
 
 ROOT = Path(__file__).resolve().parents[3]
 MODELS: dict[str, type[BaseModel]] = {
@@ -19,6 +19,27 @@ MODELS: dict[str, type[BaseModel]] = {
     "PersistAgentResultRequest": PersistAgentResultRequest,
     "ToolCall": ToolCall,
 }
+
+
+def test_shared_supplier_wire_cases_match_pydantic_acceptance() -> None:
+    from jsonschema import Draft202012Validator
+
+    document = json.loads(
+        (ROOT / "contracts/supply/validation-cases.json").read_text(encoding="utf-8")
+    )
+    for case in cast(list[dict[str, object]], document["toolCases"]):
+        model = SUPPLIER_TOOL_INPUTS[str(case["tool"])]
+        if case["valid"]:
+            model.model_validate(case["input"])
+        else:
+            with pytest.raises(ValidationError):
+                model.model_validate(case["input"])
+    schema = json.loads(
+        (ROOT / "contracts/supply/public-offers-v1.schema.json").read_text(encoding="utf-8")
+    )
+    validator = Draft202012Validator(schema)
+    for case in cast(list[dict[str, object]], document["offerCases"]):
+        assert validator.is_valid(cast(JsonValue, case["value"])) is case["valid"], case["id"]
 
 
 def test_shared_wire_cases_match_pydantic_acceptance() -> None:

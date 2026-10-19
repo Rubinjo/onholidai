@@ -1,47 +1,67 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { canonicalJson } from "@/domain/canonical-json";
 import { z } from "zod";
 import type { SupplyReadProvider, SupplyReadQuery } from "../read";
 import { normalizePlanningOffer } from "../offers";
-import { currencySchema, travelComponentSchema } from "@/domain/trip/schema";
+import { currencySchema } from "@/domain/trip/schema";
 import { planningDetailsSchema } from "@/domain/trip/itinerary";
 
 // Provider-specific SDK/HTTP clients translate wire payloads to this narrow, read-only port.
 // No supplier credential, reservation method or arbitrary URL crosses the port.
-export interface ReadOfferClient { search(query: SupplyReadQuery, signal: AbortSignal): Promise<unknown> }
-const hitSchema = z.object({ selectionGroup: z.string().min(1).max(120).optional(), currency: currencySchema, offerId: z.string().min(1).max(256), supplierMinor: z.number().int().nonnegative(),
-  serviceStart: z.iso.datetime({ offset: true }).optional(), serviceEnd: z.iso.datetime({ offset: true }).optional(),
+export interface ReadOfferClient {
+  search(query: SupplyReadQuery, signal: AbortSignal): Promise<unknown>;
+  detail?(offerId: string, query: SupplyReadQuery, signal: AbortSignal): Promise<unknown>;
+  revalidate?(offerId: string, query: SupplyReadQuery, signal: AbortSignal): Promise<unknown>;
+}
+const hitSchema = z.object({ selectionGroup: z.string().min(1).max(120).optional(), currency: currencySchema, offerId: z.string().min(1).max(256), supplierMinor: z.number().int().nonnegative().nullable(),
+  serviceStart: z.iso.datetime({ offset: true }).nullable().optional(), serviceEnd: z.iso.datetime({ offset: true }).nullable().optional(),
   planningDetails: planningDetailsSchema.optional(),
-  taxesMinor: z.number().int().nonnegative(), feesMinor: z.number().int().nonnegative(),
-  checkedAt: z.iso.datetime(), expiresAt: z.iso.datetime(), terms: z.string().min(1).max(2000).nullable(),
-  details: z.record(z.string(), z.json()), minimumAge: z.number().int().nonnegative().nullable(),
+  taxesMinor: z.number().int().nonnegative().nullable(), feesMinor: z.number().int().nonnegative().nullable(),
+  checkedAt: z.iso.datetime(), expiresAt: z.iso.datetime().nullable(), terms: z.string().min(1).max(2000).nullable(),
+  supplierReferences: z.object({ accommodationId: z.string().max(256).optional(), searchResultId: z.string().max(256).optional(),
+    roomId: z.string().max(256).optional(), rateId: z.string().max(256).optional(), quoteId: z.string().max(256).optional(),
+    productCode: z.string().max(256).optional(), optionCode: z.string().max(256).optional(), availabilityId: z.string().max(256).optional() }).strict().optional(),
+  details: z.record(z.string(), z.json()).nullable(), minimumAge: z.number().int().nonnegative().nullable(),
   maximumAge: z.number().int().nonnegative().nullable(), maximumAdults: z.number().int().positive().nullable(),
   maximumChildren: z.number().int().nonnegative().nullable(), accessibilityVerified: z.boolean().nullable() }).strict();
 export function createReadAdapter(provider: string, type: "flight" | "accommodation" | "activity" | "rail",
   client: ReadOfferClient): SupplyReadProvider {
-  return { capabilities: { provider, search: [type], readOnly: true }, async search(query, signal) {
-    const hits = z.array(hitSchema).max(32).parse(await client.search(query, signal));
-    return hits.map((hit) => {
+  function normalize(raw: unknown, query: SupplyReadQuery) {
+    const hit = hitSchema.parse(raw);
       if (hit.currency !== query.currency) throw new Error("A sourced currency conversion is required");
-      const money = (minorUnits: number) => ({ currency: query.currency, minorUnits });
+      const money = (minorUnits: number | null) => minorUnits === null ? null : ({ currency: query.currency, minorUnits });
       const margin = 0; // No invented commercial margin policy; live clients must supply approved facts.
       const ages = query.travellerParty.children.map((child) => child.ageAtTripStart);
       const ineligible = (hit.maximumAdults !== null && query.travellerParty.adults > hit.maximumAdults)
-        || (hit.maximumChildren !== null && ages.length > hit.maximumChildren)
-        || ages.some((age) => (hit.minimumAge !== null && age < hit.minimumAge) || (hit.maximumAge !== null && age > hit.maximumAge));
-      const component = travelComponentSchema.parse({ id: randomUUID(), itineraryItemIds: [], provider, supplierOfferId: hit.offerId,
-        type, offerStatus: "available", serviceStart: hit.serviceStart ?? `${query.startDate}T12:00:00Z`, serviceEnd: hit.serviceEnd ?? `${query.endDate}T12:00:00Z`,
+        || (hit.maximumChildren !== null && ages.length > hit.maximumChildren);
+      const component = { id: randomUUID(), itineraryItemIds: [], provider, supplierOfferId: hit.offerId,
+        type, offerStatus: "available", serviceStart: hit.serviceStart ?? null, serviceEnd: hit.serviceEnd ?? null,
         planningDetails: hit.planningDetails,
-        travellerIds: [...Array.from({ length: query.travellerParty.adults }, () => randomUUID()), ...query.travellerParty.children.map((child) => child.id)],
+        travellerIds: [...Array.from({ length: query.travellerParty.adults }, (_, slot) => {
+          const hash = createHash("sha256").update(canonicalJson([query.travellerParty, slot])).digest("hex");
+          return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+        }), ...query.travellerParty.children.map((child) => child.id)],
         bookingRequirements: ["Traveller identities and current eligibility must be verified before booking"],
-        cancellationTerms: hit.terms ?? "Unverified cancellation terms", checkedAt: hit.checkedAt, expiresAt: hit.expiresAt,
-        bookingStatus: "unbooked", details: hit.details, price: { supplierAmount: money(hit.supplierMinor), platformMargin: money(margin),
+        cancellationTerms: hit.terms, checkedAt: hit.checkedAt, expiresAt: hit.expiresAt,
+        bookingStatus: "unbooked", details: hit.details, price: { currency: query.currency, supplierAmount: money(hit.supplierMinor), platformMargin: money(margin),
           customerPayableTaxes: money(hit.taxesMinor), customerPayableFees: money(hit.feesMinor),
-          finalCustomerAmount: money(hit.supplierMinor + margin + hit.taxesMinor + hit.feesMinor),
-          status: "estimated", source: provider, checkedAt: hit.checkedAt, expiresAt: hit.expiresAt } });
-      return normalizePlanningOffer({ component, selectionGroup: hit.selectionGroup ?? `${type}:whole_query`, eligibility: { status: ineligible ? "ineligible" : "unverified",
+          finalCustomerAmount: money(hit.supplierMinor === null || hit.taxesMinor === null || hit.feesMinor === null ? null
+            : hit.supplierMinor + margin + hit.taxesMinor + hit.feesMinor),
+          status: "estimated", source: provider, checkedAt: hit.checkedAt, expiresAt: hit.expiresAt } };
+      return normalizePlanningOffer({ component, supplierReferences: hit.supplierReferences,
+        selectionGroup: hit.selectionGroup ?? `${type}:whole_query`, eligibility: { status: ineligible ? "ineligible" : "unverified",
         minimumAge: hit.minimumAge, maximumAge: hit.maximumAge }, occupancy: { maximumAdults: hit.maximumAdults, maximumChildren: hit.maximumChildren },
         accessibility: hit.accessibilityVerified === true ? "verified" : hit.accessibilityVerified === false ? "unsupported" : "unverified",
         attribution: { provider, sourceUrl: null }, unverifiedFacts: hit.terms === null ? ["terms"] : [] });
-    }).filter((offer) => offer.eligibility.status !== "ineligible");
-  } };
+  }
+  return { capabilities: { provider, search: [type], readOnly: true },
+    async search(query, signal) {
+      return z.array(hitSchema).max(32).parse(await client.search(query, signal)).map((hit) => normalize(hit, query))
+        .filter((offer) => offer.eligibility.status !== "ineligible");
+    },
+    ...(client.detail ? { detail: async (offerId: string, query: SupplyReadQuery, signal: AbortSignal) =>
+      normalize(await client.detail!(offerId, query, signal), query) } : {}),
+    ...(client.revalidate ? { revalidate: async (offerId: string, query: SupplyReadQuery, signal: AbortSignal) =>
+      normalize(await client.revalidate!(offerId, query, signal), query) } : {}),
+  };
 }

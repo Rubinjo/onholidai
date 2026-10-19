@@ -12,9 +12,10 @@ import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import { RunRepository } from "../../server/agent-client/run-repository";
 import { acceptEstimate, recordEstimate } from "../../domain/trip/apply-estimate";
 import { createDuffelReadProvider } from "../../server/supply/providers/duffel-read";
-import { createBookingReadProvider } from "../../server/supply/providers/booking-read";
+import { createDuffelStaysReadProvider } from "../../server/supply/providers/duffel-stays-read";
 import { syntheticReadClient } from "../../server/supply/providers/synthetic";
 import { searchPlanningOffers } from "../../server/supply/read";
+import { materializePlanningOffer } from "../../server/supply/offers";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { hasIsolatedDatabaseConfiguration, withIsolatedTestDatabase } from "../helpers/database";
 
@@ -29,14 +30,14 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research"
       const trip = await createTrip(database, userId, { requestId: randomUUID(), title: "Accept estimate", currency: "GBP", snapshot });
       const runs = new RunRepository(database), context = { userId, tripId: trip.tripId, requestId: randomUUID(), baseTripVersion: 1 };
       const run = await runs.reserve({ ...context, purpose: "initial_estimate", message: "Estimate reviewed settings", ...(policy !== "manual" ? { applicationPolicy: "automatic" } : {}) });
-      const found = await searchPlanningOffers([createDuffelReadProvider(syntheticReadClient("flight")), createBookingReadProvider(syntheticReadClient("accommodation"))], {
+      const found = await searchPlanningOffers([createDuffelReadProvider(syntheticReadClient("flight")), createDuffelStaysReadProvider(syntheticReadClient("accommodation"))], {
         componentTypes: ["flight", "accommodation"], currency: "GBP", departureOrigin: snapshot.departureOrigin,
         destinationIds: snapshot.destinations.map((destination) => destination.id), startDate: "2030-05-01", endDate: "2030-05-08", travellerParty: snapshot.travellerParty });
       for (const offer of found.offers) await database.insertInto("planningOfferRecords").values({ runId: run.id, componentId: offer.component.id, offer: { ...offer },
         query: { startDate: "2030-05-01", endDate: "2030-05-08", destinationIds: snapshot.destinations.map((destination) => destination.id),
           currency: "GBP", departureOrigin: snapshot.departureOrigin, travellerParty: snapshot.travellerParty } }).execute();
       const components = found.offers.map((offer) => {
-        const { price, ...component } = offer.component;
+        const { price, ...component } = materializePlanningOffer(offer).component;
         return { ...component, price: { currency: "GBP", finalCustomerMinor: price.finalCustomerAmount.minorUnits, status: "estimated", checkedAt: price.checkedAt } };
       });
       const proposal = { id: randomUUID(), initiatingRequestId: context.requestId, baseTripVersion: 1, purpose: "initial_estimate" as const,

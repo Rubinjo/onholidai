@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Database } from "@/server/db/database";
 import { fingerprint, runConflict } from "@/server/agent-client/run-repository";
 import { searchPlanningOffers, type SupplyReadProvider } from "@/server/supply/read";
+import { isCompletePlanningOffer } from "@/server/supply/offers";
 import { projectCustomerSnapshot } from "@/domain/pricing/projections";
 import { previewDraftEdit } from "./impact";
 import { proposalOperationSchema } from "./proposal";
@@ -14,7 +15,7 @@ import { priceEstimate } from "./apply-estimate";
 import { tripSnapshotSchema, type TripSnapshot } from "./schema";
 
 export const editPreviewSchema = z.object({ requestId: z.uuid(), expectedVersion: z.number().int().positive(), operations: z.array(proposalOperationSchema).min(1).max(32) }).strict();
-export const editSchema = editPreviewSchema.extend({ impactFingerprint: z.string().regex(/^[a-f0-9]{64}$/) });
+export const editSchema = editPreviewSchema.extend({ impactFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional() });
 
 export async function researchDraftImpact(base: TripSnapshot, version: number, operations: readonly unknown[], providers: readonly SupplyReadProvider[]) {
   const review = previewDraftEdit(base, version, operations);
@@ -24,8 +25,9 @@ export async function researchDraftImpact(base: TripSnapshot, version: number, o
     const endDate = dates.at(-1) ?? new Date(Date.parse(startDate + "T00:00:00Z") + (candidate.duration.idealDays - 1) * 86400000).toISOString().slice(0, 10);
     const found = await searchPlanningOffers(providers, { startDate, endDate, componentTypes: ["flight", "accommodation", "activity", "rail"], currency: candidate.price.currency,
       departureOrigin: candidate.departureOrigin, travellerParty: candidate.travellerParty, destinationIds: candidate.destinations.map((destination) => destination.id) });
-    const groups = new Map<string, typeof found.offers>();
-    for (const offer of found.offers) {
+    const complete = found.offers.filter(isCompletePlanningOffer);
+    const groups = new Map<string, typeof complete>();
+    for (const offer of complete) {
       const key = offer.selectionGroup ?? offer.component.type;
       groups.set(key, [...(groups.get(key) ?? []), offer]);
     }
@@ -80,16 +82,27 @@ export async function applyEdit(database: Kysely<Database>, userId: string, trip
   return inTransaction(database, async (transaction) => {
     const trip = await transaction.selectFrom("trips").selectAll().where("id", "=", tripId).where("ownerUserId", "=", userId).forUpdate().executeTakeFirst();
     if (!trip || trip.lifecycleState !== "draft") runConflict();
-    const review = await transaction.selectFrom("draftEditReviews").selectAll().where("id", "=", input.requestId).where("tripId", "=", tripId).where("ownerUserId", "=", userId).executeTakeFirst();
-    if (!review || review.baseTripVersion !== input.expectedVersion || review.fingerprint !== input.impactFingerprint || fingerprint(review.operations) !== fingerprint(input.operations)) runConflict();
     const prior = await transaction.selectFrom("tripVersions").select("version").where("tripId", "=", tripId).where("initiatingRequestId", "=", input.requestId).executeTakeFirst();
-    if (!prior && (review.expiresAt.getTime() <= Date.now() || trip.currentVersion !== input.expectedVersion)) runConflict();
+    if (!prior && trip.currentVersion !== input.expectedVersion) runConflict();
     const base = await readOwnedTripVersion(transaction, userId, tripId, input.expectedVersion);
     if (base.snapshot.components.some((component) => component.bookingStatus !== "unbooked")) runConflict();
-    if (!prior && review.snapshot.components.some((component) => component.offerStatus !== "available" || [component.expiresAt, component.price.expiresAt].some((expiry) => expiry && Date.parse(expiry) <= Date.now()))) runConflict();
+    let snapshot: TripSnapshot;
+    let affectedFacts: string[];
+    if (input.impactFingerprint !== undefined) {
+      const review = await transaction.selectFrom("draftEditReviews").selectAll().where("id", "=", input.requestId).where("tripId", "=", tripId).where("ownerUserId", "=", userId).executeTakeFirst();
+      if (!review || review.baseTripVersion !== input.expectedVersion || review.fingerprint !== input.impactFingerprint || fingerprint(review.operations) !== fingerprint(input.operations)) runConflict();
+      if (!prior && review.expiresAt.getTime() <= Date.now()) runConflict();
+      if (!prior && review.snapshot.components.some((component) => component.offerStatus !== "available" || [component.expiresAt, component.price.expiresAt].some((expiry) => expiry && Date.parse(expiry) <= Date.now()))) runConflict();
+      snapshot = tripSnapshotSchema.parse(review.snapshot);
+      affectedFacts = z.array(z.string()).parse(review.review.affectedFacts);
+    } else {
+      const change = previewDraftEdit(tripSnapshotSchema.parse(base.snapshot), input.expectedVersion, input.operations);
+      snapshot = change.snapshot;
+      affectedFacts = change.affectedFacts;
+    }
     const receipt = await commitTripMutation(transaction, { tripId, ownerUserId: userId, expectedVersion: input.expectedVersion, requestId: input.requestId, idempotencyKey: input.requestId,
-      requestFingerprint: fingerprint(input), snapshot: tripSnapshotSchema.parse(review.snapshot), initiatingActor: "user", proposalId: null,
-      changeSummary: z.array(z.string()).parse(review.review.affectedFacts), inverseOperation: { operation: "replace", target: "/", value: base.snapshot }, nonReversibleReason: null, outboxEventId: randomUUID(), auditEventId: randomUUID() });
+      requestFingerprint: fingerprint(input), snapshot, initiatingActor: "user", proposalId: null,
+      changeSummary: affectedFacts, inverseOperation: { operation: "replace", target: "/", value: base.snapshot }, nonReversibleReason: null, outboxEventId: randomUUID(), auditEventId: randomUUID() });
     return readTrip(transaction, userId, tripId, { version: receipt.version });
   });
 }

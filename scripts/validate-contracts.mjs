@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import SwaggerParser from "@apidevtools/swagger-parser";
+import { z } from "zod";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoot = path.join(root, "specs", "001-ai-trip-agent", "contracts");
@@ -185,10 +186,8 @@ checkClosedComposition(sourceWebApi, "source web OpenAPI");
 
 const offersPath = path.join(promotedRoot, "supply", "offers-v1.schema.json");
 const offersSchema = JSON.parse(await read(offersPath));
-const componentReference = offersSchema.properties.component.allOf[0].$ref;
-const [componentFile, componentPointer] = componentReference.split("#");
-const componentDocument = JSON.parse(await read(path.resolve(path.dirname(offersPath), componentFile)));
-assert(resolveJsonPointer(componentDocument, `#${componentPointer}`), "Planning offers must resolve their component schema");
+assert.equal(offersSchema.properties.component.oneOf.length, 5, "Discovery must retain all canonical component types");
+z.fromJSONSchema(offersSchema);
 checkClosedComposition(offersSchema, "planning offer schema");
 
 const [sourceWebText, promotedWebText] = await Promise.all([
@@ -208,3 +207,28 @@ const [sourceSupplyText, promotedSupplyText] = await Promise.all([
 assert.equal(promotedSupplyText, sourceSupplyText, "promoted supply contract has drifted");
 
 console.log("Validated source and promoted contracts, references, operations, and drift.");
+
+const publicSupplySchema = JSON.parse(await read(path.join(promotedRoot, "supply", "public-offers-v1.schema.json")));
+const supplierTools = JSON.parse(await read(path.join(promotedRoot, "supply", "supplier-tools-v1.schema.json")));
+const supplyCases = JSON.parse(await read(path.join(promotedRoot, "supply", "validation-cases.json")));
+assert.deepEqual(Object.keys(supplierTools.tools).sort(), [
+  "supplier_capabilities", "supplier_offer_details", "supplier_revalidate_offer", "supplier_search",
+]);
+for (const [name, schema] of Object.entries(supplierTools.tools)) {
+  assert.equal(schema.additionalProperties, false, `${name} must reject extra arguments`);
+  for (const forbidden of ["ownerId", "tripId", "runId", "version", "token", "credential"]) {
+    assert(!Object.hasOwn(schema.properties, forbidden), `${name} exposes trusted context`);
+  }
+}
+for (const fixture of supplyCases.toolCases) {
+  assert.equal(z.fromJSONSchema(supplierTools.tools[fixture.tool]).safeParse(fixture.input).success,
+    fixture.valid, `supplier tool wire case: ${fixture.id}`);
+}
+for (const fixture of supplyCases.offerCases) {
+  assert.equal(z.fromJSONSchema(publicSupplySchema).safeParse(fixture.value).success,
+    fixture.valid, `public supply wire case: ${fixture.id}`);
+}
+assert(!/"(?:supplierAmount|platformMargin|supplierTotal|platformMarginTotal)"/.test(JSON.stringify(publicSupplySchema)),
+  "Public supply schemas cannot expose internal pricing fields");
+checkClosedComposition(publicSupplySchema, "public supply schema");
+console.log(`Validated ${supplyCases.toolCases.length + supplyCases.offerCases.length} shared supply wire cases.`);

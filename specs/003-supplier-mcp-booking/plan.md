@@ -4,6 +4,8 @@
 
 **Input**: Feature specification and the user's reuse-first planning principles. Setup reports the feature identifier as `BRANCH: 003-supplier-mcp-booking`; `git branch --show-current` confirms the checkout is `main`. No branch was created or switched by planning.
 
+**Revision**: 2026-10-19. Amend the existing feature in place: Duffel Flights and Stays, Viator activities, no active rail provider. Preserve completed T001-T008 as historical evidence; revise remaining tasks and add a prerequisite correction for the already-implemented provider/key configuration. No implementation is claimed by this revision.
+
 ## Summary
 
 Extend the existing supply read port and normalized offers, expose four read-only tools with in-memory FastMCP in the Python agent, retain signed web callbacks and Tavily Search API. Keep clients, normalization, pricing, access and transactions in existing TypeScript boundaries. Extend current recommendation, proposal and workspace capabilities.
@@ -18,9 +20,9 @@ Complete the existing booking page and harden its authorization/Temporal workflo
 **Testing**: Vitest/Testing Library, Playwright, pytest, Pyright, Ruff, ESLint, TypeScript, current contract generators, isolated database helpers and Temporal tests; deterministic controlled clocks/faults.
 **Target Platform**: Existing web, Python agent and TypeScript worker deployments; browsers from 320px; no MCP network endpoint.
 **Project Type**: Existing web application, conversational agent and workflow worker.
-**Performance Goals**: Deterministic p95 search <=10s, bounded response <=12s; current 8s provider deadline inside overall budget. No automatic retries by default; at most one rate-limit-directed read retry if it fits. Max four providers, 32 total offers and 32 booking components.
+**Performance Goals**: Deterministic p95 search <=10s, bounded response <=12s; current 8s provider deadline inside overall budget. No automatic retries by default; at most one rate-limit-directed read retry if it fits. Retain the existing maximum-four-adapter safety ceiling with three active product lanes, 32 total offers and 32 booking components.
 **Constraints**: No read-side holds/reservations; no transaction tools/secrets in agent/MCP. Unknown facts stay unknown. Server-enforced completeness/exact authorization, integer-safe money and one exact payable currency. Preserve guest linking, proposal policy, immutable evidence and confirmed commitments.
-**Scale/Scope**: Four providers and accommodation property variation, existing routes and trip limits. Actual provider quotas/coverage are configured evidence, not scaling assumptions.
+**Scale/Scope**: Two active providers covering three product lanes: Duffel flight, Duffel accommodation, Viator activity. Booking.com and Trainline are deferred; GetYourGuide is replaced. Retain rail in compatibility/query types to return explicit unsupported outcomes, not to request replacement inventory. Actual provider quotas/property coverage are configured evidence, not scaling assumptions.
 
 ## Constitution Check
 
@@ -51,7 +53,7 @@ specs/003-supplier-mcp-booking/
   checklists/requirements.md
 ```
 
-Task generation is deferred to `$speckit-tasks`.
+The existing task list is revised in place; completed work remains historical evidence, not proof of compliance with changed requirements.
 
 ### Source Code (repository root)
 
@@ -98,9 +100,20 @@ Use [data-model.md](data-model.md) and the [discovery](contracts/supplier-discov
 
 Agent run -> in-process MCP client/server -> existing signed web read endpoints -> existing supply port -> provider clients. Trusted owner/trip/version/run is captured outside model args. Web checks every call, grant and offer-record access. Reuse audience web and trip:read with route-level restrictions; no new signing mechanism or network MCP auth. Python receives no supplier secrets.
 
-Browser -> existing resource/session/Origin guard -> same supply/domain reads and safe projections. Research persists evidence only; selection uses existing proposal/commit policy. Booking -> existing account/link boundary -> persisted complete revalidation -> replay-safe exact authorization -> start -> current Temporal/transaction adapters. Read credentials remain in web; transaction credentials and trusted identity/payment resolution remain in worker. Provider keys that cannot be permission-scoped use separate process/secret injection and operation allowlists, with the limitation declared honestly.
+Browser -> existing resource/session/Origin guard -> same supply/domain reads and safe projections. Research persists evidence only; selection uses existing proposal/commit policy. Booking -> existing account/link boundary -> persisted complete revalidation -> replay-safe exact authorization -> start -> current Temporal/transaction adapters. Duffel read keys remain in web and separate write keys only in worker. Viator's one upstream key is injected into trusted web-read and worker clients; it never reaches Python/MCP/browser. Web's Viator client exposes only a fixed side-effect-free endpoint/method allowlist and cannot import restricted transaction clients. Different secret references do not create different upstream permissions; allow the same Viator reference in both boundaries, not the same Duffel read/write reference. Missing booking-tier approval still blocks Viator writes.
 
 The MCP facade never imports transaction adapters. Booking revalidation reuses read-client normalization/semantics; MCP research cannot mint authorization. Tighten allowlisting of nested supplier fields/text, not only price projection.
+
+### Supplier/product composition and no-rail planning
+
+- Keep canonical provider identity `duffel` for both flight and accommodation; use existing component type plus provider identity for per-operation readiness and routing. Preserve product-specific offer/search-result/rate/quote/inventory IDs so flight and stay IDs never collide or cross-route. Do not add a general plugin framework.
+- Extend current Duffel flight clients and add focused `duffel-stays-read.ts` / `duffel-stays-http.ts` clients for search, room/rate detail and safe quote evidence. Preserve actual property type, room/guest allocation, check-in/out, selected rate, refund conditions, mandatory taxes/fees, deposits and amounts due at accommodation. A search's cheapest rate is not a complete room quote. Unknown mandatory costs block authorization under the existing exact-total policy; unsupported payment schedules remain blocked, not silently charged or omitted.
+- Stays quotes are allowed in discovery only after documented no-hold/no-reservation semantics and read-key permission are established. If any search/quote operation needs elevated Duffel permissions, declare it unsupported/blocked rather than inject the write key or reserve inventory. Stays commercial access is distinct from Flights access.
+- Implement Viator Partner API product/option detail, availability and pricing in focused `viator-read.ts` / `viator-http.ts`; no holds, carts or booking calls in reads. Implement approved booking/status only in restricted `viator-transactions.ts` / `viator-transaction-http.ts`, with required booking-question readiness resolved through trusted opaque references. Affiliate content access is not booking entitlement.
+- Compose only Duffel flight/stay and Viator activity lanes in deterministic and live discovery/worker roots. Maintain the existing maximum-four-adapter safety ceiling and 32-offer/32-component bounds; allocate results fairly by requirement/product, not just by provider, so two Duffel products do not starve one another.
+- Every requested unsupported rail search returns an explicit `unsupported`/deferred capability outcome, including rail-only requests. Do not register synthetic Trainline inventory or a replacement, call deferred providers, or label absent rail as no matches.
+- Extend current estimate/refine/finalize and runtime capability handling so no-rail planning succeeds when supported offers satisfy accepted constraints. Missing rail alone is not global research failure. An explicit rail requirement remains unresolved; preserve existing proposal/clarification rules, never silently substitute flights or invent travel times/prices. Tavily remains advisory, not rail inventory.
+- Keep legacy Booking.com (`booking.com`/`booking`), Trainline and GetYourGuide identifiers in compatibility readers and existing authorized status reconciliation only. Do not remap their saved offers/confirmations to Duffel/Viator, migrate historical attribution, activate new writes, or require their keys for current setup. Future Booking.com/Trainline activation is a separate feature, not speculative integration work now.
 
 ### Eligibility and safe execution
 
@@ -136,7 +149,7 @@ Append migrations after 013 for necessary offer revisions, run purpose checks, a
 
 Deploy compatible readers/workers before enabling v2 starts using current deployment workflow. Pause/drain legacy pending writes for fresh review while keeping reconciliation. Old workers cannot consume v2 execution. Rollback disables new starts and reconciles outstanding attempts without deleting evidence. Prove fresh/upgrade/legacy-read paths.
 
-Replace the generic TRAVEL_PROVIDER_API_KEY live-read assumption with typed operation-level provider configuration/readiness. Keep examples secret-free. Wire deterministic transaction doubles into the existing worker root: its current empty registry cannot demonstrate end-to-end booking. Add real transports only from approved wire contracts; document unavailable operations and trusted identity/payment prerequisites. Live approvals are separate release gates, not waived requirements.
+Revise the existing typed provider configuration/readiness added by T008 for the active supplier/product matrix and shared Viator key; the old unconditional distinct-secret-reference check is not valid for Viator. Test changes in `web/tests/unit/config.test.ts` before editing `web/server/config.ts` and injection in web/worker roots. Keep examples secret-free and remove deferred-provider onboarding from current setup. Wire deterministic transaction doubles into the existing worker root: its current empty registry cannot demonstrate end-to-end booking. Add real transports only from approved wire contracts; document unavailable operations and trusted identity/payment prerequisites. Live approvals are separate release gates, not waived requirements.
 
 ## Complexity Tracking
 

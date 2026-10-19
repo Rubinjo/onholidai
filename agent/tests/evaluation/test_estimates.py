@@ -7,6 +7,7 @@ from typing import cast
 
 from onholidai_agent.graph.estimate import estimate
 from onholidai_agent.models.api import CreateAgentRunRequest
+from tests.fixtures.planning import complete_component_facts
 
 
 def test_frozen_100_estimates_execute_real_graph_with_failure_inclusive_denominator():
@@ -30,10 +31,12 @@ def test_frozen_100_estimates_execute_real_graph_with_failure_inclusive_denomina
                 "offers": [
                     {
                         "component": {
+                            **complete_component_facts(kind),
                             "id": f"a0000000-a000-4000-8000-a0000000000{index}",
                             "bookingStatus": "unbooked",
                             "type": kind,
-                            "price": {"currency": "EUR", "finalCustomerMinor": 100000},
+                            "price": {"currency": "EUR", "finalCustomerMinor": 100000,
+                                      "taxesMinor": 0, "feesMinor": 0},
                         }
                     }
                     for index, kind in enumerate(("flight", "accommodation"), 1)

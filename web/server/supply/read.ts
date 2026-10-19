@@ -1,69 +1,211 @@
 import { z } from "zod";
 
-import { currencySchema, departureOriginSchema, travellerPartySchema } from "@/domain/trip/schema";
+import { canonicalJson } from "@/domain/canonical-json";
+import { currencySchema, departureOriginSchema, destinationSchema, travellerPartySchema } from "@/domain/trip/schema";
+import { containsSensitiveText } from "@/lib/privacy";
+import type { ProviderOperationReadiness, SupplierReadiness } from "@/server/config";
 import { normalizePlanningOffer, type PlanningOffer } from "./offers";
 
 const componentTypeSchema = z.enum(["flight", "accommodation", "activity", "rail", "transfer"]);
+type ComponentType = z.infer<typeof componentTypeSchema>;
+
 export const supplyReadQuerySchema = z.object({
   componentTypes: z.array(componentTypeSchema).min(1).max(5), currency: currencySchema,
   departureOrigin: departureOriginSchema.nullable(), destinationIds: z.array(z.uuid()).min(1).max(8),
+  destinations: z.array(destinationSchema).max(8).optional(),
   startDate: z.iso.date(), endDate: z.iso.date(), travellerParty: travellerPartySchema,
 }).strict().superRefine((query, context) => {
   if (query.endDate < query.startDate) context.addIssue({ code: "custom", path: ["endDate"], message: "Dates must be ordered" });
   if (query.componentTypes.includes("flight") && query.departureOrigin === null) {
     context.addIssue({ code: "custom", path: ["departureOrigin"], message: "Confirm departure origin before flight research" });
   }
+  for (const field of ["componentTypes", "destinationIds"] as const) {
+    if (new Set(query[field]).size !== query[field].length) {
+      context.addIssue({ code: "custom", path: [field], message: "Research selections must be unique" });
+    }
+  }
 });
 
-export const readCapabilitiesSchema = z.object({ provider: z.string().trim().min(1).max(120),
-  search: z.array(componentTypeSchema).min(1).max(5), readOnly: z.literal(true) }).strict();
+export const readCapabilitiesSchema = z.object({
+  provider: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,119}$/).refine((value) => !containsSensitiveText(value)),
+  search: z.array(componentTypeSchema).min(1).max(5).refine((types) => new Set(types).size === types.length),
+  readOnly: z.literal(true),
+  mode: z.enum(["deterministic", "live"]).optional(),
+}).strict();
 export type SupplyReadQuery = z.infer<typeof supplyReadQuerySchema>;
 export interface SupplyReadProvider {
   capabilities: z.infer<typeof readCapabilitiesSchema>;
   search(query: SupplyReadQuery, signal: AbortSignal): Promise<readonly unknown[]>;
+  detail?(offerId: string, query: SupplyReadQuery, signal: AbortSignal): Promise<unknown>;
+  revalidate?(offerId: string, query: SupplyReadQuery, signal: AbortSignal): Promise<unknown>;
+}
+
+const failureStatusSchema = z.enum(["unconfigured", "access_blocked", "unsupported", "rate_limited", "error"]);
+type FailureStatus = z.infer<typeof failureStatusSchema>;
+type SearchStatus = FailureStatus | "available" | "no_matches" | "deadline";
+
+const safeReasons: Record<SearchStatus, string> = {
+  available: "Search returned planning offers; inventory is not reserved.",
+  no_matches: "Search completed without matching inventory.",
+  unconfigured: "The current supplier product is not configured for search.",
+  access_blocked: "Search access or a required supplier prerequisite is blocked.",
+  unsupported: "This supplier operation or requested coverage is unsupported.",
+  rate_limited: "The supplier rate limit prevented current inventory verification.",
+  deadline: "The search deadline elapsed before current inventory could be established.",
+  error: "The supplier search failed or returned invalid evidence; inventory is unknown.",
+};
+
+export class SupplyReadError extends Error {
+  readonly status: FailureStatus;
+  readonly retryAfterMs: number | null;
+
+  constructor(status: FailureStatus, retryAfterMs?: number) {
+    super(safeReasons[status]);
+    this.name = "SupplyReadError";
+    this.status = failureStatusSchema.parse(status);
+    this.retryAfterMs = status === "rate_limited" && retryAfterMs !== undefined
+      ? z.number().int().min(0).max(86_400_000).parse(retryAfterMs) : null;
+  }
+}
+
+export interface SupplyReadOutcome {
+  provider: string | null;
+  componentType: ComponentType;
+  mode: "deterministic" | "live" | "unknown";
+  status: SearchStatus;
+  safeReason: string;
+  retryable: boolean;
+  retryAfterMs: number | null;
+  unverifiedCount: number;
 }
 export interface SupplyReadResult {
   offers: PlanningOffer[];
-  outcomes: { provider: string; status: "available" | "unavailable" | "deadline"; unverifiedCount: number }[];
+  outcomes: SupplyReadOutcome[];
+}
+interface SupplyReadOptions {
+  signal?: AbortSignal;
+  readiness?: SupplierReadiness;
 }
 
-async function boundedSearch(provider: SupplyReadProvider, query: SupplyReadQuery, now: Date) {
+function outcome(provider: string | null, componentType: ComponentType, status: SearchStatus,
+  mode: SupplyReadOutcome["mode"] = "unknown"): SupplyReadOutcome {
+  return { provider, componentType, mode, status, safeReason: safeReasons[status],
+    retryable: ["rate_limited", "deadline", "error"].includes(status), retryAfterMs: null, unverifiedCount: 0 };
+}
+
+function offerIdentity(offer: PlanningOffer): string {
+  const component = offer.component;
+  return canonicalJson([component.provider, component.type, component.supplierOfferId, offer.selectionGroup ?? null,
+    component.serviceStart, component.serviceEnd, component.details, component.planningDetails ?? null]);
+}
+
+async function boundedSearch(provider: SupplyReadProvider, query: SupplyReadQuery, type: ComponentType,
+  now: Date, signal?: AbortSignal, mode = provider.capabilities.mode): Promise<{ offers: PlanningOffer[]; outcome: SupplyReadOutcome }> {
+  const sourceOutcome = outcome(provider.capabilities.provider, type, "deadline", mode);
+  if (signal?.aborted) {
+    return { offers: [], outcome: { ...sourceOutcome, retryable: false, safeReason: "Research was cancelled before search." } };
+  }
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => { controller.abort(); reject(new Error("deadline")); }, 8_000);
+  let cancel: (() => void) | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    const stop = () => {
+      reject(new Error("Search interrupted"));
+      controller.abort();
+    };
+    timer = setTimeout(stop, 8_000);
+    cancel = stop;
+    signal?.addEventListener("abort", stop, { once: true });
   });
   try {
-    const rawOffers = await Promise.race([provider.search(structuredClone(query), controller.signal), timeout]);
-    if (rawOffers.length > 32) throw new Error("Offer response is too large");
-    const offers = rawOffers.map((offer) => normalizePlanningOffer(offer, now));
-    if (offers.some((offer) => offer.component.provider !== provider.capabilities.provider
-      || !query.componentTypes.includes(offer.component.type)
-      || !provider.capabilities.search.includes(offer.component.type)
-      || offer.component.price.finalCustomerAmount.currency !== query.currency)) {
+    const rawOffers = await Promise.race([
+      provider.search({ ...structuredClone(query), componentTypes: [type] }, controller.signal), deadline,
+    ]);
+    if (signal?.aborted || controller.signal.aborted) throw new Error("Search interrupted");
+    if (!Array.isArray(rawOffers) || rawOffers.length > 32) throw new Error("Offer response is too large or invalid");
+    const normalized = rawOffers.map((offer) => normalizePlanningOffer(offer, now));
+    if (normalized.some((offer) => offer.component.provider !== provider.capabilities.provider
+      || offer.component.type !== type || (offer.component.price.finalCustomerAmount?.currency ?? offer.component.price.currency) !== query.currency)) {
       throw new Error("Offer context does not match research");
     }
-    return { offers, outcome: { provider: provider.capabilities.provider, status: "available" as const,
-      unverifiedCount: offers.filter((offer) => offer.unverifiedFacts.length > 0).length } };
-  } catch {
-    return { offers: [], outcome: { provider: provider.capabilities.provider,
-      status: controller.signal.aborted ? "deadline" as const : "unavailable" as const, unverifiedCount: 0 } };
-  } finally { clearTimeout(timer); }
+    const offers = [...new Map(normalized.map((offer) => [offerIdentity(offer), offer])).values()];
+    return { offers, outcome: { ...outcome(sourceOutcome.provider, type, offers.length ? "available" : "no_matches", sourceOutcome.mode),
+      unverifiedCount: offers.reduce((count, offer) => count + offer.unverifiedFacts.length, 0) } };
+  } catch (error) {
+    if (signal?.aborted) {
+      return { offers: [], outcome: { ...sourceOutcome, retryable: false, safeReason: "Research was cancelled before search completed." } };
+    }
+    const status = controller.signal.aborted ? "deadline" : error instanceof SupplyReadError ? error.status : "error";
+    return { offers: [], outcome: { ...outcome(sourceOutcome.provider, type, status, sourceOutcome.mode),
+      retryAfterMs: error instanceof SupplyReadError ? error.retryAfterMs : null } };
+  } finally {
+    clearTimeout(timer);
+    if (cancel) signal?.removeEventListener("abort", cancel);
+  }
+}
+
+const deferredProviders = new Set(["booking", "booking.com", "trainline", "getyourguide"]);
+const currentProviderByType = { flight: "duffel", accommodation: "duffel", activity: "viator", rail: null, transfer: null } as const;
+
+function productSearchReadiness(readiness: SupplierReadiness | undefined, type: ComponentType) {
+  if (!readiness) return undefined;
+  if (type === "flight" || type === "accommodation") {
+    return { mode: readiness.duffel.mode, operation: readiness.duffel.products[type].operations.search };
+  }
+  if (type === "activity") return { mode: readiness.viator.mode, operation: readiness.viator.products.activity.operations.search };
+}
+
+function readinessFailure(operation: ProviderOperationReadiness, mode: "deterministic" | "live"): FailureStatus | null {
+  if (operation.support === "unsupported") return "unsupported";
+  if (operation.access === "unconfigured") return "unconfigured";
+  if (operation.support !== "supported" || operation.access === "blocked"
+    || (mode === "live" && operation.access !== "verified")) return "access_blocked";
+  return null;
 }
 
 export async function searchPlanningOffers(providers: readonly SupplyReadProvider[], rawQuery: unknown,
-  now = new Date()): Promise<SupplyReadResult> {
+  now = new Date(), { signal, readiness }: SupplyReadOptions = {}): Promise<SupplyReadResult> {
   const query = supplyReadQuerySchema.parse(rawQuery);
   if (providers.length > 4) throw new Error("At most four planning provider adapters are supported");
-  providers.forEach((provider) => readCapabilitiesSchema.parse(provider.capabilities));
-  const selected = providers.filter((provider) => provider.capabilities.search.some((type) => query.componentTypes.includes(type)));
-  const results = await Promise.all(selected.map((provider) => boundedSearch(provider, query, now)));
-  // Share the bounded context across suppliers, rather than letting flight alternatives
-  // consume every slot and hide available stays/activities/rail quotes.
-  const offers: PlanningOffer[] = [];
-  for (let index = 0; index < 32 && offers.length < 32; index += 1) {
-    for (const result of results) if (result.offers[index] && offers.length < 32) offers.push(result.offers[index]);
+  const registered = new Set<string>();
+  for (const provider of providers) {
+    const capabilities = readCapabilitiesSchema.parse(provider.capabilities);
+    for (const type of capabilities.search) {
+      const key = `${capabilities.provider}:${type}`;
+      if (registered.has(key)) throw new Error("Duplicate planning provider product");
+      registered.add(key);
+    }
   }
-  const unique = [...new Map(offers.map((offer) => [`${offer.component.provider}:${offer.component.supplierOfferId}`, offer])).values()];
-  return { offers: unique.slice(0, 32), outcomes: results.map((result) => result.outcome) };
+  type SourceResult = { offers: PlanningOffer[]; outcome: SupplyReadOutcome };
+  const sources = query.componentTypes.flatMap((type): Array<SourceResult | Promise<SourceResult>> => {
+    if (type === "rail") {
+      return [{ offers: [], outcome: { ...outcome(null, type, "unsupported"),
+        safeReason: "Rail inventory is deferred; no current rail supplier or replacement is available." } }];
+    }
+    const declared = productSearchReadiness(readiness, type);
+    const blocked = declared ? readinessFailure(declared.operation, declared.mode) : null;
+    if (blocked) return [{ offers: [], outcome: outcome(currentProviderByType[type], type, blocked, declared?.mode) }];
+    const selected = providers.filter((provider) => !deferredProviders.has(provider.capabilities.provider)
+      && provider.capabilities.search.includes(type));
+    if (!selected.length) {
+      return [{ offers: [], outcome: outcome(currentProviderByType[type], type,
+        currentProviderByType[type] === null ? "unsupported" : "unconfigured", declared?.mode) }];
+    }
+    return selected.map((provider) => boundedSearch(provider, query, type, now, signal, declared?.mode ?? provider.capabilities.mode));
+  });
+  const results = await Promise.all(sources);
+  const offers: PlanningOffer[] = [];
+  const seen = new Set<string>();
+  // Allocate across product lanes after deduplication, so repeated flight hits cannot
+  // consume the context budget or hide Duffel stays and Viator activities.
+  for (let index = 0; index < 32 && offers.length < 32; index += 1) {
+    for (const result of results) {
+      const offer = result.offers[index];
+      if (offer && offers.length < 32 && !seen.has(offerIdentity(offer))) {
+        seen.add(offerIdentity(offer));
+        offers.push(offer);
+      }
+    }
+  }
+  return { offers, outcomes: results.map((result) => result.outcome) };
 }

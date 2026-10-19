@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from fixtures.doubles import (
     SYNTHETIC_OFFERS,
+    DeterministicClock,
     DeterministicProviderDouble,
     TimeoutAfterCommitError,
 )
@@ -99,3 +100,28 @@ def test_provider_double_covers_changed_unavailable_and_commit_edge_cases() -> N
     )
     assert [outcome.duplicate for outcome in duplicate] == [False, True]
     assert [outcome.status for outcome in contradictory] == ["confirmed", "rejected"]
+
+
+def test_provider_read_modes_use_clock_evidence_without_writes() -> None:
+    clock = DeterministicClock("2030-01-01T00:00:00Z")
+    provider = DeterministicProviderDouble(now=clock.now)
+    assert len(provider.search().offers) == 3
+    assert provider.detail("offer-available-001").status == "available"
+    assert provider.revalidate("offer-changed-001").status == "changed"
+    clock.advance(1_000)
+    evidence = provider.search("rate_limited")
+    assert evidence.status == "rate_limited"
+    assert evidence.offers == ()
+    assert evidence.checked_at == "2030-01-01T00:00:01.000Z"
+    assert provider.counters["writes"] == 0
+    assert provider.counters["write_attempts"] == 0
+
+
+def test_provider_truth_survives_crash_without_duplicate_writes() -> None:
+    provider = DeterministicProviderDouble()
+    with pytest.raises(TimeoutAfterCommitError):
+        provider.commit("crash-request", "offer-available-001", "timeout_after_commit")
+    restored = DeterministicProviderDouble(state=provider.snapshot())
+    assert restored.commit("crash-request", "offer-available-001")[0].duplicate
+    assert restored.counters["writes"] == 1
+    assert restored.commit("partial-request", "offer-unavailable-001")[0].status == "rejected"

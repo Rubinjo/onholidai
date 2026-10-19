@@ -1,10 +1,10 @@
 export class PlanningRequestError extends Error {
   constructor(public readonly status: number, public readonly code: string) { super(code); this.name = "PlanningRequestError"; }
 }
-export async function planningJson(path: string, body?: unknown, method?: "POST" | "PATCH"): Promise<unknown> {
+export async function planningJson(path: string, body?: unknown, method?: "POST" | "PATCH", signal?: AbortSignal): Promise<unknown> {
   const response = await fetch(path, { method: method ?? (body === undefined ? "GET" : "POST"), cache: "no-store", credentials: "same-origin",
     headers: body === undefined ? {} : { "Content-Type": "application/json" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal });
   const result: unknown = await response.json();
   if (!response.ok) {
     const code = typeof result === "object" && result && "code" in result && typeof result.code === "string" ? result.code : "request_failed";

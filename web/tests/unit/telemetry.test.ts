@@ -35,6 +35,15 @@ describe("correlation propagation", () => {
       ),
     ).toBe(generated);
   });
+
+  it("does not propagate supplier secrets hidden inside trace metadata", () => {
+    const outgoing = createPropagationHeaders(new Headers({
+      [CORRELATION_ID_HEADER]: "passport-991199",
+      tracestate: "vendor=api%4bey-private-canary",
+    }));
+    expect(outgoing.get(CORRELATION_ID_HEADER)).not.toBe("passport-991199");
+    expect(outgoing.has("tracestate")).toBe(false);
+  });
 });
 
 describe("telemetry attribute allowlist", () => {
@@ -70,9 +79,31 @@ describe("telemetry attribute allowlist", () => {
       }),
     ).toEqual({});
   });
+
+  it("rejects encoded supplier secrets and economics inside operational tokens", () => {
+    expect(allowlistedTelemetryAttributes({
+      "onholidai.provider": "supplier_cost_991199",
+      "onholidai.operation": "https://provider.example/secret/883388",
+      "onholidai.outcome": "passport-991199",
+      "onholidai.duration_ms": 12,
+    })).toEqual({ "onholidai.duration_ms": 12 });
+  });
 });
 
 describe("RFC problem responses", () => {
+  it("does not trust sensitive strings inside explicitly typed problems", async () => {
+    const response = problemResponse(new ProblemError({
+      title: "Provider failed: supplier_cost=991199",
+      status: 502,
+      code: "supplier_failure",
+      detail: "https://provider.example/offer?api%4bey=883388",
+      fieldErrors: [{ path: "passport_991199", message: "Bearer private-canary" }],
+    }), "request-safe");
+    const body = JSON.stringify(await response.json());
+    expect(body).not.toMatch(/991199|883388|private-canary/);
+    expect(body).toContain("request-safe");
+  });
+
   it("returns explicitly safe problem details and the correlation header", async () => {
     const response = problemResponse(
       new ProblemError({

@@ -59,9 +59,6 @@
           {
             "properties": {
               "scopes": {
-                "contains": {
-                  "const": "proposal:create"
-                },
                 "uniqueItems": true
               }
             }
@@ -76,7 +73,7 @@
               "$ref": "#/components/schemas/AgentScope"
             },
             "maxItems": 3,
-            "minItems": 2,
+            "minItems": 1,
             "title": "Scopes",
             "type": "array"
           },
@@ -257,6 +254,39 @@
             "if": {
               "properties": {
                 "purpose": {
+                  "const": "supplier_research"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "answer",
+                        "clarification"
+                      ]
+                    }
+                  }
+                },
+                "status": {
+                  "enum": [
+                    "queued",
+                    "running",
+                    "awaiting_clarification",
+                    "completed",
+                    "failed",
+                    "cancelled"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "purpose": {
                   "const": "initial_estimate"
                 }
               }
@@ -372,7 +402,7 @@
             "$ref": "#/components/schemas/NonNegativeInt"
           },
           "purpose": {
-            "$ref": "#/components/schemas/ProposalPurpose"
+            "$ref": "#/components/schemas/RunPurpose"
           },
           "requestId": {
             "$ref": "#/components/schemas/UUIDString"
@@ -783,6 +813,34 @@
       },
       "CreateAgentRunRequest": {
         "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "purpose": {
+                  "enum": [
+                    "initial_estimate",
+                    "refinement",
+                    "finalization"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "actor": {
+                  "properties": {
+                    "scopes": {
+                      "contains": {
+                        "const": "proposal:create"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
         "properties": {
           "actor": {
             "$ref": "#/components/schemas/ActorContext"
@@ -802,7 +860,7 @@
             "$ref": "#/components/schemas/Text12000"
           },
           "purpose": {
-            "$ref": "#/components/schemas/ProposalPurpose"
+            "$ref": "#/components/schemas/RunPurpose"
           },
           "requestId": {
             "$ref": "#/components/schemas/UUIDString"
@@ -1531,6 +1589,15 @@
         ],
         "title": "RetrieveRelevantContextInput",
         "type": "object"
+      },
+      "RunPurpose": {
+        "enum": [
+          "initial_estimate",
+          "refinement",
+          "finalization",
+          "supplier_research"
+        ],
+        "type": "string"
       },
       "TerminalEvent": {
         "additionalProperties": false,

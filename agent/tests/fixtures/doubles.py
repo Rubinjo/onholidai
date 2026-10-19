@@ -1,4 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 from typing import Literal
 
 OfferStatus = Literal["available", "changed", "unavailable"]
@@ -39,6 +41,45 @@ SYNTHETIC_OFFERS = (
     SyntheticOffer("offer-unavailable-001", "unavailable", 42_000),
 )
 
+type ReadScenario = Literal[
+    "success", "no_matches", "unsupported", "rate_limited", "deadline", "error"
+]
+type ReadStatus = Literal[
+    "available", "changed", "unavailable", "no_matches", "unsupported", "rate_limited",
+    "deadline", "error"
+]
+
+
+@dataclass(frozen=True, slots=True)
+class ReadEvidence:
+    status: ReadStatus
+    offers: tuple[SyntheticOffer, ...]
+    checked_at: str
+    expires_at: str | None
+    evidence_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderFixtureState:
+    sequence: int
+    committed: tuple[CommitOutcome, ...]
+    writes: int
+
+
+class DeterministicClock:
+    def __init__(self, timestamp: str = "2030-01-01T00:00:00Z") -> None:
+        self._instant = datetime.fromisoformat(timestamp)
+        if self._instant.tzinfo is None:
+            raise ValueError("Synthetic clock requires an offset")
+
+    def now(self) -> datetime:
+        return self._instant
+
+    def advance(self, milliseconds: int) -> None:
+        if isinstance(milliseconds, bool) or milliseconds < 0:
+            raise ValueError("Invalid clock advance")
+        self._instant += timedelta(milliseconds=milliseconds)
+
 
 class TimeoutAfterCommitError(RuntimeError):
     def __init__(self, outcome: CommitOutcome) -> None:
@@ -47,9 +88,58 @@ class TimeoutAfterCommitError(RuntimeError):
 
 
 class DeterministicProviderDouble:
-    def __init__(self) -> None:
-        self.committed: dict[str, CommitOutcome] = {}
-        self._sequence = 0
+    def __init__(
+        self,
+        now: Callable[[], datetime] | None = None,
+        state: ProviderFixtureState | None = None,
+    ) -> None:
+        self._now = now or DeterministicClock().now
+        self.committed: dict[str, CommitOutcome] = {
+            outcome.request_id: outcome for outcome in state.committed
+        } if state else {}
+        self._sequence = state.sequence if state else 0
+        self.counters = {
+            "search": 0, "detail": 0, "revalidation": 0, "write_attempts": 0,
+            "writes": state.writes if state else 0,
+        }
+
+    def snapshot(self) -> ProviderFixtureState:
+        return ProviderFixtureState(
+            self._sequence, tuple(self.committed.values()), self.counters["writes"]
+        )
+
+    def search(self, scenario: ReadScenario = "success") -> ReadEvidence:
+        return self._read("search", None, scenario)
+
+    def detail(self, offer_id: str, scenario: ReadScenario = "success") -> ReadEvidence:
+        return self._read("detail", offer_id, scenario)
+
+    def revalidate(self, offer_id: str, scenario: ReadScenario = "success") -> ReadEvidence:
+        return self._read("revalidation", offer_id, scenario)
+
+    def _read(
+        self,
+        operation: Literal["search", "detail", "revalidation"],
+        offer_id: str | None,
+        scenario: ReadScenario,
+    ) -> ReadEvidence:
+        self.counters[operation] += 1
+        checked_at = self._now()
+        selected = (
+            ((self.quote(offer_id),) if offer_id else SYNTHETIC_OFFERS)
+            if scenario == "success" else ()
+        )
+        status: ReadStatus = (
+            (selected[0].status if selected else "no_matches")
+            if scenario == "success" else scenario
+        )
+        expiry = checked_at + timedelta(minutes=5) if selected else None
+        return ReadEvidence(
+            status, selected,
+            checked_at.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            expiry.isoformat(timespec="milliseconds").replace("+00:00", "Z") if expiry else None,
+            f"synthetic-{operation}-{self.counters[operation]}",
+        )
 
     def quote(self, offer_id: str) -> SyntheticOffer:
         try:
@@ -63,6 +153,7 @@ class DeterministicProviderDouble:
         offer_id: str,
         scenario: ProviderScenario = "success",
     ) -> tuple[CommitOutcome, ...]:
+        self.counters["write_attempts"] += 1
         existing = self.committed.get(request_id)
         if existing is not None:
             return (replace(existing, duplicate=True),)
@@ -102,6 +193,7 @@ class DeterministicProviderDouble:
         confirmation_id: str | None,
     ) -> CommitOutcome:
         self._sequence += 1
+        self.counters["writes"] += 1
         outcome = CommitOutcome(
             request_id=request_id,
             offer_id=offer_id,

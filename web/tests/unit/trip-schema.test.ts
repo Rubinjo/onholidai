@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   decodeTripSnapshot,
+  componentPriceSchema,
+  moneySchema,
+  travelComponentSchema,
   tripSchema,
   tripVersionSchema,
   UnsupportedTripSnapshotVersionError,
@@ -74,6 +77,55 @@ function snapshotFixture() {
 }
 
 describe("Trip and TripVersion schemas", () => {
+  it("accepts only safe integer minor units and recognized ISO currencies", () => {
+    expect(moneySchema.safeParse({ currency: "GBP", minorUnits: Number.MAX_SAFE_INTEGER }).success).toBe(true);
+    for (const minorUnits of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, Infinity, NaN]) {
+      expect(moneySchema.safeParse({ currency: "GBP", minorUnits }).success).toBe(false);
+    }
+    for (const currency of ["gbp", "ZZZ", "GBP ", "GB"]) {
+      expect(moneySchema.safeParse({ currency, minorUnits: 100 }).success).toBe(false);
+    }
+  });
+
+  it("keeps component price arithmetic and accepted service dates strict", () => {
+    const price = {
+      supplierAmount: zero,
+      platformMargin: zero,
+      customerPayableTaxes: zero,
+      customerPayableFees: zero,
+      finalCustomerAmount: zero,
+      status: "estimated",
+      source: "synthetic",
+      checkedAt: timestamp,
+      expiresAt: null,
+    };
+    const component = {
+      id: ids.request,
+      itineraryItemIds: [],
+      provider: "synthetic",
+      supplierOfferId: "synthetic-stay",
+      type: "accommodation",
+      offerStatus: "available",
+      serviceStart: "2027-04-01T14:00:00Z",
+      serviceEnd: "2027-04-02T10:00:00Z",
+      travellerIds: [ids.user],
+      bookingRequirements: [],
+      cancellationTerms: "Synthetic terms",
+      price,
+      checkedAt: timestamp,
+      expiresAt: null,
+      bookingStatus: "unbooked",
+      details: { occupancy: "One adult", amenities: [] },
+    };
+
+    expect(travelComponentSchema.safeParse(component).success).toBe(true);
+    expect(travelComponentSchema.safeParse({ ...component, serviceStart: null }).success).toBe(false);
+    expect(travelComponentSchema.safeParse({ ...component, serviceEnd: component.serviceStart }).success).toBe(false);
+    expect(travelComponentSchema.safeParse({ ...component, unexpected: true }).success).toBe(false);
+    expect(componentPriceSchema.safeParse({ ...price, supplierAmount: { currency: "GBP", minorUnits: 0 } }).success).toBe(false);
+    expect(componentPriceSchema.safeParse({ ...price, finalCustomerAmount: { ...zero, minorUnits: 1 } }).success).toBe(false);
+  });
+
   it("accepts a complete current snapshot and immutable root metadata", () => {
     const snapshot = snapshotFixture();
     const decoded = decodeTripSnapshot(1, snapshot);

@@ -15,23 +15,94 @@ function envelope() {
 }
 
 describe("trip editor impact review", () => {
-  it("explains an unchanged draft instead of sending an empty review request", async () => {
+  it("shows discard only for unsaved changes and restores saved values without a request", () => {
     render(<TripEditor trip={envelope()} onCommit={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "Review edit impacts" }));
-    expect(await screen.findByText(/No settings have changed/)).toBeTruthy();
-    await waitFor(() => expect(api.preview).not.toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reload current trip details" })).toBeNull();
+    const pace = screen.getByLabelText("Pace", { exact: false });
+    const savedValue = (pace as HTMLInputElement).value;
+    fireEvent.change(pace, { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    expect((pace as HTMLInputElement).value).toBe(savedValue);
+    expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
+    expect(api.preview).not.toHaveBeenCalled();
   });
 
-  it("reviews only the settings that changed", async () => {
-    api.preview.mockResolvedValue({ impactFingerprint: "a".repeat(64), affectedFacts: ["preferences"], priceImpact: null, scheduleImpact: null, operations: [], warnings: [] });
-    render(<TripEditor trip={envelope()} onCommit={() => {}} />);
+  it("hides discard when a changed value is manually restored", () => {
+    const trip = envelope();
+    trip.snapshot.preferences.pace = 100;
+    render(<TripEditor trip={trip} onCommit={() => {}} />);
+    const pace = screen.getByLabelText("Pace", { exact: false });
+    const savedValue = (pace as HTMLInputElement).value;
+    fireEvent.change(pace, { target: { value: "7" } });
+    expect(screen.getByRole("button", { name: "Discard changes" })).toBeTruthy();
+    fireEvent.change(pace, { target: { value: savedValue } });
+    expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
+  });
+
+  it("discards to the latest saved version after a background update", () => {
+    const trip = envelope();
+    const { rerender } = render(<TripEditor trip={trip} onCommit={() => {}} />);
     fireEvent.change(screen.getByLabelText("Pace", { exact: false }), { target: { value: "7" } });
-    fireEvent.click(screen.getByRole("button", { name: "Review edit impacts" }));
-    await waitFor(() => expect(api.preview).toHaveBeenCalled());
+    const latest = { ...trip, version: 3, snapshot: { ...trip.snapshot,
+      preferences: { ...trip.snapshot.preferences, pace: 100 } } };
+    rerender(<TripEditor trip={latest} onCommit={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    expect((screen.getByLabelText("Pace", { exact: false }) as HTMLInputElement).value).toBe("10");
+    expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
+    expect(screen.queryByText(/The trip changed while you were editing/)).toBeNull();
+    expect(api.preview).not.toHaveBeenCalled();
+  });
+
+  it("updates a clean form on a newer saved version without showing discard", () => {
+    const trip = envelope();
+    const { rerender } = render(<TripEditor trip={trip} onCommit={() => {}} />);
+    const latest = { ...trip, version: 3, snapshot: { ...trip.snapshot,
+      preferences: { ...trip.snapshot.preferences, pace: 100 } } };
+    rerender(<TripEditor trip={latest} onCommit={() => {}} />);
+    expect((screen.getByLabelText("Pace", { exact: false }) as HTMLInputElement).value).toBe("10");
+    expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
+    expect(screen.queryByText(/The trip changed while you were editing/)).toBeNull();
+  });
+
+  it("hides apply for a clean form instead of sending an empty request", () => {
+    render(<TripEditor trip={envelope()} onCommit={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Apply changes" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review edit impacts" })).toBeNull();
+    expect(api.preview).not.toHaveBeenCalled();
+  });
+
+  it("immediately saves only changed settings without an impact preview", async () => {
+    const trip = envelope();
+    const saved = { ...trip, version: 3, snapshot: { ...trip.snapshot,
+      preferences: { ...trip.snapshot.preferences, pace: 67 } } };
+    api.preview.mockResolvedValue(saved);
+    const onCommit = vi.fn();
+    render(<TripEditor trip={trip} onCommit={onCommit} />);
+    fireEvent.change(screen.getByLabelText("Pace", { exact: false }), { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(onCommit).toHaveBeenCalledWith(saved));
+    expect(api.preview).toHaveBeenCalledTimes(1);
     const [path, input] = api.preview.mock.calls[0] as [string, { operations: { target: string; value: unknown }[] }];
-    expect(path).toBe("/api/v1/trips/10000000-0000-4000-8000-000000000090/commands/edit-preview");
+    expect(path).toBe("/api/v1/trips/10000000-0000-4000-8000-000000000090/commands/edit");
     expect(input.operations).toHaveLength(1);
     expect(input.operations[0].target).toBe("/preferences");
     expect((input.operations[0].value as { pace: number }).pace).toBe(67);
+    expect(input).not.toHaveProperty("impactFingerprint");
+    expect(screen.queryByRole("button", { name: "Apply changes" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
+  });
+
+  it("preserves edits after a failed save and reuses the request when retried", async () => {
+    api.preview.mockRejectedValue(new Error("Unavailable"));
+    render(<TripEditor trip={envelope()} onCommit={() => {}} />);
+    fireEvent.change(screen.getByLabelText("Pace", { exact: false }), { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+    expect(await screen.findByText("Safe failure")).toBeTruthy();
+    const original = api.preview.mock.calls[0][1];
+    fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
+    await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(2));
+    expect(api.preview.mock.calls[1][1]).toEqual(original);
+    expect((screen.getByLabelText("Pace", { exact: false }) as HTMLInputElement).value).toBe("7");
   });
 });

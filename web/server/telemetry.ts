@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { containsSensitiveText } from "../lib/privacy";
 
 export const CORRELATION_ID_HEADER = "x-correlation-id";
 
@@ -63,7 +64,7 @@ export const TELEMETRY_ATTRIBUTE_KEYS = Object.freeze(
 );
 
 export function isValidCorrelationId(value: string | null): value is string {
-  return value !== null && correlationIdPattern.test(value);
+  return value !== null && correlationIdPattern.test(value) && !containsSensitiveText(value);
 }
 
 export function getOrCreateCorrelationId(
@@ -75,7 +76,7 @@ export function getOrCreateCorrelationId(
 }
 
 function isValidTracestate(value: string): boolean {
-  return value.length <= 512 && /^[\x20-\x7e]+$/.test(value);
+  return value.length <= 512 && /^[\x20-\x7e]+$/.test(value) && !containsSensitiveText(value);
 }
 
 export function createPropagationHeaders(incoming: Headers): Headers {
@@ -102,7 +103,7 @@ export function allowlistedTelemetryAttributes(
 
   for (const [key, value] of Object.entries(attributes)) {
     const validator = attributeValidators[key as keyof typeof attributeValidators];
-    if (validator?.(value)) {
+    if (validator?.(value) && (typeof value !== "string" || !containsSensitiveText(value))) {
       allowed[key] = value;
     }
   }

@@ -17,6 +17,8 @@ Tool arguments are closed typed objects: reject unknown fields/coercions that by
 
 Currency, party, origin, accepted constraints, eligible requirements and trip/version are derived server-side. Search dates/destinations/origin must fit the current authoritative planning scope. If an existing planner legitimately explores a new route, use its existing validated research/proposal scope; arbitrary model arguments cannot expand it. Provider native IDs are never authority to fetch unrelated inventory.
 
+Active inventory is Duffel flight/accommodation and Viator activity only. Keep rail in query types for compatibility, but every rail request (including rail-only) returns explicit unsupported/deferred capability information without a Trainline call, replacement provider or synthetic offer. Absence of rail must not reject a mixed request or discard its supported results. Capability support/access is product/operation-specific so Duffel Flights access cannot imply Stays access. The four-tool count is independent of the two-provider/three-product scope.
+
 Detail/revalidation references must belong to the current run's stored offers or server-approved imported selections. Browser-created refinements may import selected references from earlier same-owner/trip/current-version research only after access validation. A reference from another run without that grant is denied, including same-owner unrelated work. A new revision does not mutate old evidence or accepted trip state.
 
 ## Public result fields
@@ -35,6 +37,8 @@ Provider search outcome is separate from inventory outcome:
 | `deadline` / `error` | Truth could not be established; no inventory conclusion |
 
 Each source includes a safe reason, retry eligibility/time when known and unknown-fact count. No fake successful source is manufactured when the live registry is empty. Every requested revalidation yields an explicit outcome; unchanged requires affirmative current matching evidence, and changed includes differences. Expiry cannot be extended locally without evidence. Estimated, quoted and live-revalidated labels do not imply inventory is held.
+
+Use provider plus component type/requirement to identify source outcomes and fairly allocate the 32-offer bound; do not merge Duffel flight and accommodation evidence or let one starve the other. Represent requested rail as an unsupported component-type outcome without inventing a replacement provider identity. Legacy saved supplier references retain their original attribution and cannot become newly verified current inventory through aliasing.
 
 ## Web routes and shared service
 
@@ -57,6 +61,8 @@ Selection passes an opaque offer reference/revision in a structured refinement r
 Reuse the existing problem envelope/status conventions: validation 400/422, unauthenticated 401, inaccessible reference 403/404 without cross-owner disclosure, stale version/revision 409, rate limiting 429, bounded unavailable/deadline failure 503/504 where the entire read fails. Partial provider failures are structured outcomes in a successful search response, not loss of all results.
 
 Enforce one <=12s overall research budget, current <=8s supplier ceiling, abort propagation and bounded payloads. No automatic retries by default; one rate-limit-directed safe read retry only if it fits. Apply existing guest/account run limits and provider/account request limits; no Redis or new quota service. Late response/revalidation uses expected revision and cannot overwrite newer evidence. Failed evidence persistence cannot return an unresolvable reference.
+
+Duffel discovery uses only the separate read key; Stays quote/search operations must have established safe semantics and permitted read-key scope before use. Viator's shared upstream key stays in the trusted web client behind a closed non-transactional endpoint/method allowlist. Key scope does not grant model/tool authority, and a POST read is not automatically transactional or automatically safe. No discovery call may hold inventory or invoke booking/cart/cancellation/rescheduling; blocked semantics return unsupported instead of using privileged fallback.
 
 URLs/text are data, never instructions. Allowlist schemes/fields and strip protected values before MCP/browser output, trace spans or exceptions. Do not log tool arguments, raw supplier responses, arbitrary detail strings, credential headers or sensitive context. Audit safe IDs/categories/duration/counts.
 

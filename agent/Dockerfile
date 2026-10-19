@@ -13,6 +13,7 @@ COPY agent/pyproject.toml agent/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY agent/src ./src
+COPY contracts/supply/public-offers-v1.schema.json /workspace/contracts/supply/public-offers-v1.schema.json
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8000

@@ -2,6 +2,7 @@ import math
 import re
 from collections.abc import Mapping, Sequence, Set
 from typing import cast, overload
+from urllib.parse import unquote
 
 REDACTED = "[REDACTED]"
 
@@ -99,7 +100,17 @@ def _is_sensitive_key(key: object) -> bool:
 
 
 def _is_sensitive_string(value: str) -> bool:
-    return any(pattern.search(value) for pattern in _SENSITIVE_VALUE_PATTERNS)
+    if len(value) > 16_384:
+        return True
+    decoded = value
+    for _depth in range(3):
+        expanded = unquote(decoded)
+        if expanded == decoded:
+            break
+        decoded = expanded
+    normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", decoded)
+    normalized = re.sub(r"[_-]+", " ", normalized)
+    return any(pattern.search(normalized) for pattern in _SENSITIVE_VALUE_PATTERNS)
 
 
 @overload

@@ -1,19 +1,71 @@
 import { z } from "zod";
 
-import { decodeTripSnapshot, publicTripPriceSchema, tripSnapshotSchema, type TripSnapshot, type LegacyTripSnapshot } from "../trip/schema";
+import { decodeTripSnapshot, publicTripPriceSchema, travelComponentSchema, tripSnapshotSchema, type TripSnapshot, type LegacyTripSnapshot } from "../trip/schema.ts";
+import { publicSupplierText } from "../../lib/privacy.ts";
 
 type Component = TripSnapshot["components"][number];
 type PublicComponent<Value = Component> = Value extends Component ? Omit<Value, "price"> & { price: PublicPrice } : never;
 export type PublicPrice = z.infer<typeof publicTripPriceSchema>;
+export const publicComponentSchema = z.discriminatedUnion("type", [
+  travelComponentSchema.options[0].extend({ price: publicTripPriceSchema }),
+  travelComponentSchema.options[1].extend({ price: publicTripPriceSchema }),
+  travelComponentSchema.options[2].extend({ price: publicTripPriceSchema }),
+  travelComponentSchema.options[3].extend({ price: publicTripPriceSchema }),
+  travelComponentSchema.options[4].extend({ price: publicTripPriceSchema }),
+]);
 export type CustomerSnapshot = Omit<TripSnapshot, "components" | "price" | "departureOrigin"> & {
   departureOrigin: TripSnapshot["departureOrigin"] | null;
   components: PublicComponent[];
   price: PublicPrice;
 };
 
-function projectValidatedSnapshot(snapshot: TripSnapshot | LegacyTripSnapshot, now: Date): CustomerSnapshot {
-  const components = snapshot.components.map((component) => ({
-    ...component,
+export function projectPublicComponent(component: Component, now = new Date()): PublicComponent {
+  return {
+    id: component.id,
+    itineraryItemIds: component.itineraryItemIds,
+    provider: publicSupplierText(component.provider),
+    supplierOfferId: publicSupplierText(component.supplierOfferId),
+    type: component.type,
+    offerStatus: component.offerStatus,
+    serviceStart: component.serviceStart,
+    serviceEnd: component.serviceEnd,
+    travellerIds: component.travellerIds,
+    bookingRequirements: component.bookingRequirements.map(publicSupplierText),
+    cancellationTerms: publicSupplierText(component.cancellationTerms),
+    checkedAt: component.checkedAt,
+    expiresAt: component.expiresAt,
+    bookingStatus: component.bookingStatus,
+    details: component.type === "flight"
+      ? { legs: component.details.legs.map(publicSupplierText), baggage: component.details.baggage.map(publicSupplierText) }
+      : component.type === "accommodation"
+        ? { occupancy: publicSupplierText(component.details.occupancy), amenities: component.details.amenities.map(publicSupplierText) }
+        : component.type === "activity"
+          ? { durationMinutes: component.details.durationMinutes, directions: publicSupplierText(component.details.directions) }
+          : component.type === "rail"
+            ? { originStation: publicSupplierText(component.details.originStation), destinationStation: publicSupplierText(component.details.destinationStation), route: publicSupplierText(component.details.route) }
+            : { origin: publicSupplierText(component.details.origin), destination: publicSupplierText(component.details.destination), route: publicSupplierText(component.details.route) },
+    ...(component.planningDetails ? { planningDetails: {
+      locationName: component.planningDetails.locationName === null ? null : publicSupplierText(component.planningDetails.locationName),
+      timezone: component.planningDetails.timezone,
+      airportNames: component.planningDetails.airportNames.map(publicSupplierText),
+      airlines: component.planningDetails.airlines.map(publicSupplierText),
+      flightDirection: component.planningDetails.flightDirection,
+      durationMinutes: component.planningDetails.durationMinutes,
+      layovers: component.planningDetails.layovers.map(publicSupplierText),
+      fareConditions: component.planningDetails.fareConditions === null ? null : publicSupplierText(component.planningDetails.fareConditions),
+      accommodationType: component.planningDetails.accommodationType === null ? null : publicSupplierText(component.planningDetails.accommodationType),
+      travelFromStayMinutes: component.planningDetails.travelFromStayMinutes,
+      eligibility: component.planningDetails.eligibility,
+      accessibility: component.planningDetails.accessibility,
+      availability: component.planningDetails.availability,
+      constraintEvidence: component.planningDetails.constraintEvidence.map((evidence) => ({
+        constraintId: evidence.constraintId, status: evidence.status,
+        source: publicSupplierText(evidence.source), checkedAt: evidence.checkedAt,
+      })),
+      source: publicSupplierText(component.planningDetails.source),
+      checkedAt: component.planningDetails.checkedAt,
+      unavailableFacts: component.planningDetails.unavailableFacts.map(publicSupplierText),
+    } } : {}),
     price: publicTripPriceSchema.parse({ currency: component.price.finalCustomerAmount.currency,
       finalCustomerMinor: component.price.finalCustomerAmount.minorUnits,
       taxesMinor: component.price.customerPayableTaxes.minorUnits,
@@ -21,14 +73,29 @@ function projectValidatedSnapshot(snapshot: TripSnapshot | LegacyTripSnapshot, n
       status: component.price.status !== "confirmed" && component.price.expiresAt !== null
         && Date.parse(component.price.expiresAt) <= now.getTime() ? "expired" : component.price.status,
       checkedAt: component.price.checkedAt, expiresAt: component.price.expiresAt }),
-  })) as PublicComponent[];
+  } as PublicComponent;
+}
+
+function projectValidatedSnapshot(snapshot: TripSnapshot | LegacyTripSnapshot, now: Date): CustomerSnapshot {
+  const components = snapshot.components.map((component) => projectPublicComponent(component, now));
   const conversionWarnings = snapshot.price.conversionDisclosures.map((conversion) => ({
     code: "currency_conversion", severity: "info" as const, relatedIds: [],
-    message: `Converted ${conversion.fromCurrency} to ${conversion.toCurrency} at ${conversion.rate} (${conversion.source}, ${conversion.quotedAt}).`,
+    message: `Converted ${conversion.fromCurrency} to ${conversion.toCurrency} at ${conversion.rate} (${publicSupplierText(conversion.source)}, ${conversion.quotedAt}).`,
   }));
   return {
-    ...snapshot, departureOrigin: snapshot.departureOrigin ?? null, components,
-    warnings: [...snapshot.warnings, ...conversionWarnings],
+    departureOrigin: snapshot.departureOrigin ?? null,
+    availabilityWindows: snapshot.availabilityWindows,
+    duration: snapshot.duration,
+    travellerParty: snapshot.travellerParty,
+    preferences: snapshot.preferences,
+    constraints: snapshot.constraints,
+    destinations: snapshot.destinations,
+    itineraryDays: snapshot.itineraryDays,
+    components,
+    warnings: [...snapshot.warnings.map((warning) => ({
+      code: publicSupplierText(warning.code), severity: warning.severity,
+      relatedIds: warning.relatedIds, message: publicSupplierText(warning.message),
+    })), ...conversionWarnings],
     price: publicTripPriceSchema.parse({ currency: snapshot.price.currency,
       finalCustomerMinor: snapshot.price.finalCustomerTotal.minorUnits,
       taxesMinor: snapshot.price.customerPayableTaxesTotal.minorUnits,

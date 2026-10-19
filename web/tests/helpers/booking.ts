@@ -24,6 +24,7 @@ export interface SeededBooking {
 }
 
 export interface SeedBookingOptions {
+  now?: Date;
   expiresInMs?: number;
   serviceStart?: string;
   serviceEnd?: string;
@@ -33,6 +34,7 @@ export interface SeedBookingOptions {
 // Seeds a finalized trip with unbooked flight, rail and stay components plus one
 // authorized exact-term booking request, mirroring the US4 independent fixture.
 export async function seedAuthorizedBooking(database: Kysely<Database>, options: SeedBookingOptions = {}): Promise<SeededBooking> {
+  const now = options.now ?? new Date();
   const userId = randomUUID();
   await sql`INSERT INTO app."user" (id, name, email) VALUES (${userId}, 'Synthetic booking owner', ${`booking-${userId}@example.invalid`})`.execute(database);
   const checkedAt = "2029-11-01T12:00:00Z";
@@ -77,8 +79,8 @@ export async function seedAuthorizedBooking(database: Kysely<Database>, options:
     inverseOperation: { operation: "replace", target: "/", value: trip.snapshot },
     nonReversibleReason: null, outboxEventId: randomUUID(), auditEventId: randomUUID(),
   });
-  const expiresAt = new Date(Date.now() + (options.expiresInMs ?? 300_000)).toISOString();
-  const authorizedAt = new Date(Math.min(Date.parse(expiresAt) - 1_000, Date.now() - 1_000)).toISOString();
+  const expiresAt = new Date(now.getTime() + (options.expiresInMs ?? 300_000)).toISOString();
+  const authorizedAt = new Date(Math.min(Date.parse(expiresAt) - 1_000, now.getTime() - 1_000)).toISOString();
   const terms = bookingTermsSchema.parse({
     departureOrigin: {
       kind: snapshot.departureOrigin!.kind, placeId: snapshot.departureOrigin!.placeId,

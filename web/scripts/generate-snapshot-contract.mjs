@@ -9,6 +9,7 @@ import {
   tripSnapshotSchema,
   itineraryDaySchema,
 } from "../domain/trip/schema.ts";
+import { planningOfferSchema, publicPlanningOfferSchema } from "../server/supply/offers.ts";
 
 const outputPath = resolve(process.cwd(), "../contracts/trip-domain/snapshot-v1.schema.json");
 const generated = `${JSON.stringify(
@@ -41,3 +42,29 @@ const itinerary = `${JSON.stringify({
 if (process.argv.includes("--check")) {
   assertGeneratedArtifact(await readFile(itineraryPath, "utf8"), itinerary, "itinerary-v1.schema.json has drifted");
 } else { await writeFile(itineraryPath, itinerary, "utf8"); }
+
+const publicOffersPath = resolve(process.cwd(), "../contracts/supply/public-offers-v1.schema.json");
+const publicOffers = `${JSON.stringify({
+  $id: "https://onholidai.local/contracts/supply/public-offers-v1.schema.json",
+  title: "Public Planning Offer v1",
+  description: "Customer/agent supply projection with customer pricing only; generated from canonical Zod fields.",
+  ...z.toJSONSchema(publicPlanningOfferSchema, { target: "draft-2020-12" }),
+}, null, 2)}\n`;
+if (process.argv.includes("--check")) {
+  assertGeneratedArtifact(await readFile(publicOffersPath, "utf8"), publicOffers, "public-offers-v1.schema.json has drifted");
+} else {
+  await writeFile(publicOffersPath, publicOffers, "utf8");
+}
+
+const offersPath = resolve(process.cwd(), "../contracts/supply/offers-v1.schema.json");
+const offers = `${JSON.stringify({
+  $id: "https://onholidai.local/contracts/supply/offers-v1.schema.json",
+  title: "Planning Offer v1",
+  description: "Internal discovery evidence, including unknown facts and immutable references; accepted components remain strict.",
+  ...z.toJSONSchema(planningOfferSchema, { target: "draft-2020-12" }),
+}, null, 2)}\n`;
+if (process.argv.includes("--check")) {
+  assertGeneratedArtifact(await readFile(offersPath, "utf8"), offers, "offers-v1.schema.json has drifted");
+} else {
+  await writeFile(offersPath, offers, "utf8");
+}

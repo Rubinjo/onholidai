@@ -2,7 +2,7 @@ import type { ReadOfferClient } from "./adapter";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "@/domain/canonical-json";
 export function syntheticReadClient(type: "flight" | "accommodation" | "activity" | "rail"): ReadOfferClient {
-  return { async search(query, signal) {
+  const client: ReadOfferClient = { async search(query, signal) {
     if (signal.aborted) throw new Error("deadline");
     const days = Math.max(1, (Date.parse(query.endDate) - Date.parse(query.startDate)) / 86400000);
     const people = query.travellerParty.adults + query.travellerParty.children.length;
@@ -25,7 +25,16 @@ export function syntheticReadClient(type: "flight" | "accommodation" | "activity
       selectionGroup: interval.group, serviceStart: interval.start, serviceEnd: interval.end,
       supplierMinor: rate / intervals.length, taxesMinor: Math.round(rate / intervals.length * 0.1), feesMinor: 0,
       checkedAt: now.toISOString(), expiresAt: new Date(now.getTime() + 900000).toISOString(),
-      terms: null, details: type === "flight" ? { ...details, legs: [`Synthetic ${interval.group.split(":")[1]} flight; airport and carrier facts unverified`] } : details,
+      terms: "Demonstration terms only; no reservation or booking is available.",
+      details: type === "flight" ? { ...details, legs: [`Synthetic ${interval.group.split(":")[1]} flight; airport and carrier facts unverified`] } : details,
       minimumAge: null, maximumAge: null, maximumAdults: null, maximumChildren: null, accessibilityVerified: null }));
   } };
+  const current = async (id: string, query: Parameters<ReadOfferClient["search"]>[0], signal: AbortSignal) => {
+    const hits = await client.search(query, signal);
+    if (!Array.isArray(hits)) throw new Error("Invalid synthetic evidence");
+    const hit = hits.find((item: unknown) => typeof item === "object" && item !== null && "offerId" in item && item.offerId === id);
+    if (!hit) throw new Error("Synthetic offer not found");
+    return hit;
+  };
+  return { ...client, detail: current, revalidate: current };
 }

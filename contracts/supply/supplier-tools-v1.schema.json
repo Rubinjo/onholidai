@@ -1,0 +1,186 @@
+{
+  "$id": "https://onholidai.local/contracts/supply/supplier-tools-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "tools": {
+    "supplier_capabilities": {
+      "$defs": {
+        "SupplierComponentType": {
+          "enum": [
+            "flight",
+            "accommodation",
+            "activity",
+            "rail"
+          ],
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "componentTypes": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SupplierComponentType"
+              },
+              "maxItems": 4,
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Componenttypes"
+        }
+      },
+      "title": "SupplierCapabilitiesInput",
+      "type": "object"
+    },
+    "supplier_offer_details": {
+      "$defs": {
+        "SupplierOfferReference": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "offerRef": {
+          "$ref": "#/$defs/SupplierOfferReference"
+        },
+        "revision": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offerRef",
+        "revision"
+      ],
+      "title": "SupplierOfferInput",
+      "type": "object"
+    },
+    "supplier_revalidate_offer": {
+      "$defs": {
+        "SupplierOfferReference": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "offerRef": {
+          "$ref": "#/$defs/SupplierOfferReference"
+        },
+        "revision": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offerRef",
+        "revision"
+      ],
+      "title": "SupplierOfferInput",
+      "type": "object"
+    },
+    "supplier_search": {
+      "$defs": {
+        "SupplierComponentType": {
+          "enum": [
+            "flight",
+            "accommodation",
+            "activity",
+            "rail"
+          ],
+          "type": "string"
+        },
+        "SupplierOfferReference": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "UUIDString": {
+          "format": "uuid",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "componentTypes": {
+          "items": {
+            "$ref": "#/$defs/SupplierComponentType"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Componenttypes",
+          "type": "array"
+        },
+        "departurePlaceId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SupplierOfferReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "destinationIds": {
+          "items": {
+            "$ref": "#/$defs/UUIDString"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Destinationids",
+          "type": "array"
+        },
+        "endDate": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Enddate",
+          "type": "string"
+        },
+        "propertyTypes": {
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Propertytypes",
+          "type": "array"
+        },
+        "requirementIds": {
+          "items": {
+            "$ref": "#/$defs/SupplierOfferReference"
+          },
+          "maxItems": 32,
+          "title": "Requirementids",
+          "type": "array"
+        },
+        "startDate": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Startdate",
+          "type": "string"
+        }
+      },
+      "required": [
+        "componentTypes",
+        "destinationIds",
+        "startDate",
+        "endDate"
+      ],
+      "title": "SupplierSearchInput",
+      "type": "object"
+    }
+  }
+}

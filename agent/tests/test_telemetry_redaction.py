@@ -65,3 +65,20 @@ def test_redacts_sensitive_keys_at_every_mapping_depth_and_in_cycles() -> None:
         "accessToken": REDACTED,
         "self": REDACTED,
     }
+
+
+def test_redacts_encoded_supplier_urls_and_separator_obfuscated_economics() -> None:
+    payload = {
+        "metadata": {
+            "provider": "synthetic",
+            "result": [
+                "supplier_cost=991199",
+                "https://provider.example/offer?platform%4dargin=883388",
+                "https://provider.example/offer?api%4bey=private-canary",
+            ],
+        }
+    }
+
+    assert redact_for_langsmith(payload) == {
+        "metadata": {"provider": "synthetic", "result": [REDACTED] * 3}
+    }

@@ -15,6 +15,7 @@ import { planningError, PlanningRequestError } from "@/components/trip-setup/htt
 import { Destinations } from "@/components/trip-setup/destinations";
 import { canonicalJson } from "@/domain/canonical-json";
 import { tripEnvelopeSchema } from "./use-trip";
+import { OfferResearch } from "./offer-research";
 type WorkspaceProps = { initialTrip: TripEnvelope; initialRunId: string | null; initialResearchRequestId?: string; authenticated?: boolean };
 function WorkspacePanes({ initialTrip, initialRunId, initialResearchRequestId, authenticated = false }: WorkspaceProps) {
   const query = useTrip(initialTrip), trip = query.data;
@@ -41,7 +42,7 @@ function WorkspacePanes({ initialTrip, initialRunId, initialResearchRequestId, a
           order={editorDraft.destinationOrder ?? "manual"} onOrder={(destinationOrder) => setEditorDraft({ ...editorDraft, destinationOrder })}
           onDestinations={(destinations) => setEditorDraft({ ...editorDraft, destinations: destinations.map((entry) => ({ ...entry, arrivalDate: null, departureDate: null, plannedNights: 0 })) })} />
       </div> : <ItineraryMap trip={trip} fill />}<details className="route-details"><summary>Route, stays and transport details</summary><ItineraryList trip={trip} /></details></div>
-      <div className="trip-workspace__pane trip-workspace__pane--conversation"><Conversation trip={trip} initialRunId={initialRunId} initialResearchRequestId={initialResearchRequestId} onCommit={query.accept} /></div>
+      <div className="trip-workspace__pane trip-workspace__pane--conversation"><Conversation trip={trip} initialRunId={initialRunId} initialResearchRequestId={initialResearchRequestId} onCommit={query.accept} /><OfferResearch trip={trip} /></div>
       <PriceBar trip={trip} authenticated={authenticated} />
     </div></main>;
 }

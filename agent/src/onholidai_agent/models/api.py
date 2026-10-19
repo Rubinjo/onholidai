@@ -19,6 +19,7 @@ from .common import (
 )
 
 type ProposalPurpose = Literal["initial_estimate", "refinement", "finalization"]
+type RunPurpose = Literal["initial_estimate", "refinement", "finalization", "supplier_research"]
 type AgentScope = Literal["trip:read", "context:read", "proposal:create"]
 
 
@@ -27,18 +28,14 @@ class ActorContext(ContractModel):
         json_schema_extra={
             "allOf": [
                 {"properties": {"scopes": {"contains": {"const": "trip:read"}}}},
-                {
-                    "properties": {
-                        "scopes": {"contains": {"const": "proposal:create"}, "uniqueItems": True}
-                    }
-                },
+                {"properties": {"scopes": {"uniqueItems": True}}},
             ]
         }
     )
     user_id: UUIDString
     trip_id: UUIDString
     base_trip_version: PositiveInt
-    scopes: list[AgentScope] = Field(min_length=2, max_length=3)
+    scopes: list[AgentScope] = Field(min_length=1, max_length=3)
 
 
 class ContextBudget(ContractModel):
@@ -96,6 +93,16 @@ class PromptContext(ContractModel):
 class CreateAgentRunRequest(ContractModel):
     model_config = ConfigDict(
         json_schema_extra={
+            "allOf": [
+                {
+                    "if": {"properties": {"purpose": {"enum": [
+                        "initial_estimate", "refinement", "finalization",
+                    ]}}},
+                    "then": {"properties": {"actor": {"properties": {
+                        "scopes": {"contains": {"const": "proposal:create"}},
+                    }}}},
+                },
+            ],
             "x-equal-fields": [
                 ["context.tripSummary.version", "actor.baseTripVersion"],
             ],
@@ -110,7 +117,7 @@ class CreateAgentRunRequest(ContractModel):
     conversation_id: UUIDString
     message: Text12000
     context: PromptContext
-    purpose: ProposalPurpose
+    purpose: RunPurpose
 
 
 class Clarification(ContractModel):
@@ -210,6 +217,20 @@ class AgentRun(ContractModel):
             "allOf": [
                 *status_result_rules(),
                 {
+                    "if": {"properties": {"purpose": {"const": "supplier_research"}}},
+                    "then": {
+                        "properties": {
+                            "status": {"enum": [
+                                "queued", "running", "awaiting_clarification",
+                                "completed", "failed", "cancelled",
+                            ]},
+                            "result": {"properties": {
+                                "kind": {"enum": ["answer", "clarification"]},
+                            }},
+                        },
+                    },
+                },
+                {
                     "if": {"properties": {"purpose": {"const": "initial_estimate"}}},
                     "then": {
                         "properties": {
@@ -246,7 +267,7 @@ class AgentRun(ContractModel):
     request_id: UUIDString
     trip_id: UUIDString
     conversation_id: UUIDString
-    purpose: ProposalPurpose
+    purpose: RunPurpose
     base_trip_version: PositiveInt
     status: Literal[
         "queued",

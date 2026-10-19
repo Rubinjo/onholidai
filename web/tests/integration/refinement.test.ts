@@ -19,6 +19,8 @@ describe("read-only refinement repricing", () => {
     expect(base).toEqual(prior);
     expect(review.snapshot.travellerParty.adults).toBe(3);
     expect(review.snapshot.components.length).toBeGreaterThan(0);
+    expect(new Set(review.snapshot.components.map((entry) => entry.type))).toEqual(new Set(["flight", "accommodation", "activity"]));
+    expect(new Set(review.snapshot.components.map((entry) => entry.provider))).toEqual(new Set(["duffel", "viator"]));
     expect(review.snapshot.price.finalCustomerTotal.minorUnits).toBe(review.snapshot.components.reduce((sum, entry) => sum + entry.price.finalCustomerAmount.minorUnits, 0));
     expect(JSON.stringify(review.previewSnapshot)).not.toMatch(/supplierAmount|platformMargin/);
   });
@@ -40,6 +42,29 @@ describe("read-only refinement repricing", () => {
 });
 
 describe.skipIf(!hasIsolatedDatabaseConfiguration())("atomic reviewed edit and undo", () => {
+  it("commits direct edits without a review, expires old estimates, and safely replays", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const userId = randomUUID();
+      await sql`INSERT INTO app."user" (id,name,email) VALUES (${userId},'Synthetic',${`${userId}@example.invalid`})`.execute(database);
+      const snapshot = projectCustomerSnapshot(createSyntheticTripSnapshot());
+      snapshot.itineraryDays = [];
+      const trip = await createTrip(database, userId, { requestId: randomUUID(), title: "Direct edit", currency: "GBP", snapshot });
+      const command = { requestId: randomUUID(), expectedVersion: 1,
+        operations: [{ operation: "replace", target: "/preferences/pace", value: 67 }] };
+      const saved = await applyEdit(database, userId, trip.tripId, command);
+      expect(saved.version).toBe(2);
+      expect(saved.snapshot.preferences.pace).toBe(67);
+      expect(saved.snapshot.price.status).toBe("expired");
+      expect((await applyEdit(database, userId, trip.tripId, command)).version).toBe(2);
+      expect(await database.selectFrom("draftEditReviews").select("id").where("tripId", "=", trip.tripId).execute()).toEqual([]);
+      await expect(applyEdit(database, userId, trip.tripId, { ...command, requestId: randomUUID() })).rejects.toThrow();
+      await expect(applyEdit(database, userId, trip.tripId, { ...command,
+        operations: [{ operation: "replace", target: "/preferences/pace", value: 80 }] })).rejects.toThrow();
+      const restored = await undoDraft(database, userId, trip.tripId, { requestId: randomUUID(), expectedVersion: 2, restoreVersion: 1 });
+      expect(restored.snapshot.preferences.pace).toBe(snapshot.preferences.pace);
+    });
+  });
+
   it("commits once, rejects a competing reviewed edit, and restores as a new immutable version", async () => {
     await withIsolatedTestDatabase(async ({ database }) => {
       const userId = "10000000-0000-4000-8000-000000000011";

@@ -4,7 +4,7 @@ import type { Kysely } from "kysely";
 import { z } from "zod";
 import type { ChangeProposal as AgentProposal } from "../../../contracts/agent-api/generated";
 import { projectCustomerSnapshot } from "@/domain/pricing/projections";
-import { planningOfferSchema, type PlanningOffer } from "@/server/supply/offers";
+import { planningOfferSchema, isCompletePlanningOffer, materializePlanningOffer, type PlanningOffer } from "@/server/supply/offers";
 import { ProposalRepository } from "@/server/db/proposal-repository";
 import type { Database } from "@/server/db/database";
 import { ProblemError } from "@/server/errors";
@@ -21,13 +21,13 @@ export function priceEstimate(base: TripSnapshot, operations: readonly unknown[]
   const candidate = applyDraftOperations(base, operations, false);
   candidate.components = candidate.components.map((component) => {
     const offer = offers.find((entry) => entry.component.id === component.id);
-    if (!offer || offer.component.price.finalCustomerAmount.currency !== base.price.currency
+    if (!offer || !isCompletePlanningOffer(offer) || offer.component.price.finalCustomerAmount.currency !== base.price.currency
       || offer.component.bookingStatus !== "unbooked" || offer.component.offerStatus !== "available"
       || (offer.component.expiresAt && Date.parse(offer.component.expiresAt) <= now.getTime())) {
       throw new ProblemError({ title: "Planning offer unavailable", status: 409, code: "offer_unavailable" });
     }
     // Every material offer fact and monetary amount comes from web-owned supply records.
-    return structuredClone(offer.component);
+    return structuredClone(materializePlanningOffer(offer).component);
   });
   if (!candidate.components.some((component) => ["flight", "rail", "transfer"].includes(component.type))
     || (candidate.destinations.some((destination) => destination.plannedNights > 0)

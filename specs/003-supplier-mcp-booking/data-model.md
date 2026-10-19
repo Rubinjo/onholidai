@@ -4,9 +4,13 @@ Design only. Canonical implementation remains in existing Zod/Pydantic contracts
 
 ## Provider capability/readiness
 
-Extend current provider declarations with canonical provider ID (`booking`, `duffel`, `trainline`, `getyourguide`), display attribution, mode, supported component/property types, query fields, market/party coverage and operation limits. Decode existing `booking.com` as a routing alias while preserving source attribution. Synthetic identities remain test-only.
+Extend current provider declarations with active canonical provider IDs `duffel` and `viator`, display attribution, mode, supported component/property types, query fields, market/party coverage and operation limits. Retain legacy `booking`/`booking.com`, `trainline` and `getyourguide` identifiers only for saved-data compatibility and approved reconciliation, never as active defaults or relabelled inventory. Synthetic identities remain test-only and match current supplier scope.
 
 Each operation has separate support (`supported | unsupported | unknown`) and access (`unconfigured | configured_unverified | verified | blocked`), safe reason, verification time/evidence reference and prerequisites. Operations include search, detail, read-only revalidation; restricted declarations additionally include book/status/idempotency/cancel/reschedule. Credential configuration alone cannot establish verified access. Deadline/rate/freshness policy comes from approved configuration; unknown coverage or limits are not “all” or invented values.
+
+Readiness is keyed by provider, component type and operation: Duffel flight and accommodation evidence are independent. Missing Stays access must not block Flights, and vice versa. Rail queries return explicit unsupported/deferred outcomes with no fabricated provider or inventory. Provider identity is not a substitute for product readiness.
+
+Credential references stay private. Duffel `readSecretRef` and `transactionSecretRef` must be distinct and resolve to separately scoped keys; the write key is worker-only. Viator may use the same secret reference/value for both trusted processes because it has one upstream read/write key. Its web client enforces a fixed non-transactional operation allowlist; public capability summaries expose neither references nor values. Key presence does not prove Viator booking entitlement.
 
 Expose safe relevant capability summaries, never secrets, commercial account IDs or internal diagnostics. Extend the existing read capabilities and transaction adapter declarations, not another registry.
 
@@ -15,10 +19,11 @@ Expose safe relevant capability summaries, never secrets, commercial account IDs
 Evolve the existing `PlanningOffer` and `planningOfferRecords`:
 
 - Preserve component/service type, eligibility, occupancy, accessibility, attribution, unverified facts and requirement grouping. Property type remains `planningDetails.accommodationType`; no second lodging taxonomy.
-- Add opaque record reference/revision, source mode and query/product/party fingerprint. Stable identity includes provider offer, requirement, dates, fare/room allocation and query context; provider offer ID alone need not identify equivalent inventory.
+- Add opaque record reference/revision, source mode and query/product/party fingerprint. Stable identity includes provider, component type, provider offer, requirement, dates, fare/room allocation and query context; provider offer ID alone need not identify equivalent inventory. Preserve Duffel Stays accommodation/search-result/room/rate/quote references and Viator product/option/availability references as applicable; never route a stay ID through flight operations.
 - Owner/trip/base version comes through the existing run relation. An offer reference never grants access. Server-approved selected references from prior research retain provenance and receive a grant in the new refinement run only after same-trip/current-version ownership validation.
 - Track `estimated | quoted | live_revalidated | expired` research evidence separately from `available | unavailable | unknown` availability and from accepted component booking status. Add checked/expiry and immutable material-fact evidence revision.
 - Missing source service dates, required details and customer price/tax/fee facts may be nullable in this same discovery offer using shared component/price field definitions. Expand unverified-fact reasons. Do not invent times, zero mandatory charges, eligibility, baggage inclusion or favourable refundability.
+- Duffel Stays cheapest search price is incomplete until the selected room/rate and current quote establish mandatory totals/terms. Preserve deposits, due-at-accommodation amounts/currencies and payment timing without double counting; unresolved mandatory amounts or unsupported payment schedules block authorization. Preserve only supported property types; synthetic variants do not prove live coverage.
 - Stable anonymous party slots are derived server-side from accepted party/version; adult IDs are not randomly regenerated per search. Child eligibility uses service-date age where trusted evidence supports it; otherwise unknown.
 - Bound and allowlist provider text, facts, attribution URLs and safe error codes. Raw payloads and hidden fields cannot pass through nested details or notes.
 
@@ -42,6 +47,8 @@ Input: one accepted trip/version, supplier evidence and durable confirmations. O
 Derive outbound/inter-destination/return legs unless accepted self-arranged/not-required evidence covers them. Derive stay-night and room-party coverage from dated destinations, not the count of accommodation components. Paid activities derive from accepted components and booking classification. Add optional `bookingDisposition: required | not_required | unknown` plus source/verification to current itinerary/travel facts where needed. Missing legacy classification remains unknown unless authoritative facts prove otherwise. A planning note or agent guess cannot silently waive required booking.
 
 Cover each required party/service interval once; a bundle may satisfy multiple requirements but its price is counted once. No incompatible inventory reuse. Reuse feasibility timing/constraint checks, but generic acknowledgement cannot satisfy unknown hard booking facts. Required unsupported transfers block coverage. Confirmations cover only matching durable commitments, regardless of offer expiry. A nonempty fully resolved required set is necessary; confirmed-only trips have no new action to authorize.
+
+No deferred provider is a global completeness prerequisite. A complete flight/stay/activity trip can be eligible without Booking.com or Trainline. A required rail leg without authoritative confirmed/self-arranged/not-required evidence stays blocked; provider deferral cannot waive it or authorize booking only the other components.
 
 Recompute at review, authorization, start and dispatch. The fingerprint binds policy, source trip/version, mapping and material eligibility evidence, not incidental polling timestamps.
 

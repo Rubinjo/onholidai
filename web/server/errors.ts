@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { CORRELATION_ID_HEADER, isValidCorrelationId } from "./telemetry";
+import { containsSensitiveText } from "../lib/privacy";
 
 export interface Problem {
   type: string;
@@ -73,7 +74,10 @@ export function problemResponse(error: unknown, correlationId: string): Response
   const safeCorrelationId = isValidCorrelationId(correlationId)
     ? correlationId
     : randomUUID();
-  const safeProblem = error instanceof ProblemError ? error : internalProblem;
+  const safeProblem = error instanceof ProblemError && ![
+    error.type, error.title, error.code, error.detail ?? "", error.nextPath ?? "",
+    ...(error.fieldErrors ?? []).flatMap((field) => [field.path, field.message]),
+  ].some(containsSensitiveText) ? error : internalProblem;
   const body: Problem = {
     type: safeProblem.type,
     title: safeProblem.title,

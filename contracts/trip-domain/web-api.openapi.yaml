@@ -195,6 +195,7 @@ paths:
       tags: [Trips]
       operationId: applyDirectTripEdit
       summary: Validate a direct UI edit and append a trip version
+      description: Applies edits immediately without supplier impact research. A supplied impact fingerprint instead applies the previously reviewed snapshot.
       parameters:
         - $ref: '#/components/parameters/TripId'
       requestBody:
@@ -1334,7 +1335,7 @@ components:
     TripMutationRequest:
       type: "object"
       additionalProperties: false
-      required: ["requestId","expectedVersion","impactFingerprint","operations"]
+      required: ["requestId","expectedVersion","operations"]
       properties:
         requestId:
           type: "string"
@@ -1344,6 +1345,7 @@ components:
           minimum: 1
         impactFingerprint:
           type: "string"
+          description: Optional fingerprint for applying an existing impact review; omit for immediate edits.
           minLength: 32
           maxLength: 256
         operations:

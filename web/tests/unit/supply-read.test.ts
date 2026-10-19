@@ -49,7 +49,7 @@ describe("read-only planning supply", () => {
     ];
     const result = await searchPlanningOffers(providers, query(), new Date("2030-01-01T00:00:00Z"));
     expect(result.offers).toHaveLength(1);
-    expect(result.outcomes.map((outcome) => outcome.status)).toEqual(["available", "unavailable"]);
+    expect(result.outcomes.map((outcome) => outcome.status)).toEqual(["available", "error"]);
     expect(JSON.stringify(result.outcomes)).not.toContain("secret raw supplier response");
   });
 

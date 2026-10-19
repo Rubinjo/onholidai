@@ -50,7 +50,10 @@ def authorize(http: Request, request: CreateAgentRunRequest) -> None:
             secret=http.app.state.settings.service_token_secret,
             expected_audience="agent",
             expected_context=context,
-            required_scopes=["trip:read", "proposal:create"],
+            required_scopes=(
+                ["trip:read"] if request.purpose == "supplier_research"
+                else ["trip:read", "proposal:create"]
+            ),
         )
         if any(scope not in claims.scopes for scope in request.actor.scopes):
             raise ServiceTokenError("Scope amplification")
@@ -77,12 +80,12 @@ def scoped_request(http: Request) -> CreateAgentRunRequest:
                 "contractVersion": "1",
                 "requestId": http.headers.get("x-request-id"),
                 "conversationId": http.headers.get("x-conversation-id"),
-                "purpose": "initial_estimate",
+                "purpose": "supplier_research",
                 "actor": {
                     "userId": http.headers.get("x-user-id"),
                     "tripId": http.headers.get("x-trip-id"),
                     "baseTripVersion": int(http.headers.get("x-base-trip-version", "0")),
-                    "scopes": ["trip:read", "proposal:create"],
+                    "scopes": ["trip:read"],
                 },
                 "message": "Read persisted estimate status",
                 "context": {"tripSummary": {}, "contextBudget": {"maximumTokens": 16000}},
@@ -320,7 +323,7 @@ class RunService:
                 updated = request.model_copy(
                     update={
                         "message": answer.answer
-                        if request.purpose == "initial_estimate"
+                        if request.purpose in ("initial_estimate", "supplier_research")
                         else request.message + "\nClarification: " + answer.answer
                     }
                 )

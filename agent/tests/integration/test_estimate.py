@@ -5,6 +5,7 @@ import pytest
 
 from onholidai_agent.graph.estimate import estimate
 from onholidai_agent.models.api import CreateAgentRunRequest
+from tests.fixtures.planning import complete_component_facts
 
 
 def request():
@@ -89,10 +90,12 @@ def test_alternative_supplier_quotes_are_not_added_together_as_booked_components
                 "offers": [
                     {
                         "component": {
+                            **complete_component_facts(kind),
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
-                            "price": {"currency": "EUR", "finalCustomerMinor": price},
+                            "price": {"currency": "EUR", "finalCustomerMinor": price,
+                                      "taxesMinor": 0, "feesMinor": 0},
                         }
                     }
                     for index, (kind, price) in enumerate(
@@ -129,10 +132,12 @@ def test_departure_comparison_proposes_the_supported_cheaper_origin_without_chan
                 "offers": [
                     {
                         "component": {
+                            **complete_component_facts(kind),
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
-                            "price": {"currency": "EUR", "finalCustomerMinor": price},
+                            "price": {"currency": "EUR", "finalCustomerMinor": price,
+                                      "taxesMinor": 0, "feesMinor": 0},
                         }
                     }
                     for index, kind in enumerate(["flight", "accommodation"], 1)
@@ -176,10 +181,12 @@ def test_ai_estimate_proposes_origin_aware_order_for_review_without_changing_sav
                 "offers": [
                     {
                         "component": {
+                            **complete_component_facts(kind),
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
-                            "price": {"currency": "EUR", "finalCustomerMinor": 10000},
+                            "price": {"currency": "EUR", "finalCustomerMinor": 10000,
+                                      "taxesMinor": 0, "feesMinor": 0},
                         }
                     }
                     for index, kind in enumerate(["flight", "accommodation"], 1)
@@ -238,10 +245,12 @@ def test_unavailable_baseline_does_not_hide_a_supported_departure_alternative():
                 "offers": [
                     {
                         "component": {
+                            **complete_component_facts(kind),
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
-                            "price": {"currency": "EUR", "finalCustomerMinor": 10000},
+                            "price": {"currency": "EUR", "finalCustomerMinor": 10000,
+                                      "taxesMinor": 0, "feesMinor": 0},
                         }
                     }
                     for index, kind in enumerate(["flight", "accommodation"], 1)

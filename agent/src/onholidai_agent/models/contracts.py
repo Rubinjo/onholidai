@@ -204,9 +204,22 @@ def exported_files(root: Path) -> dict[Path, str]:
     tools_schema = (
         json.dumps(build_tool_schema(), indent=2, sort_keys=True, ensure_ascii=False) + "\n"
     )
+    supplier_tools = json.dumps(
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "https://onholidai.local/contracts/supply/supplier-tools-v1.schema.json",
+            "tools": {
+                name: model.model_json_schema(by_alias=True)
+                for name, model in tools.SUPPLIER_TOOL_INPUTS.items()
+            },
+        },
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
     return {
         root / "contracts/agent-api/openapi.yaml": openapi,
         root / "specs/001-ai-trip-agent/contracts/agent-api.openapi.yaml": openapi,
         root / "contracts/agent-api/tools.schema.json": tools_schema,
         root / "specs/001-ai-trip-agent/contracts/agent-tools.schema.json": tools_schema,
+        root / "contracts/supply/supplier-tools-v1.schema.json": supplier_tools,
     }

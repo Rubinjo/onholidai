@@ -273,18 +273,20 @@ export const travelSegmentSchema = z
     }
   });
 
+export const componentPriceFields = {
+  supplierAmount: moneySchema,
+  platformMargin: moneySchema,
+  customerPayableTaxes: moneySchema,
+  customerPayableFees: moneySchema,
+  finalCustomerAmount: moneySchema,
+  status: z.enum(["estimated", "quoted", "live", "expired", "confirmed"]),
+  source: nonBlank(120),
+  checkedAt: utcDateTimeSchema,
+  expiresAt: utcDateTimeSchema.nullable(),
+};
+
 export const componentPriceSchema = z
-  .object({
-    supplierAmount: moneySchema,
-    platformMargin: moneySchema,
-    customerPayableTaxes: moneySchema,
-    customerPayableFees: moneySchema,
-    finalCustomerAmount: moneySchema,
-    status: z.enum(["estimated", "quoted", "live", "expired", "confirmed"]),
-    source: nonBlank(120),
-    checkedAt: utcDateTimeSchema,
-    expiresAt: utcDateTimeSchema.nullable(),
-  })
+  .object(componentPriceFields)
   .strict()
   .superRefine((price, context) => {
     const amounts = [
@@ -310,15 +312,19 @@ export const componentPriceSchema = z
     }
   });
 
-const componentBaseFields = {
+export const componentServiceFields = {
+  serviceStart: offsetDateTimeSchema,
+  serviceEnd: offsetDateTimeSchema,
+};
+
+export const componentBaseFields = {
   planningDetails: planningDetailsSchema.optional(),
   id: UUID,
   itineraryItemIds: z.array(UUID).max(64),
   provider: nonBlank(120),
   supplierOfferId: nonBlank(256),
   offerStatus: z.enum(["available", "changed", "unavailable", "expired"]),
-  serviceStart: offsetDateTimeSchema,
-  serviceEnd: offsetDateTimeSchema,
+  ...componentServiceFields,
   travellerIds: z.array(UUID).min(1).max(10),
   bookingRequirements: z.array(nonBlank(500)).max(32),
   cancellationTerms: nonBlank(2000),

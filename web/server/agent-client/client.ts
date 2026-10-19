@@ -17,13 +17,14 @@ export async function dispatchEstimate(application: Application, run: AgentRun &
   const trip = await readAgentTrip(application.database, run.ownerUserId, run.tripId, run.baseTripVersion, "compact");
   const conversation = run.purpose === "refinement" ? await new ConversationRepository(application.database).context(run.ownerUserId, run.tripId, run.baseTripVersion) : {};
   const body: CreateAgentRunRequest = CreateAgentRunRequestSchema.parse({ contractVersion: "1", actor: {
-    userId: context.userId, tripId: run.tripId, baseTripVersion: run.baseTripVersion, scopes: ["trip:read", "context:read", "proposal:create"] },
+    userId: context.userId, tripId: run.tripId, baseTripVersion: run.baseTripVersion, scopes:
+      run.purpose === "supplier_research" ? ["trip:read", "context:read"] : ["trip:read", "context:read", "proposal:create"] },
     requestId: run.requestId, conversationId: run.conversationId, purpose: run.purpose, message,
     // The agent fetches the authoritative bounded view through get_trip; do not
     // duplicate a potentially large snapshot in the creation command.
     context: { tripSummary: { tripId: trip.tripId, version: trip.version }, ...conversation, contextBudget: { maximumTokens: 24000 } } });
   const token = createAgentServiceToken({ ...context, secret: application.config.SERVICE_TOKEN_SECRET,
-    scopes: ["trip:read", "context:read", "proposal:create"] });
+    scopes: run.purpose === "supplier_research" ? ["trip:read", "context:read"] : ["trip:read", "context:read", "proposal:create"] });
   const response = await transport(new URL("/internal/v1/agent-runs", application.config.AGENT_BASE_URL), { method: "POST",
     headers: { "Content-Type": "application/json", authorization: `Bearer ${token}`, "x-agent-run-id": run.id },
     body: JSON.stringify(body), signal: AbortSignal.timeout(8000), cache: "no-store" });

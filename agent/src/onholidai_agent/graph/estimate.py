@@ -15,7 +15,11 @@ from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import AgentResult, CreateAgentRunRequest
 from onholidai_agent.tools.get_trip import TripReader, get_trip
 from onholidai_agent.tools.propose_trip_changes import propose_trip_changes
-from onholidai_agent.tools.research import ResearchReader, research
+from onholidai_agent.tools.research import (
+    ResearchReader,
+    complete_planning_component,
+    research,
+)
 
 
 class Sources(TripReader, ResearchReader, Protocol):
@@ -25,6 +29,13 @@ class Sources(TripReader, ResearchReader, Protocol):
 def select_quotes(offers: list[dict[str, object]], spend: int) -> list[dict[str, object]]:
     groups: dict[str, list[dict[str, object]]] = {}
     for offer in offers:
+        if not complete_planning_component(offer.get("component")):
+            continue
+        raw_evidence = offer.get("evidence")
+        if isinstance(raw_evidence, dict):
+            evidence = cast(dict[str, object], raw_evidence)
+            if evidence.get("status") == "expired" or evidence.get("availability") != "available":
+                continue
         component = cast(dict[str, object], offer["component"])
         group = str(offer.get("selectionGroup", component.get("type")))
         groups.setdefault(group, []).append(offer)
@@ -289,6 +300,29 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
     warnings = [
         "Source eligibility, occupancy, accessibility and cancellation facts require verification."
     ]
+    if any(
+        not complete_planning_component(offer.get("component"))
+        for offer in cast(list[dict[str, object]], found.get("offers", []))
+    ):
+        warnings.append(
+            "Incomplete or unsupported discovery offers were not added; "
+            "missing facts remain unknown."
+        )
+    raw_outcomes = found.get("outcomes", [])
+    if isinstance(raw_outcomes, list):
+        for item in cast(list[object], raw_outcomes)[:16]:
+            if not isinstance(item, dict):
+                continue
+            outcome = cast(dict[str, object], item)
+            kind, status = outcome.get("componentType"), outcome.get("status")
+            if kind in ("flight", "accommodation", "activity", "rail") and status in (
+                "unsupported", "unconfigured", "access_blocked", "rate_limited",
+                "deadline", "error", "no_matches",
+            ):
+                warnings.append(
+                    f"Supplier {kind} research is {status}; related requirements remain "
+                    "unresolved, with no replacement inventory assumed."
+                )
     constraints = cast(list[dict[str, object]], snapshot.get("constraints", []))
     warnings.extend(
         f"Unverified {constraint['priority']} requirement: {str(constraint['statement'])[:850]}"

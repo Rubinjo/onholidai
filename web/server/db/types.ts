@@ -214,6 +214,7 @@ export interface BookingProviderCallbackTable {
 }
 
 export interface AgentRunTable {
+  researchResult: Generated<Record<string, unknown> | null>;
   applicationPolicy: Generated<"manual" | "automatic">;
   planningAccessRevokedAt: Generated<Date | null>;
   dispatchRequest: Generated<Record<string, unknown> | null>;
@@ -229,7 +230,7 @@ export interface AgentRunTable {
   ownerUserId: string;
   requestId: string;
   baseTripVersion: number;
-  purpose: ChangeProposal["purpose"];
+  purpose: ChangeProposal["purpose"] | "supplier_research";
   requestFingerprint: string;
   status: Generated<"queued" | "running" | "awaiting_clarification" | "proposed" | "completed" | "failed" | "cancelled">;
   eventCursor: Generated<number>;
@@ -286,6 +287,7 @@ export interface AgentRunResumeTable {
   createdAt: GeneratedTimestamp;
 }
 export interface PlanningOfferRecordTable {
+  offerRef: Generated<string>; revision: Generated<number>;
   runId: string; componentId: string; offer: Json<Record<string, unknown>>; createdAt: GeneratedTimestamp;
   query: Json<Record<string, unknown>>;
 }

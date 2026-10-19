@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { setTimeout } from "node:timers/promises";
 
 import {
   CamelCasePlugin,
@@ -124,9 +125,25 @@ export async function createIsolatedTestDatabase({
         return;
       }
       cleanedUp = true;
-      await database.destroy();
-      await adminPool.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
-      await adminPool.end();
+      try {
+        await database.destroy();
+        // pg-pool can resolve end() before PostgreSQL sees all client disconnects.
+        const deadline = Date.now() + 5_000;
+        while (true) {
+          const sessions = await adminPool.query<{ connected: boolean }>(
+            "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend') AS connected",
+            [databaseName],
+          );
+          if (!sessions.rows[0].connected) break;
+          if (Date.now() >= deadline) {
+            throw new Error(`Test database ${databaseName} still has open connections after cleanup`);
+          }
+          await setTimeout(25);
+        }
+        await adminPool.query(`DROP DATABASE "${databaseName}"`);
+      } finally {
+        await adminPool.end();
+      }
     },
   };
 }

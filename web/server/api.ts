@@ -174,7 +174,7 @@ export function planningApiResponse(request: Request, action: (application: Appl
 // Route-level scope/context verification remains in each handler. This outer
 // transaction additionally checks the live run grant before any private delivery.
 export function internalPlanningApiResponse(request: Request, action: (application: Application) => Promise<unknown>,
-  options: { status?: number } = {}) {
+  options: { status?: number; outsideTransaction?: boolean } = {}) {
   return apiResponse(request, async (application) => {
     const authorization = request.headers.get("authorization");
     const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : undefined;
@@ -186,6 +186,12 @@ export function internalPlanningApiResponse(request: Request, action: (applicati
     } catch { throw new ServiceTokenError("Invalid token"); }
     const context = verifyServiceToken(token, { secret: application.config.SERVICE_TOKEN_SECRET, expectedAudience: "web",
       expectedContext: untrusted, requiredScopes: [] });
+    if (options.outsideTransaction) {
+      await inTransaction(application.database, (transaction) => lockServiceGrant(transaction, context));
+      const result = await action(application);
+      await inTransaction(application.database, (transaction) => lockServiceGrant(transaction, context));
+      return result;
+    }
     return inTransaction(application.database, async (transaction) => {
       await lockServiceGrant(transaction, context);
       return action({ ...application, database: transaction });
@@ -256,4 +262,3 @@ export function internalActor(application: Application, request: Request, tripId
     expectedAudience: "web", expectedContext: context, requiredScopes: [scope],
   });
 }
-

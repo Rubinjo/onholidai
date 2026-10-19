@@ -1,8 +1,12 @@
 import asyncio
+import json
 from typing import cast
 
+from fastmcp import Client
+
 from onholidai_agent.api.store import RunStore
-from onholidai_agent.models.api import CreateAgentRunRequest
+from onholidai_agent.models.api import AgentResult, CreateAgentRunRequest
+from onholidai_agent.models.tools import SupplierSearchInput
 
 from .maps import MapsGroundingClient
 from .nebius import NebiusClient
@@ -51,3 +55,42 @@ class EstimateSources:
                         {"text": fact.text, "sourceUrl": fact.source_url, "verified": False}
                     )
         return {**normalized, "researchFacts": facts[:6]}
+
+
+async def supplier_research(
+    request: CreateAgentRunRequest, store: RunStore,
+) -> AgentResult:
+    from .supplier_mcp import supplier_server
+
+    # The browser submits closed search arguments as the existing run message.
+    # Web rechecks their dates, destinations and constraints against the current trip.
+    query = SupplierSearchInput.model_validate_json(request.message)
+    async with asyncio.timeout(12), Client(supplier_server(store, request)) as client:
+        response = await client.call_tool(
+            "supplier_search",
+            query.model_dump(
+                mode="json", by_alias=True, exclude_none=True, exclude_unset=True,
+            ),
+        )
+    data = cast(dict[str, object], response.structured_content)
+    offers = cast(list[dict[str, object]], data["offers"])
+    references = [
+        {"offerRef": offer["offerRef"], "revision": offer["revision"]}
+        for offer in offers
+    ]
+    raw_outcomes = data.get("outcomes", [])
+    outcomes: list[dict[str, object]] = []
+    if isinstance(raw_outcomes, list):
+        for item in cast(list[object], raw_outcomes)[:16]:
+            if isinstance(item, dict):
+                outcome = cast(dict[str, object], item)
+                outcomes.append({
+                    key: str(outcome[key])[:240]
+                    for key in ("provider", "componentType", "status", "reason")
+                    if key in outcome
+                })
+    message = json.dumps(
+        {"offers": references, "outcomes": outcomes},
+        separators=(",", ":"), ensure_ascii=True,
+    )
+    return AgentResult.model_validate({"kind": "answer", "message": message})

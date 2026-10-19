@@ -1,0 +1,53 @@
+{
+  "toolCases": [
+    { "id": "search", "tool": "supplier_search", "valid": true, "input": { "componentTypes": ["flight", "accommodation"], "destinationIds": ["10000000-0000-4000-8000-000000000001"], "startDate": "2030-05-01", "endDate": "2030-05-08" } },
+    { "id": "forged-trip", "tool": "supplier_search", "valid": false, "input": { "componentTypes": ["flight"], "destinationIds": ["10000000-0000-4000-8000-000000000001"], "startDate": "2030-05-01", "endDate": "2030-05-08", "tripId": "10000000-0000-4000-8000-000000000002" } },
+    { "id": "empty-search", "tool": "supplier_search", "valid": false, "input": { "componentTypes": [], "destinationIds": [], "startDate": "2030-05-01", "endDate": "2030-05-08" } },
+    { "id": "invalid-type", "tool": "supplier_search", "valid": false, "input": { "componentTypes": ["booking"], "destinationIds": ["10000000-0000-4000-8000-000000000001"], "startDate": "2030-05-01", "endDate": "2030-05-08" } },
+    { "id": "detail", "tool": "supplier_offer_details", "valid": true, "input": { "offerRef": "synthetic-offer-reference", "revision": 1 } },
+    { "id": "detail-coercion", "tool": "supplier_offer_details", "valid": false, "input": { "offerRef": "synthetic-offer-reference", "revision": "1" } },
+    { "id": "detail-unsafe-integer", "tool": "supplier_offer_details", "valid": false, "input": { "offerRef": "synthetic-offer-reference", "revision": 9007199254740992 } },
+    { "id": "revalidate", "tool": "supplier_revalidate_offer", "valid": true, "input": { "offerRef": "synthetic-offer-reference", "revision": 2 } },
+    { "id": "revalidate-zero", "tool": "supplier_revalidate_offer", "valid": false, "input": { "offerRef": "synthetic-offer-reference", "revision": 0 } },
+    { "id": "forged-provider-method", "tool": "supplier_revalidate_offer", "valid": false, "input": { "offerRef": "synthetic-offer-reference", "revision": 1, "method": "reserve" } },
+    { "id": "capabilities", "tool": "supplier_capabilities", "valid": true, "input": {} },
+    { "id": "filtered-capabilities", "tool": "supplier_capabilities", "valid": true, "input": { "componentTypes": ["rail", "activity"] } },
+    { "id": "forged-token", "tool": "supplier_capabilities", "valid": false, "input": { "token": "synthetic-canary" } }
+  ],
+  "offerCases": [
+    {
+      "id": "public-flight",
+      "valid": true,
+      "value": {
+        "sourceMode": "deterministic",
+        "queryFingerprint": null,
+        "partyFingerprint": null,
+        "selectionGroup": "flight:outbound",
+        "component": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "itineraryItemIds": [],
+          "provider": "synthetic",
+          "supplierOfferId": "synthetic-flight",
+          "type": "flight",
+          "offerStatus": "available",
+          "serviceStart": "2030-05-01T12:00:00Z",
+          "serviceEnd": "2030-05-01T14:00:00Z",
+          "travellerIds": ["10000000-0000-4000-8000-000000000002"],
+          "bookingRequirements": [],
+          "cancellationTerms": "Unverified synthetic terms",
+          "checkedAt": "2030-01-01T00:00:00Z",
+          "expiresAt": null,
+          "bookingStatus": "unbooked",
+          "details": { "legs": ["Synthetic flight"], "baggage": [] },
+          "price": { "currency": "GBP", "finalCustomerMinor": 12000, "taxesMinor": 1000, "feesMinor": 0, "status": "estimated", "checkedAt": "2030-01-01T00:00:00Z", "expiresAt": null }
+        },
+        "eligibility": { "status": "unverified", "minimumAge": null, "maximumAge": null },
+        "occupancy": { "maximumAdults": null, "maximumChildren": null },
+        "accessibility": "unverified",
+        "attribution": { "provider": "synthetic", "sourceUrl": null },
+        "unverifiedFacts": ["eligibility", "occupancy", "accessibility"]
+      }
+    },
+    { "id": "private-payload", "valid": false, "value": { "supplierAmount": 991199, "platformMargin": 883388 } }
+  ]
+}

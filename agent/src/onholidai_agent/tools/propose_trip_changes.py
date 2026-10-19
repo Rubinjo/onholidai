@@ -1,7 +1,9 @@
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import uuid4
 
 from onholidai_agent.models.api import AgentResult, CreateAgentRunRequest
+from onholidai_agent.tools.research import complete_planning_component
 
 
 def propose_trip_changes(
@@ -11,6 +13,31 @@ def propose_trip_changes(
     warnings: list[str],
     now: datetime | None = None,
 ) -> AgentResult:
+    for operation in operations:
+        target = operation.get("target")
+        if not isinstance(target, str) or not (
+            target == "/components" or target.startswith("/components/")
+        ):
+            continue
+        if operation.get("operation") == "remove":
+            continue
+        value = operation.get("value")
+        components = cast(list[object], value) if isinstance(value, list) else [value]
+        if target != "/components" or not all(
+            complete_planning_component(component) for component in components
+        ):
+            return AgentResult.model_validate({
+                "kind": "clarification",
+                "message": "Incomplete supplier facts cannot become accepted components.",
+                "clarification": {
+                    "id": str(uuid4()),
+                    "question": (
+                        "Which complete, current supplier offer should be reviewed? "
+                        "Missing prices, dates or terms remain unknown."
+                    ),
+                    "materialReason": "feasibility",
+                },
+            })
     timestamp = now or datetime.now(UTC)
     return AgentResult.model_validate(
         {

@@ -1,6 +1,7 @@
 import asyncio
 import time
 from typing import Protocol
+from urllib.parse import quote
 
 import httpx
 
@@ -33,6 +34,15 @@ class RunStore(Protocol):
     async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]: ...
     async def search(
         self, request: CreateAgentRunRequest, query: dict[str, object]
+    ) -> dict[str, object]: ...
+    async def offer_details(
+        self, request: CreateAgentRunRequest, offer_ref: str, revision: int
+    ) -> dict[str, object]: ...
+    async def revalidate_offer(
+        self, request: CreateAgentRunRequest, offer_ref: str, revision: int
+    ) -> dict[str, object]: ...
+    async def capabilities(
+        self, request: CreateAgentRunRequest, component_types: list[str] | None
     ) -> dict[str, object]: ...
 
 
@@ -194,6 +204,41 @@ class WebRunStore:
         response = await self.client.post(
             f"/api/v1/internal/trips/{request.actor.trip_id}/planning-search",
             json=query,
+            headers=self.headers(request, "trip:read"),
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    async def offer_details(
+        self, request: CreateAgentRunRequest, offer_ref: str, revision: int
+    ) -> dict[str, object]:
+        response = await self.client.get(
+            f"/api/v1/internal/trips/{request.actor.trip_id}/planning-offers/"
+            f"{quote(offer_ref, safe='')}",
+            params={"revision": revision},
+            headers=self.headers(request, "trip:read"),
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    async def revalidate_offer(
+        self, request: CreateAgentRunRequest, offer_ref: str, revision: int
+    ) -> dict[str, object]:
+        response = await self.client.post(
+            f"/api/v1/internal/trips/{request.actor.trip_id}/planning-offers/"
+            f"{quote(offer_ref, safe='')}/revalidations",
+            json={"revision": revision},
+            headers=self.headers(request, "trip:read"),
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    async def capabilities(
+        self, request: CreateAgentRunRequest, component_types: list[str] | None
+    ) -> dict[str, object]:
+        response = await self.client.get(
+            f"/api/v1/internal/trips/{request.actor.trip_id}/planning-capabilities",
+            params={"componentTypes": ",".join(component_types)} if component_types else {},
             headers=self.headers(request, "trip:read"),
         )
         response.raise_for_status()
