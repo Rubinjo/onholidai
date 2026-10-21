@@ -83,6 +83,11 @@ export function Availability({ windows, duration, onChange, timezone = "UTC" }: 
       <label><span className="sr-only">Date preference {index + 1}</span><select value={window.preference} onChange={(event) => {
         setRemoval(null); commit(windows.map((entry) => entry.id === window.id ? { ...entry, preference: event.target.value === "preferred" ? "preferred" : "flexible" } : entry));
       }}><option value="preferred">Preferred</option><option value="flexible">Flexible</option></select></label>
+      <Button variant="ghost" className="button-remove" aria-label={`Delete availability window ${index + 1}`} onClick={() => {
+        setStart(null); setRemoval(null); setError("");
+        commit(windows.filter((entry) => entry.id !== window.id));
+        setNotice(`Availability window ${index + 1} deleted.`);
+      }}>Delete</Button>
     </li>)}</ol>
     {!windows.length && <p className="calendar-empty">No dates selected yet. Choose your first window above.</p>}
     <p role="status" className="calendar-feedback">{notice}</p>{(error || normalized.error) && <p role="alert">{error || normalized.error}</p>}

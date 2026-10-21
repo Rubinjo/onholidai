@@ -1,4 +1,5 @@
 import { SupplyReadError, type SupplyReadQuery } from "../read";
+import type { ReadOfferClient } from "./adapter";
 import { checkedAt, decimalMinor, discoveryHit, emptyHit, identifier, instant, list, queryKey, readJson, record,
   safeMapping, secret, text, validateQuery, type ReadHttpOptions, type WireHit } from "./read-http";
 
@@ -17,12 +18,25 @@ export function createDuffelStaysHttpClient(options: DuffelStaysHttpOptions) {
   const headers = { Authorization: `Bearer ${secret(options.readToken)}`, "Duffel-Version": "v2",
     Accept: "application/json", "Content-Type": "application/json" };
   const url = "https://api.duffel.com/stays/search";
-  const grants = new Map<string, string>();
+  const grants = new Map<string, { queryKey: string; rooms: number }>();
 
-  function mapResult(value: unknown, query: SupplyReadQuery): WireHit {
+  function mapResult(value: unknown, query: SupplyReadQuery, expectedRooms: number): WireHit {
     const result = record(value);
     const accommodation = record(result.accommodation);
     if (result.check_in_date !== query.startDate || result.check_out_date !== query.endDate) throw new SupplyReadError("error");
+    if (result.rooms != null && result.rooms !== expectedRooms) throw new SupplyReadError("error");
+    const guests = result.guests == null ? null : list(result.guests, 16).map((value) => {
+      const guest = record(value);
+      if (guest.type !== "adult" && (guest.type !== "child" || !Number.isInteger(guest.age)
+        || Number(guest.age) < 0 || Number(guest.age) > 17)) throw new SupplyReadError("error");
+      return guest;
+    });
+    const party = guests === null ? null : { adults: guests.filter((guest) => guest.type === "adult").length,
+      childAges: guests.filter((guest) => guest.type === "child").map((guest) => Number(guest.age)).sort((a, b) => a - b) };
+    if (party && (party.adults !== query.travellerParty.adults || JSON.stringify(party.childAges)
+      !== JSON.stringify(query.travellerParty.children.map((child) => child.ageAtTripStart).sort((a, b) => a - b)))) {
+      throw new SupplyReadError("error");
+    }
     const hit = emptyHit(identifier(result.id, /^srr_[A-Za-z0-9]{1,120}$/), query.currency, checkedAt(options));
     if (result.cheapest_rate_currency !== query.currency) throw new SupplyReadError("unsupported");
     hit.expiresAt = instant(result.expires_at);
@@ -35,6 +49,7 @@ export function createDuffelStaysHttpClient(options: DuffelStaysHttpOptions) {
       checkOutDate: result.check_out_date === query.endDate ? query.endDate : null,
       priceFromMinor: decimalMinor(result.cheapest_rate_total_amount, query.currency),
       mandatoryFeesMinor: null, depositMinor: null, dueAtPropertyMinor: null,
+      requestedRooms: result.rooms ?? null, party,
       availability: "search_result_not_quoted",
     };
     if (result.cheapest_rate_due_at_accommodation_amount != null) {
@@ -46,6 +61,7 @@ export function createDuffelStaysHttpClient(options: DuffelStaysHttpOptions) {
   }
 
   return {
+    capabilities: { search: "supported", detail: "supported", revalidation: "unsupported" } satisfies NonNullable<ReadOfferClient["capabilities"]>,
     search: (input: SupplyReadQuery, signal: AbortSignal) => safeMapping(async () => {
       if (options.accessApproved !== true) throw new SupplyReadError("access_blocked");
       const query = validateQuery(input);
@@ -62,21 +78,22 @@ export function createDuffelStaysHttpClient(options: DuffelStaysHttpOptions) {
           ...query.travellerParty.children.map((child) => ({ type: "child", age: child.ageAtTripStart }))],
         check_in_date: query.startDate, check_out_date: query.endDate },
       }));
-      const hits = list(record(response.data).results).slice(0, 32).map((result) => mapResult(result, query));
+      const hits = list(record(response.data).results).slice(0, 32).map((result) => mapResult(result, query, location.rooms));
       for (const hit of hits) {
         if (grants.size >= 256) grants.delete(grants.keys().next().value!);
-        grants.set(hit.offerId, queryKey(query));
+        grants.set(hit.offerId, { queryKey: queryKey(query), rooms: location.rooms });
       }
       return hits.map((hit) => discoveryHit(hit, "Duffel Stays"));
     }),
     detail: (offerId: string, query: SupplyReadQuery, signal: AbortSignal) => safeMapping(async () => {
       if (options.accessApproved !== true) throw new SupplyReadError("access_blocked");
       identifier(offerId, /^srr_[A-Za-z0-9]{1,120}$/);
-      if (grants.get(offerId) !== queryKey(query)) throw new SupplyReadError("unsupported");
+      const grant = grants.get(offerId);
+      if (!grant || grant.queryKey !== queryKey(query)) throw new SupplyReadError("unsupported");
       const detailUrl = `https://api.duffel.com/stays/search_results/${offerId}/actions/fetch_all_rates`;
       const response = record(await readJson(options, [`POST ${detailUrl}`], headers)(detailUrl, "POST", signal));
       const result = record(response.data);
-      const hit = mapResult(result, query);
+      const hit = mapResult(result, query, grant.rooms);
       if (hit.offerId !== offerId) throw new SupplyReadError("error");
       hit.details.rooms = list(record(result.accommodation).rooms, 128).slice(0, 16).map((value) => {
         const room = record(value);
@@ -93,7 +110,15 @@ export function createDuffelStaysHttpClient(options: DuffelStaysHttpOptions) {
             taxesMinor: amount("tax_amount", "tax_currency"), feesMinor: amount("fee_amount", "fee_currency"),
             dueAtPropertyMinor: amount("due_at_accommodation_amount", "due_at_accommodation_currency"),
             depositMinor: null, expiresAt: instant(rate.expires_at), boardType: text(rate.board_type, 80),
-            paymentType: text(rate.payment_type, 80) };
+            paymentType: text(rate.payment_type, 80),
+            paymentMethods: rate.available_payment_methods == null ? null
+              : list(rate.available_payment_methods, 8).map((method) => identifier(method, /^[a-z_]{1,40}$/)),
+            conditions: rate.conditions == null ? null
+              : list(rate.conditions, 16).map((condition) => text(record(condition).description, 300)),
+            cancellationTimeline: rate.cancellation_timeline == null ? null : list(rate.cancellation_timeline, 16).map((value) => {
+              const policy = record(value);
+              return { before: instant(policy.before), refundMinor: policy.refund_amount == null ? null : decimalMinor(policy.refund_amount, query.currency) };
+            }) };
         }) };
       });
       const rooms = hit.details.rooms as { rates: { rateId: string }[] }[];

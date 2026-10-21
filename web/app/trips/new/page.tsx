@@ -1,5 +1,5 @@
 import { SetupForm } from "@/components/trip-setup/setup-form";
-import Link from "next/link";
+import { BrandLink } from "@/components/brand-link";
 export default function NewTripPage() {
-  return <main className="planning-page setup-page"><Link href="/">OnHolidai</Link><SetupForm /></main>;
+  return <main className="planning-page setup-page"><BrandLink /><SetupForm /></main>;
 }

@@ -16,7 +16,13 @@ Map/research credentials and agent-model credentials are configured separately. 
 
 ## Guest planning
 
+On `/trips/new`, the information icons beside route ordering and travel styles explain how each choice guides AI recommendations. Hover over an icon or focus it with the keyboard to read its tooltip; Escape dismisses it. **My order** preserves your stop sequence, while **Let AI arrange** lets AI compare route orders, travel time and available pricing for your review, without guaranteeing savings. Each availability window has a **Delete** button; removing a window adjusts the trip duration to fit the remaining dates.
+
 Guest setup, private planning, free registration and selected-trip linking are implemented. See the [guest quickstart](specs/002-platform-guest-planning/quickstart.md) and [handoff](specs/002-platform-guest-planning/evidence/implementation-status.md). Story tests are unrun, scenario coverage is partial, and manual/participant gates remain open. Schema migrations extend through 012; deploy compatible web/booking workers together.
+
+## Website branding
+
+The shared home link uses `web/public/logo/main_logo.svg` in the homepage header and footer, trip setup, and authentication pages. Both SVG assets use a sage accent (`#78a98f`) to distinguish the landscape and sun from the light page background. Root layout metadata applies `web/public/logo/main_icon.svg` to browser tabs on every route, with a transparent 32px PNG fallback and a white-backed 180px Apple touch icon for home-screen bookmarks. When replacing the icon artwork, regenerate `web/public/logo/favicon-32.png` and `web/public/logo/apple-touch-icon.png` from the SVG, preserving its aspect ratio and the Apple icon's padding. Use transparent padding when fitting the non-square SVG into the square favicon; an opaque fill creates an uneven white edge.
 
 ## Validation
 

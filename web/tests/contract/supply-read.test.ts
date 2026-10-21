@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { createReadAdapter } from "../../server/supply/providers/adapter";
 import { createPlanningProviders } from "../../server/supply/providers";
 import { createDuffelReadProvider } from "../../server/supply/providers/duffel-read";
@@ -27,6 +28,58 @@ describe("injected planning suppliers", () => {
     expect(publicPlanningOfferSchema.safeParse({ ...publicOffer, rawSupplierPayload: {} }).success).toBe(false);
     expect(publicPlanningOfferSchema.safeParse({ ...publicOffer,
       component: { ...publicOffer.component, price: result.offers[0].component.price } }).success).toBe(false);
+  });
+
+  it.each(["hotel", "apartment", "villa", "hostel"])(
+    "preserves sourced %s property facts without filling unknown dates, costs or terms",
+    async (accommodationType) => {
+      const trip = createSyntheticTripSnapshot();
+      const query: SupplyReadQuery = { componentTypes: ["accommodation"], currency: "GBP", departureOrigin: null,
+        destinationIds: trip.destinations.map((destination) => destination.id), startDate: "2030-05-01",
+        endDate: "2030-05-08", travellerParty: trip.travellerParty };
+      const queryBefore = structuredClone(query);
+      const synthetic = await syntheticReadClient("accommodation").search(query, new AbortController().signal);
+      const hit = z.array(z.record(z.string(), z.unknown())).parse(synthetic)[0];
+      const execute = vi.fn();
+      const client = {
+        search: async () => [{ ...hit, serviceStart: null, serviceEnd: null, supplierMinor: null,
+          taxesMinor: null, feesMinor: null, terms: null, details: null,
+          planningDetails: { locationName: null, timezone: null, airportNames: [], airlines: [], flightDirection: null,
+            durationMinutes: null, layovers: [], fareConditions: null, accommodationType, travelFromStayMinutes: null,
+            eligibility: "unverified", accessibility: "unverified", availability: "unverified",
+            constraintEvidence: [], source: "Synthetic property evidence", checkedAt: hit.checkedAt, unavailableFacts: [] } }],
+        execute,
+      };
+      const source = createReadAdapter("duffel", "accommodation", client);
+      const result = await searchPlanningOffers([source], query);
+      expect(result.outcomes[0]).toMatchObject({ provider: "duffel", componentType: "accommodation", status: "available" });
+      const offer = projectPublicPlanningOffer(result.offers[0]);
+      expect(offer.component).toMatchObject({ provider: "duffel", type: "accommodation", serviceStart: null, serviceEnd: null,
+        cancellationTerms: null, details: null, planningDetails: { accommodationType },
+        price: { finalCustomerMinor: null, taxesMinor: null, feesMinor: null }, bookingStatus: "unbooked" });
+      expect(offer.unverifiedFacts).toEqual(expect.arrayContaining(["dates", "price", "taxes", "fees", "terms", "details"]));
+      expect(execute).not.toHaveBeenCalled();
+      expect(query).toEqual(queryBefore);
+    },
+  );
+
+  it("removes nested supplier privacy canaries without exposing credentials or protected economics", async () => {
+    const trip = createSyntheticTripSnapshot();
+    const query: SupplyReadQuery = { componentTypes: ["accommodation"], currency: "GBP", departureOrigin: null,
+      destinationIds: trip.destinations.map((destination) => destination.id), startDate: "2030-05-01",
+      endDate: "2030-05-08", travellerParty: trip.travellerParty };
+    const hit = z.array(z.record(z.string(), z.unknown())).parse(
+      await syntheticReadClient("accommodation").search(query, new AbortController().signal))[0];
+    const source = createReadAdapter("duffel", "accommodation", { search: async () => [{ ...hit,
+      terms: "api_key=synthetic-credential-canary",
+      details: { occupancy: "supplier_amount=synthetic-economics-canary",
+        amenities: ["passport_number=synthetic-identity-canary", "card_number=synthetic-payment-canary"] },
+    }] });
+    const result = await searchPlanningOffers([source], query);
+    expect(result.offers).toHaveLength(1);
+    const offer = projectPublicPlanningOffer(result.offers[0]);
+    expect(publicPlanningOfferSchema.safeParse(offer).success).toBe(true);
+    expect(JSON.stringify(offer)).not.toMatch(/synthetic-(?:credential|economics|identity|payment)-canary|supplierAmount|platformMargin/);
   });
 
   describe("truthful bounded supplier search outcomes", () => {
@@ -149,6 +202,7 @@ describe("injected planning suppliers", () => {
     it.each(["unconfigured", "access_blocked", "unsupported", "rate_limited", "error"] as const)(
       "returns a safe explicit %s outcome without raw provider error text or uncontrolled retry",
       async (status) => {
+        vi.useFakeTimers();
         let reads = 0;
         const source: SupplyReadProvider = {
           capabilities: { provider: "viator", search: ["activity"], readOnly: true },
@@ -159,14 +213,80 @@ describe("injected planning suppliers", () => {
             throw error;
           },
         };
-        const result = await searchPlanningOffers([source], query(["activity"]));
+        const pending = searchPlanningOffers([source], query(["activity"]));
+        await vi.advanceTimersByTimeAsync(2_000);
+        const result = await pending;
         expect(result.offers).toEqual([]);
         expect(result.outcomes[0]).toMatchObject({ provider: "viator", componentType: "activity", status,
           retryAfterMs: status === "rate_limited" ? 2_000 : null });
         expect(JSON.stringify(result)).not.toMatch(/secret|passport|commission|raw supplier/);
-        expect(reads).toBe(1);
+        expect(reads).toBe(status === "rate_limited" ? 2 : 1);
+        expect(vi.getTimerCount()).toBe(0);
       },
     );
+
+    it("retries once only after trusted rate guidance, inside the original eight-second source budget", async () => {
+      vi.useFakeTimers();
+      const source = provider("viator", "activity");
+      const search = vi.fn(source.search).mockRejectedValueOnce(new SupplyReadError("rate_limited", 2_000));
+      const pending = searchPlanningOffers([{ ...source, search }], query(["activity"]));
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(search).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      const result = await pending;
+      expect(search).toHaveBeenCalledTimes(2);
+      expect(result.outcomes[0].status).toBe("available");
+      expect(result.offers).toHaveLength(1);
+      expect(search.mock.calls[0][1]).toBe(search.mock.calls[1][1]);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it.each([null, 8_000, 20_000])("does not retry absent or non-fitting rate guidance (%s ms)", async (retryAfterMs) => {
+      vi.useFakeTimers();
+      const search = vi.fn(async () => { throw new SupplyReadError("rate_limited", retryAfterMs ?? undefined); });
+      const pending = searchPlanningOffers([{
+        capabilities: { provider: "viator", search: ["activity"], readOnly: true }, search,
+      }], query(["activity"]));
+      await vi.runAllTimersAsync();
+      expect((await pending).outcomes[0]).toMatchObject({ status: "rate_limited", retryAfterMs });
+      expect(search).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("does not reset the source deadline for a rate-directed retry", async () => {
+      vi.useFakeTimers();
+      const signals: AbortSignal[] = [];
+      const search = vi.fn(async (_query: SupplyReadQuery, signal: AbortSignal): Promise<readonly unknown[]> => {
+        signals.push(signal);
+        if (signals.length === 1) throw new SupplyReadError("rate_limited", 2_000);
+        return new Promise(() => {});
+      });
+      const pending = searchPlanningOffers([{
+        capabilities: { provider: "viator", search: ["activity"], readOnly: true }, search,
+      }], query(["activity"]));
+      await vi.advanceTimersByTimeAsync(7_999);
+      expect(search).toHaveBeenCalledTimes(2);
+      expect(signals[1].aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await pending).outcomes[0].status).toBe("deadline");
+      expect(signals.every((signal) => signal.aborted)).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("cancels a rate-limit wait without a second supplier call or leaked listeners", async () => {
+      vi.useFakeTimers();
+      const abort = new AbortController();
+      const search = vi.fn(async () => { throw new SupplyReadError("rate_limited", 2_000); });
+      const pending = searchPlanningOffers([{
+        capabilities: { provider: "viator", search: ["activity"], readOnly: true }, search,
+      }], query(["activity"]), new Date(), { signal: abort.signal });
+      await vi.advanceTimersByTimeAsync(1_000);
+      abort.abort();
+      expect((await pending).outcomes[0]).toMatchObject({ status: "deadline", retryable: false });
+      await vi.runAllTimersAsync();
+      expect(search).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
 
     it("does not misclassify arbitrary upstream error objects as trusted rate-limit guidance", async () => {
       const result = await searchPlanningOffers([{
@@ -219,6 +339,36 @@ describe("injected planning suppliers", () => {
         [type, result.offers.filter((offer) => offer.component.type === type).length])))
         .toEqual({ flight: 11, accommodation: 11, activity: 10 });
       expect(new Set(result.offers.map((offer) => `${offer.component.provider}:${offer.component.type}:${offer.component.supplierOfferId}`)).size).toBe(32);
+    });
+
+    it("does not starve return-leg requirements behind many outbound offers", async () => {
+      const sources = [provider("duffel", "flight"), provider("duffel", "accommodation"), provider("viator", "activity")]
+        .map((source): SupplyReadProvider => ({ ...source, search: async (input, signal) => {
+          const first = planningOfferSchema.parse((await source.search(input, signal))[0]);
+          return Array.from({ length: 32 }, (_, index) => ({ ...first,
+            selectionGroup: first.component.type === "flight" && index === 31 ? "flight:return" : first.selectionGroup,
+            component: { ...first.component, supplierOfferId: `${first.component.type}-${index}` } }));
+        } }));
+      const result = await searchPlanningOffers(sources, query());
+      expect(result.offers).toHaveLength(32);
+      expect(result.offers.filter((offer) => offer.component.type === "flight").map((offer) => offer.selectionGroup))
+        .toContain("flight:return");
+      expect(result.offers[3].selectionGroup).toBe("flight:return");
+    });
+
+    it("allocates by product rather than giving extra flight adapters a second budget share", async () => {
+      const sources = [provider("duffel", "flight"), provider("synthetic-flights", "flight"),
+        provider("duffel", "accommodation"), provider("viator", "activity")]
+        .map((source): SupplyReadProvider => ({ ...source, search: async (input, signal) => {
+          const first = planningOfferSchema.parse((await source.search(input, signal))[0]);
+          return Array.from({ length: 32 }, (_, index) => ({ ...first,
+            component: { ...first.component, supplierOfferId: `${first.component.type}-${index}` } }));
+        } }));
+      const result = await searchPlanningOffers(sources, query());
+      expect(result.offers).toHaveLength(32);
+      expect(Object.fromEntries(["flight", "accommodation", "activity"].map((type) =>
+        [type, result.offers.filter((offer) => offer.component.type === type).length])))
+        .toEqual({ flight: 11, accommodation: 11, activity: 10 });
     });
 
     it("rejects malformed or wrong-source results without discarding successful siblings", async () => {

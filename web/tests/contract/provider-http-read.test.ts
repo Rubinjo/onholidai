@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import { createViatorHttpClient } from "../../server/supply/providers/viator-http";
-import { decimalMinor, readJson } from "../../server/supply/providers/read-http";
+import { decimalMinor, readJson, record } from "../../server/supply/providers/read-http";
 import { SupplyReadError, type SupplyReadQuery } from "../../server/supply/read";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
@@ -124,6 +124,14 @@ describe("bounded read HTTP and decimal mapping", () => {
     const fractionalMinor = valid.replace("90071992547409.91", "0.290000000000000000001");
     await expect(client(vi.fn(async () => new Response(fractionalMinor))).search(query(), new AbortController().signal))
       .rejects.toMatchObject({ status: "error" });
+  });
+  it("preserves exact mandatory-extra charge tokens for downstream integer scaling", async () => {
+    const transport = vi.fn(async () => new Response('{"totalExtraCharges":0.290000000000000000001}'));
+    const payload = await readJson({ fetch: transport }, ["GET https://approved.invalid/read"], {})(
+      "https://approved.invalid/read", "GET", new AbortController().signal);
+    expect(payload).toEqual({ totalExtraCharges: "0.290000000000000000001" });
+    expect(() => decimalMinor(record(payload).totalExtraCharges, "GBP"))
+      .toThrow(SupplyReadError);
   });
   it("propagates cancellation and applies its own deadline even to an uncooperative injected fetch", async () => {
     const abortController = new AbortController();

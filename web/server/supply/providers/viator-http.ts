@@ -1,4 +1,5 @@
 import { SupplyReadError, type SupplyReadQuery } from "../read";
+import type { ReadOfferClient } from "./adapter";
 import { checkedAt, decimalMinor, discoveryHit, emptyHit, identifier, list, queryKey, readJson, record, safeMapping,
   secret, text, validateQuery, type ReadHttpOptions, type WireHit } from "./read-http";
 
@@ -25,10 +26,17 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
     "Content-Type": "application/json;version=2.0", "Accept-Language": "en" };
   const grants = new Map<string, string>();
   const code = (value: unknown) => identifier(value, /^[A-Za-z0-9_-]{1,100}$/);
+  const numberFact = (value: unknown, maximum: number, integer = true): number | null => {
+    if (value == null) return null;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > maximum
+      || (integer && !Number.isSafeInteger(value))) throw new SupplyReadError("error");
+    return value;
+  };
 
   function mapProduct(value: unknown, query: SupplyReadQuery): WireHit {
     const product = record(value);
     const hit = emptyHit(code(product.productCode), query.currency, checkedAt(options));
+    hit.availability = "unknown";
     hit.supplierReferences = { productCode: hit.offerId };
     hit.details = { title: text(product.title), productCode: hit.offerId, productOptionCode: null,
       availability: "content_only", priceBasis: "from_price_not_party_total" };
@@ -38,6 +46,28 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
       const summary = record(pricing.summary);
       hit.details.fromPriceMinor = decimalMinor(summary.fromPrice, query.currency);
     }
+    hit.details.productOptions = product.productOptions == null ? null : list(product.productOptions, 16).map((value) => {
+      const option = record(value);
+      return { optionCode: code(option.productOptionCode), description: text(option.description, 160) };
+    });
+    hit.details.bookingQuestionCount = product.bookingQuestions == null ? null : list(product.bookingQuestions, 64).length;
+    hit.details.bookingPrerequisites = "trusted_answers_unverified";
+    hit.details.confirmationType = text(product.confirmationType, 80);
+    if (product.pricingInfo != null) {
+      hit.details.ageBands = list(record(product.pricingInfo).ageBands, 16).map((value) => {
+        const band = record(value);
+        return { ageBand: text(band.ageBand, 20), startAge: numberFact(band.startAge, 120), endAge: numberFact(band.endAge, 120) };
+      });
+    }
+    hit.details.cancellationPolicy = product.cancellationPolicy == null ? null : (() => {
+      const policy = record(product.cancellationPolicy);
+      return { type: text(policy.type, 40), refundEligibility: policy.refundEligibility == null ? null
+        : list(policy.refundEligibility, 16).map((value) => {
+          const window = record(value);
+          return { dayRangeMin: numberFact(window.dayRangeMin, 100_000), dayRangeMax: numberFact(window.dayRangeMax, 100_000),
+            percentageRefundable: numberFact(window.percentageRefundable, 100, false) };
+        }) };
+    })();
     // A content summary's "from" price is not current party/date pricing or eligibility evidence.
     return hit;
   }
@@ -56,6 +86,8 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
   }
 
   return {
+    capabilities: { search: "supported", detail: "supported",
+      revalidation: options.resolvePaxMix ? "supported" : "unsupported" } satisfies NonNullable<ReadOfferClient["capabilities"]>,
     search: (input: SupplyReadQuery, signal: AbortSignal) => safeMapping(async () => {
       const query = validateQuery(input);
       if (query.destinationIds.length !== 1) throw new SupplyReadError("unsupported");
@@ -74,19 +106,7 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
     }),
     detail: (offerId: string, query: SupplyReadQuery, signal: AbortSignal) => safeMapping(async () => {
       const product = await getProduct(offerId, query, signal);
-      // Product detail pricingInfo defines age bands, not a current price.
-      const hit = emptyHit(offerId, query.currency, checkedAt(options));
-      hit.supplierReferences = { productCode: offerId };
-      hit.details = { title: text(product.title), productCode: offerId, availability: "content_only",
-        confirmationType: text(product.confirmationType, 80) };
-      if (product.pricingInfo != null) {
-        hit.details.ageBands = list(record(product.pricingInfo).ageBands, 16).map((value) => {
-          const band = record(value);
-          const age = (value: unknown) => Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 120 ? Number(value) : null;
-          return { ageBand: text(band.ageBand, 20), startAge: age(band.startAge), endAge: age(band.endAge) };
-        });
-      }
-      return discoveryHit(hit, "Viator");
+      return discoveryHit(mapProduct(product, query), "Viator");
     }),
     revalidate: (offerId: string, query: SupplyReadQuery, signal: AbortSignal) => safeMapping(async () => {
       authorize(offerId, query);
@@ -110,19 +130,40 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
       const items = list(response.bookableItems, 256).map(record);
       if (items.some((item) => typeof item.available !== "boolean")) throw new SupplyReadError("error");
       const available = items.filter((item) => item.available === true);
-      if (available.length !== 1) throw new SupplyReadError("unsupported");
-      const item = available[0];
-      const hit = emptyHit(offerId, query.currency, checkedAt(options));
-      hit.supplierReferences = { productCode: offerId,
-        ...(item.productOptionCode == null ? {} : { optionCode: code(item.productOptionCode) }) };
-      const retail = decimalMinor(record(record(item.totalPrice).price).recommendedRetailPrice, query.currency);
-      hit.details = { title: text(product.title), productCode: offerId,
-        productOptionCode: item.productOptionCode == null ? null : code(item.productOptionCode),
-        travelDate: query.startDate, startTime: text(item.startTime, 5),
-        availability: "available_not_reserved", recommendedRetailMinor: retail,
-        priceBasis: "recommended_retail_not_approved_customer_total", mandatoryFeesMinor: null };
-      // Supplier economics and raw payloads are never forwarded. Extra charges, tax and the
-      // merchant's approved customer-price policy remain prerequisites for a complete total.
+      const hit = mapProduct(product, query);
+      hit.availability = available.length === 0 ? "unavailable" : available.length === 1 ? "available" : "unknown";
+      hit.supplierReferences = { productCode: offerId };
+      const bookableOptions = available.map((item) => {
+        const extras = item.extraChargesSummary == null ? null : record(item.extraChargesSummary);
+        return {
+          optionCode: item.productOptionCode == null ? null : code(item.productOptionCode), startTime: text(item.startTime, 5),
+          recommendedRetailMinor: decimalMinor(record(record(item.totalPrice).price).recommendedRetailPrice, query.currency),
+          retailIncludingExtrasMinor: extras === null ? null
+            : decimalMinor(record(extras.price).recommendedRetailPrice, query.currency),
+          mandatoryFeesMinor: extras === null ? null
+            : decimalMinor(record(extras.mandatory).totalExtraCharges, query.currency),
+        };
+      });
+      const tax = response.tax == null ? null : record(response.tax);
+      const taxFact = (value: unknown): boolean | null => {
+        if (value == null) return null;
+        if (typeof value !== "boolean") throw new SupplyReadError("error");
+        return value;
+      };
+      const selected = bookableOptions.length === 1 ? bookableOptions[0] : null;
+      if (selected?.optionCode) hit.supplierReferences.optionCode = selected.optionCode;
+      hit.details = { ...hit.details,
+        productOptionCode: selected?.optionCode ?? null,
+        travelDate: query.startDate, startTime: selected?.startTime ?? null,
+        availability: available.length === 0 ? "unavailable" : selected ? "available_not_reserved" : "option_selection_unresolved",
+        recommendedRetailMinor: selected?.recommendedRetailMinor ?? null,
+        retailIncludingExtrasMinor: selected?.retailIncludingExtrasMinor ?? null, bookableOptions,
+        taxFacts: tax === null ? null : { taxable: taxFact(tax.isTaxable), exempt: taxFact(tax.isExempt) },
+        pricingParty: mix.map((pax) => ({ ageBand: pax.ageBand, numberOfTravelers: pax.numberOfTravelers })),
+        priceBasis: "recommended_retail_not_approved_customer_total",
+        mandatoryFeesMinor: selected?.mandatoryFeesMinor ?? null };
+      // Inclusive retail already includes destination extras; never add them again.
+      // Tax flags do not establish tax amounts or the merchant's approved customer total.
       return discoveryHit(hit, "Viator");
     }),
   };

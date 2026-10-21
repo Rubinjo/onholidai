@@ -9,6 +9,39 @@ function Calendar() {
   return <><Availability {...value} onChange={update} /><output data-testid="windows">{JSON.stringify(value.windows)}</output></>;
 }
 const choose = (date: string) => fireEvent.click(document.querySelector(`[data-calendar-date="${date}"]`)!);
+it("deletes an individual window, refits duration and supports deleting the last window", () => {
+  render(<Calendar />);
+  const values = () => JSON.parse(screen.getByTestId("windows").textContent!) as AvailabilityValue["windows"];
+  choose("2030-05-10"); choose("2030-05-11");
+  const remaining = values()[1];
+  fireEvent.click(screen.getByRole("button", { name: "Delete availability window 1" }));
+  expect(values()).toEqual([remaining]);
+  expect(screen.getByRole("slider", { name: "Maximum days" })).toHaveValue("2");
+  expect(screen.getByText("Availability window 1 deleted.")).toHaveAttribute("role", "status");
+  fireEvent.click(screen.getByRole("button", { name: "Delete availability window 1" }));
+  expect(values()).toEqual([]);
+  expect(screen.getByText("No dates selected yet. Choose your first window above.")).toBeTruthy();
+});
+it("clears pending additions and removals when deleting a window", () => {
+  render(<Calendar />);
+  const values = () => JSON.parse(screen.getByTestId("windows").textContent!) as AvailabilityValue["windows"];
+  choose("2030-05-10"); choose("2030-05-15");
+  fireEvent.click(screen.getByRole("button", { name: "Remove dates" }));
+  choose("2030-05-01");
+  fireEvent.click(screen.getByRole("button", { name: "Delete availability window 2" }));
+  choose("2030-05-03");
+  expect(values()).toHaveLength(2);
+  expect(values().map(({ startDate, endDate }) => [startDate, endDate])).toEqual([
+    ["2030-05-02", "2030-05-02"], ["2030-05-04", "2030-05-05"],
+  ]);
+  fireEvent.click(screen.getByRole("button", { name: "Add dates" }));
+  choose("2030-05-20");
+  fireEvent.click(screen.getByRole("button", { name: "Delete availability window 2" }));
+  choose("2030-05-22");
+  expect(values()).toHaveLength(1);
+  choose("2030-05-23");
+  expect(values()[1]).toMatchObject({ startDate: "2030-05-22", endDate: "2030-05-23" });
+});
 it("keeps incomplete selection local, reverses endpoints, merges overlaps and preserves adjacent alternatives", () => {
   render(<Calendar />);
   const values = () => JSON.parse(screen.getByTestId("windows").textContent!) as AvailabilityValue["windows"];

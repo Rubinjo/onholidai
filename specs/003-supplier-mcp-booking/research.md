@@ -92,4 +92,52 @@ Date: 2026-10-17; supplier-scope revision: 2026-10-19. Repository inspection and
 
 ## Research resolution
 
+### T017 approval addendum (2026-10-21)
+
+The user reports Duffel confirmed Stays quote creation has no side effects or
+obligations beyond a quote record and authorizes a bounded attempt with the
+existing separate read token. Accept this as user-attested implementation
+approval, not independent supplier access certification. The detailed sources,
+field mappings, constraints and unrun permission probe are recorded in the
+[provider ledger](evidence/provider-readiness.md#t017-conditional-implementation-approval-2026-10-21).
+Earlier no-hold blockers above are historical to this extent only.
+
+Direct inspection of the public API v2 documentation's structured schema
+establishes:
+
+- [Quote creation](https://duffel.com/docs/api/v2/quotes/create-quote)
+  takes `rate_id` and checks availability/total pricing; getting an existing
+  quote is retrieval, not documented fresh revalidation. The schema has
+  nested rate expiry, no top-level quote expiry, room count/guests/dates and no
+  supplier room ID. Do not invent a quote TTL, room ID or occupancy allocation.
+- Base, tax and fee amounts are included in the rate total. Deposits are
+  portions of that total. Mandatory due-at-accommodation amounts are excluded
+  from that total and can have a different currency. Missing/null amounts and
+  unsupported currency/payment schedules remain booking blockers.
+- Payment types `pay_now`, `deposit` and `guarantee` have distinct timing and
+  card requirements; `pay_now` alone does not establish an exact charge date.
+  Keep payment methods, mandatory conditions and cancellation timelines.
+- The [holding guide](https://duffel.com/docs/guides/holding-orders-and-paying-later)
+  describes flight air orders, not Stays quote holds. The
+  [Stays guide](https://duffel.com/docs/guides/getting-started-with-stays)
+  separates search, rates, quote and booking and still requires Stays access.
+- The [rate-limit article](https://help.duffel.com/hc/en-gb/articles/10229200096786-What-is-the-API-rate-limit),
+  retrieved through its [official public JSON](https://help.duffel.com/api/v2/help_center/en-gb/articles/10229200096786.json)
+  after HTML returned 403, documents a default **live search** quota of 10
+  requests per 60 seconds, endpoint-specific limits and `ratelimit-limit` /
+  `ratelimit-reset` response headers. No global or sandbox quota is inferred.
+- [Authentication](https://duffel.com/docs/api/overview/making-requests)
+  distinguishes read-only/read-write tokens but does not document per-operation
+  permission for these Stays POSTs.
+  [Test mode](https://duffel.com/docs/api/overview/test-mode) separates test/live
+  tokens and resource sets. The same API/key mechanism does not make credentials,
+  environments, permissions or product entitlements interchangeable.
+
+Approve implementation and synthetic tests now; keep actual read-token
+permission and environment-specific activation unverified until probed.
+No supplier process configuration was available in this runner, so no
+authenticated request or credential inspection was performed. T017 is not
+complete, no live readiness/configuration was changed, and the no-write-key
+fallback rule is unchanged.
+
 All design unknowns are resolved for planning. Dependency pin selection is an implementation lockfile check, and provider commercial/wire-document prerequisites are explicit fail-closed activation gates. They are not assumptions of live support. No product acceptance, migration, deployment or provider call was performed during research.

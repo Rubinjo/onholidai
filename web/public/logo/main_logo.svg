@@ -1,0 +1,103 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="460"
+  height="104"
+  viewBox="0 0 460 104"
+  fill="none"
+  role="img"
+  aria-labelledby="onholidai-title"
+>
+  <title id="onholidai-title">OnHolidai</title>
+
+  <defs>
+    <!-- Cut the winding route out rather than painting it. -->
+    <mask
+      id="onholidai-route"
+      x="0"
+      y="0"
+      width="100"
+      height="104"
+      maskUnits="userSpaceOnUse"
+      style="mask-type: luminance"
+    >
+      <rect width="100" height="104" fill="white" />
+      <path
+        d="
+          M 38 61
+          C 51 65, 71 68, 67 73
+          C 63 79, 39 80, 46 87
+          C 50 91, 69 94, 72 104
+          L 45 104
+          C 46 97, 24 95, 25 86
+          C 26 77, 59 75, 57 71
+          C 55 68, 44 65, 38 61
+          Z
+        "
+        fill="black"
+      />
+    </mask>
+  </defs>
+
+  <!-- Destination pin with a genuinely transparent center. -->
+  <path
+    fill="#12664f"
+    fill-rule="evenodd"
+    d="
+      M 36 3
+      C 26 3, 18 11, 18 21
+      C 18 31, 29 44, 34 51
+      Q 36 54, 38 51
+      C 43 44, 54 31, 54 21
+      C 54 11, 46 3, 36 3
+      Z
+
+      M 44 21
+      A 8 8 0 1 1 28 21
+      A 8 8 0 1 1 44 21
+      Z
+    "
+  />
+
+  <circle cx="76" cy="25" r="13" fill="#78a98f" />
+
+  <!-- Landscape silhouette, with the route cut through it. -->
+  <g mask="url(#onholidai-route)">
+    <path
+      fill="#78a98f"
+      d="
+        M 0 55
+        C 10 47, 14 44, 25 51
+        L 39 60
+        C 50 56, 61 47, 71 45
+        C 82 43, 91 51, 100 59
+        C 100 84, 80 103, 51 103
+        C 22 103, 0 85, 0 55
+        Z
+      "
+    />
+
+    <path
+      fill="#12664f"
+      d="
+        M 0 55
+        C 10 47, 14 44, 25 51
+        C 36 58, 43 63, 55 65
+        C 72 64, 87 67, 99 71
+        C 94 90, 76 103, 51 103
+        C 22 103, 0 85, 0 55
+        Z
+      "
+    />
+  </g>
+
+  <!-- Single-color serif wordmark matching the website. -->
+  <text
+    x="114"
+    y="85"
+    fill="#084c3a"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="68"
+    font-weight="700"
+    letter-spacing="-2.5"
+  >OnHolidai</text>
+</svg>

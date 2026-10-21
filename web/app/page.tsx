@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLink } from "@/components/brand-link";
 import { MarketingNavigation } from "@/components/marketing/navigation";
 import { MarketingHero } from "@/components/marketing/hero";
 import { PlanningProcess } from "@/components/marketing/process";
@@ -16,5 +17,5 @@ export default function HomePage() {
         description="Begin with a country, then choose its cities. Let AI suggest a connected journey across Japan and South Korea." /></section>
     <section className="marketing-start"><h2>Where is your next holiday taking you?</h2><Button size="lg" asChild><Link href="/trips/new">Plan your holiday</Link></Button>
       <p>No account needed to explore a plan. Examples are illustrative; prices, inventory and supplier availability require current checks.</p></section>
-  </main><footer className="marketing-footer">OnHolidai · A plan you can review, refine and choose.</footer></div>;
+  </main><footer className="marketing-footer"><BrandLink /><p>A plan you can review, refine and choose.</p></footer></div>;
 }

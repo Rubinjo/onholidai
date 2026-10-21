@@ -57,7 +57,7 @@ describe("Duffel Stays synthetic HTTP wire", () => {
     await client.search(query(), signal);
     transport.mockImplementation(async () => new Response(JSON.stringify({ data: result() })));
     const hit = await client.detail("srr_synthetic1", query(), signal);
-    expect(JSON.parse(hit.planningDetails.fareConditions!).rooms).toEqual([{ name: "Synthetic room", roomId: null, rates: [{
+    expect(JSON.parse(hit.planningDetails.fareConditions!).rooms).toMatchObject([{ name: "Synthetic room", roomId: null, rates: [{
       rateId: "rat_synthetic1", quoteId: null, name: "Synthetic rate", totalMinor: 15005, taxesMinor: 1005,
       feesMinor: 300, dueAtPropertyMinor: 500, depositMinor: null, expiresAt: null,
       boardType: "room_only", paymentType: "pay_now",
@@ -69,6 +69,36 @@ describe("Duffel Stays synthetic HTTP wire", () => {
     await expect(client.detail("srr_other", query(), signal)).rejects.toMatchObject({ status: "unsupported" });
     await expect(client.revalidate("srr_synthetic1", query(), signal)).rejects.toMatchObject({ status: "unsupported" });
     expect(transport).toHaveBeenCalledTimes(2);
+  });
+  it("preserves sourced anonymous occupancy and complete room-rate refund/payment evidence without promoting a search price to a quote", async () => {
+    const { client, transport } = setup();
+    const row = result();
+    const rate = row.accommodation.rooms[0].rates[0];
+    const payload = { ...row, rooms: 1, guests: [{ type: "adult" }, { type: "adult" }],
+      accommodation: { ...row.accommodation, rooms: [{ ...row.accommodation.rooms[0], rates: [{ ...rate,
+        cancellation_timeline: [{ before: "2030-04-30T12:00:00Z", refund_amount: "150.05" }],
+        conditions: [{ description: "Synthetic mandatory local terms" }],
+        available_payment_methods: ["balance"], expires_at: "2030-01-01T00:15:00Z",
+      }] }] } };
+    const signal = new AbortController().signal;
+    await client.search(query(), signal);
+    transport.mockImplementation(async () => new Response(JSON.stringify({ data: payload })));
+    const hit = await client.detail("srr_synthetic1", query(), signal);
+    expect(JSON.parse(hit.planningDetails.fareConditions!)).toMatchObject({
+      requestedRooms: 1, party: { adults: 2, childAges: [] },
+      rooms: [{ rates: [{ paymentMethods: ["balance"], conditions: ["Synthetic mandatory local terms"],
+        cancellationTimeline: [{ before: "2030-04-30T12:00:00.000Z", refundMinor: 15005 }] }] }],
+    });
+    expect(hit.supplierMinor).toBeNull();
+    expect(hit.supplierReferences).not.toHaveProperty("quoteId");
+    expect(client.capabilities.revalidation).toBe("unsupported");
+  });
+  it("rejects mismatched sourced occupancy instead of reusing the requested party as evidence", async () => {
+    const { client, transport } = setup();
+    transport.mockImplementation(async () => new Response(JSON.stringify({ data: { results: [
+      { ...result(), rooms: 1, guests: [{ type: "adult" }] },
+    ] } })));
+    await expect(client.search(query(), new AbortController().signal)).rejects.toMatchObject({ status: "error" });
   });
   it("does not infer a property type from a hotel-like name or an advertised rating", async () => {
     const { client, transport } = setup();

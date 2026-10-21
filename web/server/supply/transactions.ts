@@ -21,7 +21,7 @@ export interface ProviderWriteRequest {
 }
 
 export interface ProviderTransactionAdapter {
-  provider: "duffel" | "booking" | "getyourguide" | "trainline";
+  provider: "duffel" | "viator" | "booking" | "getyourguide" | "trainline";
   capabilities: { book: boolean; status: boolean; cancel: boolean; reschedule: boolean; idempotency: boolean };
   execute(request: ProviderWriteRequest): Promise<TransactionOutcome>;
   getStatus?(idempotencyKey: string): Promise<TransactionOutcome>;

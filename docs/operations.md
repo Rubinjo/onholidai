@@ -70,7 +70,7 @@ try {
 
 Deterministic doubles are the default. Current search composition is Duffel Flights/Stays and Viator activities; Booking.com and Trainline are deferred, and GetYourGuide is replaced. Rail-only and mixed searches return an explicit unsupported/deferred rail outcome, without invoking rail adapters or substituting inventory. Supported mixed-query results are retained. Read-only HTTP transports, revisioned evidence, the four-tool in-memory MCP facade and the workspace comparison panel are implemented and tested with synthetic fixtures. This is discovery, not completion of [feature 003](../specs/003-supplier-mcp-booking/tasks.md) or verified supplier access. Existing saved provider identities and confirmations must not be relabelled.
 
-Search results distinguish available inventory, successful no-matches, unconfigured/blocked access, unsupported coverage, rate limiting, deadlines and errors per provider/product. Source mode is explicit (`deterministic`, `live` or `unknown` for an undeclared injected client). The internal search route supplies product readiness and request cancellation; configured-but-unverified live access does not execute. Reads have an eight-second source ceiling, propagate abort, deduplicate before fairly allocating up to 32 offers across product lanes, and never automatically retry. Trusted clients may raise `SupplyReadError` with a bounded rate-limit delay; arbitrary exception messages/payloads never become public retry guidance or error text.
+Search results distinguish available inventory, successful no-matches, unconfigured/blocked access, unsupported coverage, rate limiting, deadlines and errors per provider/product. Source mode is explicit (`deterministic`, `live` or `unknown` for an undeclared injected client). The internal search route supplies product readiness and request cancellation; configured-but-unverified live access does not execute. Reads have an eight-second source ceiling, propagate abort, and deduplicate before fairly allocating up to 32 offers across products and requirement/selection groups. There are no default retries: only a trusted `SupplyReadError` with a bounded rate-limit delay can trigger one read retry, and only when that delay fits the original source deadline. The retry does not reset that deadline, and cancellation stops the wait without another supplier call. Arbitrary exception messages/payloads never become public retry guidance or error text. Search and evidence refresh enforce a twelve-second overall budget at access/persistence boundaries; cancelled or expired work cannot append evidence. Refresh rejects a known-stale revision before a supplier call and rechecks the latest revision under the source-run lock before appending, so concurrent refreshes cannot overwrite immutable evidence.
 
 Live provider use requires separately provisioned credentials, commercial access, rate limits, and confirmation of the account's permitted operations. Availability, status lookup, idempotent writes, cancellation, and rescheduling are capability-specific; consult [supply contracts](../contracts/supply/README.md) and check the deployed adapter configuration before enabling an operation. An adapter declaration does not guarantee inventory or commercial access. Unknown outcomes stay `unknown` until reconciled; never retry an ambiguous provider write with a new key.
 
@@ -92,6 +92,16 @@ current-version completed research; internal callbacks additionally require an
 active, unrevoked grant for the same run. Source access and ownership are
 rechecked after in-flight reads. All responses are private/no-store.
 
+Capability responses distinguish the adapter's implemented read operations from
+configured product access. Configuration cannot enable an unsupported operation:
+Duffel Stays quote revalidation remains unsupported even with a verified
+configuration declaration. Detail/revalidation check their own product's support
+and access, including Viator independently of Duffel. Blocked or unverified reads
+preserve prior evidence without appending a revision. Coverage, property types,
+rate limits and maximum freshness remain unknown where not established; query
+and deadline ceilings are reported separately. Demonstration property variants
+are synthetic fixtures, not evidence of live property coverage or age eligibility.
+
 The web composition root resolves only configured read-secret references.
 Duffel write keys are never used as a read fallback. Viator's shared upstream
 key is constrained by fixed read endpoint/method allowlists, not by its name.
@@ -110,9 +120,59 @@ coordinate/radius/room allocation resolver; room counts are not inferred.
 Viator availability requires an exact day and trusted product age-band mapping;
 `ageAtTripStart` alone does not establish service-date eligibility.
 
-Stays quote/revalidation is deliberately unsupported until no-hold/read-key
-semantics are approved. Search's cheapest rate is not a complete quote. Viator
-complete customer pricing and absent mandatory amounts remain unknown.
+Stays quote/revalidation remains unsupported in the current code. On
+2026-10-21 the user supplied quote-only side-effect confirmation and approved
+implementing T017 plus a bounded sandbox probe with the existing separate read
+token. This is not verified read-token permission or live activation; see the
+[approval evidence](../specs/003-supplier-mcp-booking/evidence/provider-readiness.md#t017-conditional-implementation-approval-2026-10-21).
+Do not substitute a transaction token after a permission failure. Duffel's
+documented default live search limit is 10 requests per 60 seconds, not a
+universal endpoint/sandbox quota; respect actual endpoint limit/reset headers
+within existing read deadlines.
+The subsequently authorized sandbox probe returned HTTP 403 for search with
+the user-confirmed read-only token; an unauthenticated control returned 401.
+The denial was not structured JSON, so scope versus Stays/account access is
+not established. Rates/quotes could not be tested without a search result.
+See the [executed probe and support request references](../specs/003-supplier-mcp-booking/evidence/provider-readiness.md#authorized-sandbox-read-token-probe-2026-10-21).
+Keep Stays access blocked; sandbox response headers reported a ceiling of 30,
+which is not a verified quota for other operations or environments.
+A later standalone transaction-token diagnostic, explicitly authorized by the
+user, also returned HTTP 403 for search. The two sandbox tokens were privately
+confirmed distinct, so selecting the transaction token did not resolve access.
+The [transaction-token evidence](../specs/003-supplier-mcp-booking/evidence/provider-readiness.md#explicit-transaction-token-diagnostic-2026-10-21)
+records the safe support reference. This did not change web credential
+composition or establish a rule about permissions for every POST operation.
+Search's cheapest rate is not a complete quote.
+Sourced Stays room count and guest evidence must match the trusted request;
+missing occupancy, room identity, property type or quote deposit facts stay
+unknown. Rate payment methods, mandatory conditions and refund timelines are
+retained, but cannot establish a quote or permission to book.
+For the approved quote mapping, use sourced selected-rate expiry rather than
+inventing a quote TTL or supplier room ID. Taxes/fees are already included in
+the rate total, deposits are portions of it, and mandatory due-at-property
+charges are separate and can use another currency. Null amounts, unresolved
+occupancy and unsupported payment timing/currencies still block booking.
+
+Duffel flight fare, baggage, payment deadlines and identity/service prerequisites
+are retained without passenger IDs or payment identifiers. Offset-free service
+times are qualified only when the source airport supplies a valid timezone
+and the local instant is unambiguous; missing zones and DST gaps/overlaps stay
+unknown. Base/tax reconciliation does not prove optional service or payment
+fees are zero, so complete customer totals remain unknown without those facts.
+
+Viator product content alone has unknown availability. An exact-day check with
+no available options is unavailable; multiple available options are retained
+without silently selecting one. Booking-question counts are prerequisite
+evidence, not verified answers. Sourced recommended retail, mandatory destination
+extras and retail inclusive of extras are separate facts: inclusive retail
+already contains those extras and must not have them added again. Taxability
+flags do not establish tax amounts, collection responsibility or an approved
+complete customer total. Absent mandatory amounts remain unknown. Saved reads
+and immutable refresh revisions preserve source unknown/unavailable evidence
+without modifying accepted trip state.
+
+Safe supplier-fact summaries have a 2,000-character limit; oversized mappings
+return unsupported rather than silently truncating material terms.
 Unsupported property filters affect accommodation only, not flight/activity
 results; requirement-ID selection remains unsupported. Client instances retain
 bounded same-query native-ID read grants; after a restart, repeat search before

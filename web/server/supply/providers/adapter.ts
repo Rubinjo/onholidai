@@ -9,11 +9,13 @@ import { planningDetailsSchema } from "@/domain/trip/itinerary";
 // Provider-specific SDK/HTTP clients translate wire payloads to this narrow, read-only port.
 // No supplier credential, reservation method or arbitrary URL crosses the port.
 export interface ReadOfferClient {
+  capabilities?: NonNullable<SupplyReadProvider["capabilities"]["operations"]>;
   search(query: SupplyReadQuery, signal: AbortSignal): Promise<unknown>;
   detail?(offerId: string, query: SupplyReadQuery, signal: AbortSignal): Promise<unknown>;
   revalidate?(offerId: string, query: SupplyReadQuery, signal: AbortSignal): Promise<unknown>;
 }
 const hitSchema = z.object({ selectionGroup: z.string().min(1).max(120).optional(), currency: currencySchema, offerId: z.string().min(1).max(256), supplierMinor: z.number().int().nonnegative().nullable(),
+  availability: z.enum(["available", "unavailable", "unknown"]).optional(),
   serviceStart: z.iso.datetime({ offset: true }).nullable().optional(), serviceEnd: z.iso.datetime({ offset: true }).nullable().optional(),
   planningDetails: planningDetailsSchema.optional(),
   taxesMinor: z.number().int().nonnegative().nullable(), feesMinor: z.number().int().nonnegative().nullable(),
@@ -35,7 +37,7 @@ export function createReadAdapter(provider: string, type: "flight" | "accommodat
       const ineligible = (hit.maximumAdults !== null && query.travellerParty.adults > hit.maximumAdults)
         || (hit.maximumChildren !== null && ages.length > hit.maximumChildren);
       const component = { id: randomUUID(), itineraryItemIds: [], provider, supplierOfferId: hit.offerId,
-        type, offerStatus: "available", serviceStart: hit.serviceStart ?? null, serviceEnd: hit.serviceEnd ?? null,
+        type, offerStatus: hit.availability === "unavailable" ? "unavailable" : "available", serviceStart: hit.serviceStart ?? null, serviceEnd: hit.serviceEnd ?? null,
         planningDetails: hit.planningDetails,
         travellerIds: [...Array.from({ length: query.travellerParty.adults }, (_, slot) => {
           const hash = createHash("sha256").update(canonicalJson([query.travellerParty, slot])).digest("hex");
@@ -49,12 +51,16 @@ export function createReadAdapter(provider: string, type: "flight" | "accommodat
             : hit.supplierMinor + margin + hit.taxesMinor + hit.feesMinor),
           status: "estimated", source: provider, checkedAt: hit.checkedAt, expiresAt: hit.expiresAt } };
       return normalizePlanningOffer({ component, supplierReferences: hit.supplierReferences,
+        ...(hit.availability ? { evidence: { status: "estimated", availability: hit.availability,
+          checkedAt: hit.checkedAt, expiresAt: hit.expiresAt } } : {}),
         selectionGroup: hit.selectionGroup ?? `${type}:whole_query`, eligibility: { status: ineligible ? "ineligible" : "unverified",
         minimumAge: hit.minimumAge, maximumAge: hit.maximumAge }, occupancy: { maximumAdults: hit.maximumAdults, maximumChildren: hit.maximumChildren },
         accessibility: hit.accessibilityVerified === true ? "verified" : hit.accessibilityVerified === false ? "unsupported" : "unverified",
         attribution: { provider, sourceUrl: null }, unverifiedFacts: hit.terms === null ? ["terms"] : [] });
   }
-  return { capabilities: { provider, search: [type], readOnly: true },
+  return { capabilities: { provider, search: [type], readOnly: true,
+    operations: client.capabilities ?? { search: "supported", detail: client.detail ? "supported" : "unsupported",
+      revalidation: client.revalidate ? "supported" : "unsupported" } },
     async search(query, signal) {
       return z.array(hitSchema).max(32).parse(await client.search(query, signal)).map((hit) => normalize(hit, query))
         .filter((offer) => offer.eligibility.status !== "ineligible");

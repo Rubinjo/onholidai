@@ -9,6 +9,7 @@ export interface ReadHttpOptions {
 }
 
 export interface WireHit {
+  availability?: "available" | "unavailable" | "unknown";
   offerId: string;
   currency: string;
   supplierMinor: number | null;
@@ -171,7 +172,7 @@ export function readJson(options: ReadHttpOptions, allowed: readonly string[], h
           }
           return JSON.parse(Buffer.concat(chunks).toString("utf8"),
             (key: string, value: unknown, context?: { source?: string }) => {
-              if (typeof value === "number" && ["fromPrice", "recommendedRetailPrice"].includes(key)) {
+              if (typeof value === "number" && ["fromPrice", "recommendedRetailPrice", "totalExtraCharges"].includes(key)) {
                 // Modern JSON.parse exposes the original numeric token, avoiding precision
                 // loss before decimal scaling. Older runtimes must not guess lost digits.
                 if (!context?.source) throw new SupplyReadError("unsupported");

@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { Destinations } from "../../components/trip-setup/destinations";
 import { DurationSlider } from "../../components/trip-setup/duration-slider";
@@ -11,7 +11,14 @@ import type { TripSnapshot } from "../../domain/trip/schema";
 const api = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock("../../components/trip-setup/http", () => ({ planningJson: api.read, planningError: () => "Search unavailable. Retry." }));
 vi.mock("../../components/map/destination-picker", () => ({ DestinationPicker: ({ onCountry, candidates = [] }: { candidates?: { placeId: string; name: string }[]; onCountry?: (code: string, name: string) => void }) => <><button type="button" onClick={() => onCountry?.("JP", "Japan")}>Japan on globe</button><span data-testid="map-candidates">{candidates.map((place) => place.name).join(", ")}</span></> }));
-afterEach(() => { cleanup(); api.read.mockReset(); });
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+});
+afterEach(() => { cleanup(); api.read.mockReset(); vi.unstubAllGlobals(); });
 const japan = { placeId: "jp", kind: "country", name: "Japan", countryCode: "JP", timezone: "Asia/Tokyo", airportCode: null, location: null };
 const tokyo = { ...japan, placeId: "tokyo", kind: "city", name: "Tokyo", location: { latitude: 35, longitude: 139 } };
 function Route() {
@@ -22,6 +29,37 @@ function Route() {
     destinations={destinations} onDestinations={setDestinations} order={order} onOrder={setOrder} /></>;
 }
 describe("observable planning controls", () => {
+  it("explains both order modes in a single tooltip without changing the selected mode", async () => {
+    render(<Route />);
+    const manual = screen.getByRole("button", { name: "My order" });
+    const ai = screen.getByRole("button", { name: "Let AI arrange" });
+    expect(screen.getAllByRole("button", { name: /^About / })).toHaveLength(1);
+    act(() => screen.getByRole("button", { name: "About destination order" }).focus());
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("My order keeps destinations in the order you choose");
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("most optimal route and best available pricing");
+    expect(manual).toHaveAttribute("aria-pressed", "true");
+    expect(ai).toHaveAttribute("aria-pressed", "false");
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
+  });
+  it("explains every travel style and leaves slider labels and preferences intact", async () => {
+    const snapshot = createSyntheticTripSnapshot(), change = vi.fn();
+    render(<PartyPreferences party={snapshot.travellerParty} preferences={snapshot.preferences} onParty={() => {}} onPreferences={change} mode="preferences" />);
+    for (const [key, label, explanation] of [
+      ["pace", "Pace: relaxed to full days", "fewer activities"],
+      ["spend", "Spend: budget to premium", "not a fixed budget"],
+      ["discovery", "Discovery: familiar to adventurous", "local discoveries"],
+      ["independence", "Independence: guided to self-directed", "guided tours"],
+      ["setting", "Setting: nature to city", "natural landscapes"],
+    ]) {
+      expect(screen.getByRole("slider", { name: label })).toBeTruthy();
+      act(() => screen.getByRole("button", { name: `About ${key}` }).focus());
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(explanation);
+      fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
+    }
+    expect(change).not.toHaveBeenCalled();
+  });
   it("retains confirmed departure coordinates from the resolved place", async () => {
     const departure = { ...tokyo, kind: "airport" as const, placeId: "airport:tokyo", airportCode: "HND" };
     api.read.mockResolvedValue({ candidates: [departure] });

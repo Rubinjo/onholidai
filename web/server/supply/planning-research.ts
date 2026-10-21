@@ -11,7 +11,7 @@ import { fingerprint, runConflict } from "@/server/agent-client/run-repository";
 import { readOwnedTripVersion } from "@/domain/trip/read";
 import type { SupplierReadiness } from "@/server/config";
 import { ProblemError } from "@/server/errors";
-import { searchPlanningOffers, supplyReadQuerySchema, SupplyReadError, type SupplyReadProvider } from "./read";
+import { productReadiness, readWithRateLimitRetry, searchPlanningOffers, supplyReadQuerySchema, SupplyReadError, type SupplyReadProvider } from "./read";
 import { isCompletePlanningOffer, normalizePlanningOffer, projectPublicPlanningOffer, type PlanningOffer } from "./offers";
 
 export const researchQuerySchema = z.object({
@@ -90,7 +90,9 @@ export async function searchResearch(database: Kysely<Database>, providers: read
     sourceMode: result.outcomes.find((source) => source.provider === rawOffer.component.provider
       && source.componentType === rawOffer.component.type)?.mode ?? "unknown",
     queryFingerprint, partyFingerprint: fingerprint(basis.query.travellerParty),
-    evidence: { status: "estimated", availability: "available", checkedAt: rawOffer.component.checkedAt, expiresAt: rawOffer.component.expiresAt } }));
+    evidence: { status: rawOffer.evidence?.status ?? "estimated",
+      availability: rawOffer.evidence?.availability ?? (rawOffer.component.offerStatus === "unavailable" ? "unavailable" : "available"),
+      checkedAt: rawOffer.component.checkedAt, expiresAt: rawOffer.component.expiresAt } }));
   await inTransaction(database, async (transaction) => {
     requireTime(signal);
     await lockResearch(transaction, actor); await currentTrip(transaction, actor);
@@ -124,7 +126,9 @@ export async function readResearchOffer(database: Kysely<Database>, actor: Resea
     await lockResearch(transaction, actor);
     const record = await evidenceRecord(transaction, actor, raw);
     const offer = normalizePlanningOffer(record.offer);
-    return { outcome: offer.component.offerStatus === "expired" ? "expired" : "available", offer: projectPublicPlanningOffer(offer) };
+    return { outcome: offer.component.offerStatus === "expired" ? "expired"
+      : offer.component.offerStatus === "unavailable" ? "unavailable" : offer.evidence?.availability ?? "unknown",
+    offer: projectPublicPlanningOffer(offer) };
   });
 }
 
@@ -139,24 +143,38 @@ function materialFacts(offer: PlanningOffer) {
 }
 export async function refreshResearchOffer(database: Kysely<Database>, providers: readonly SupplyReadProvider[],
   actor: ResearchActor, raw: unknown, operation: "detail" | "revalidation", options: ResearchOptions = {}) {
+  const requestSignal = AbortSignal.any([AbortSignal.timeout(12_000), ...(options.signal ? [options.signal] : [])]);
+  requireTime(requestSignal);
   const record = await inTransaction(database, async (transaction) => {
     await lockResearch(transaction, actor);
-    return evidenceRecord(transaction, actor, raw);
+    const record = await evidenceRecord(transaction, actor, raw);
+    requireTime(requestSignal);
+    const latest = await transaction.selectFrom("planningOfferRecords").select("revision").where("offerRef", "=", record.offerRef)
+      .orderBy("revision", "desc").executeTakeFirstOrThrow();
+    if (latest.revision !== record.revision) runConflict();
+    return record;
   });
+  requireTime(requestSignal);
   const previous = normalizePlanningOffer(record.offer);
   const provider = providers.find((source) => source.capabilities.provider === previous.component.provider
     && source.capabilities.search.includes(previous.component.type));
-  const declared = previous.component.type === "activity" ? options.readiness?.viator.products.activity.operations[operation]
-    : previous.component.type === "flight" || previous.component.type === "accommodation"
-      ? options.readiness?.duffel.products[previous.component.type].operations[operation] : undefined;
+  const declared = productReadiness(options.readiness, previous.component.type, operation);
   const method = operation === "detail" ? provider?.detail : provider?.revalidate;
-  if (!method || (options.readiness?.duffel.mode === "live" && declared?.access !== "verified")) {
-    return { outcome: "unsupported", offer: projectPublicPlanningOffer(previous), differences: [] };
+  const implementation = provider?.capabilities.operations?.[operation];
+  if (!method || implementation === "unsupported" || declared?.operation.support === "unsupported") {
+    return { outcome: "unsupported", offer: projectPublicPlanningOffer(previous), differences: [],
+      safeReason: "This supplier product does not support the requested read operation." };
+  }
+  if (implementation === "unknown" || declared?.operation.access === "blocked" || (declared?.mode === "live"
+    && (declared.operation.support !== "supported" || declared.operation.access !== "verified"))) {
+    return { outcome: "unknown", offer: projectPublicPlanningOffer(previous), differences: [],
+      safeReason: "This supplier product's read access is not verified; prior evidence was not extended." };
   }
   let current: PlanningOffer;
   const deadline = new AbortController();
+  const deadlineAt = Date.now() + 8_000;
   const timer = setTimeout(() => deadline.abort(), 8_000);
-  const signal = AbortSignal.any([deadline.signal, ...(options.signal ? [options.signal] : [])]);
+  const signal = AbortSignal.any([deadline.signal, requestSignal]);
   let stop: (() => void) | undefined;
   try {
     if (signal.aborted) throw new SupplyReadError("error");
@@ -165,11 +183,14 @@ export async function refreshResearchOffer(database: Kysely<Database>, providers
       signal.addEventListener("abort", stop, { once: true });
     });
     current = normalizePlanningOffer(await Promise.race([
-      method.call(provider, previous.component.supplierOfferId, supplyReadQuerySchema.parse(record.query), signal), interrupted,
+      readWithRateLimitRetry(() => method.call(provider, previous.component.supplierOfferId,
+        supplyReadQuerySchema.parse(record.query), signal), signal, deadlineAt), interrupted,
     ]));
   } catch (error) {
+    requireTime(requestSignal);
     if (!(error instanceof Error)) throw error;
     await readResearchOffer(database, actor, raw);
+    requireTime(requestSignal);
     return { outcome: error instanceof SupplyReadError && error.status === "unsupported" ? "unsupported" : "unknown",
       offer: projectPublicPlanningOffer(previous), differences: [],
       safeReason: "Current evidence could not be established; prior evidence was not extended." };
@@ -177,14 +198,16 @@ export async function refreshResearchOffer(database: Kysely<Database>, providers
     clearTimeout(timer);
     if (stop) signal.removeEventListener("abort", stop);
   }
+  requireTime(requestSignal);
   if (current.component.provider !== previous.component.provider || current.component.type !== previous.component.type
     || current.component.supplierOfferId !== previous.component.supplierOfferId) {
     await readResearchOffer(database, actor, raw);
+    requireTime(requestSignal);
     return { outcome: "unknown", offer: projectPublicPlanningOffer(previous), differences: [], safeReason: "Supplier evidence did not match the stored selection." };
   }
   const changed = fingerprint(materialFacts(current)) !== fingerprint(materialFacts(previous));
   const outcome = current.component.offerStatus === "expired" ? "expired" : current.component.offerStatus === "unavailable" ? "unavailable"
-    : !isCompletePlanningOffer(current) ? "unknown" : changed ? "changed" : "unchanged";
+    : current.evidence?.availability === "unknown" || !isCompletePlanningOffer(current) ? "unknown" : changed ? "changed" : "unchanged";
   const offer = normalizePlanningOffer({ ...current, component: { ...current.component, id: previous.component.id },
     offerRef: record.offerRef, revision: record.revision + 1, sourceMode: previous.sourceMode,
     queryFingerprint: previous.queryFingerprint, partyFingerprint: previous.partyFingerprint,
@@ -192,14 +215,17 @@ export async function refreshResearchOffer(database: Kysely<Database>, providers
       availability: outcome === "unknown" || outcome === "expired" ? "unknown" : outcome === "unavailable" ? "unavailable" : "available",
       checkedAt: current.component.checkedAt, expiresAt: current.component.expiresAt } });
   await inTransaction(database, async (transaction) => {
+    requireTime(requestSignal);
     await lockResearch(transaction, actor); await currentTrip(transaction, actor);
     await transaction.selectFrom("agentRuns").select("id").where("id", "=", record.runId).forUpdate().executeTakeFirstOrThrow();
     await evidenceRecord(transaction, actor, raw);
     const latest = await transaction.selectFrom("planningOfferRecords").select("revision").where("offerRef", "=", record.offerRef)
       .orderBy("revision", "desc").executeTakeFirstOrThrow();
+    requireTime(requestSignal);
     if (latest.revision !== record.revision) runConflict();
     await transaction.insertInto("planningOfferRecords").values({ runId: record.runId, componentId: record.componentId,
       offerRef: record.offerRef, revision: offer.revision, offer: { ...offer }, query: record.query }).execute();
+    requireTime(requestSignal);
   });
   return { outcome, offer: projectPublicPlanningOffer(offer), differences: changed ? ["Supplier material facts changed; compare the new revision before selection."] : [] };
 }
@@ -240,20 +266,32 @@ export async function researchCapabilities(database: Kysely<Database>, providers
     if (componentType === "rail") return { provider: null, componentType, mode: "unknown", operations: {
       search: { support: "unsupported", access: "blocked", safeReason: "Rail inventory is deferred; no replacement is configured." },
       detail: { support: "unsupported", access: "blocked" }, revalidation: { support: "unsupported", access: "blocked" },
-    }, propertyTypes: null, coverage: null, rateLimit: null, sourceDeadlineMs: 8_000 };
+    }, propertyTypes: null, coverage: null, rateLimit: null, freshnessMaxAgeMs: null, sourceDeadlineMs: 8_000,
+      limitations: ["Rail is deferred; saved rail confirmations retain their original attribution."] };
     const declared = componentType === "activity" ? readiness.viator : readiness.duffel;
     const product = componentType === "activity" ? readiness.viator.products.activity : readiness.duffel.products[componentType];
     const source = providers.find((provider) => provider.capabilities.provider === declared.provider && provider.capabilities.search.includes(componentType));
     const operations = Object.fromEntries((["search", "detail", "revalidation"] as const).map((operation) => {
+      const methodExists = operation === "search" ? Boolean(source) : operation === "detail" ? Boolean(source?.detail) : Boolean(source?.revalidate);
+      const implementation = methodExists ? source?.capabilities.operations?.[operation] ?? "supported" : "unsupported";
+      if (implementation !== "supported") return [operation, {
+        support: implementation, access: "blocked", safeReason: "The configured adapter cannot establish this read operation.",
+        verifiedAt: null,
+      }];
       if (declared.mode === "deterministic") {
-        const supported = operation === "search" ? Boolean(source) : operation === "detail" ? Boolean(source?.detail) : Boolean(source?.revalidate);
-        return [operation, { support: supported ? "supported" : "unsupported", access: supported ? "configured_unverified" : "blocked",
+        const configured = product.operations[operation];
+        if (configured.support === "unsupported" || configured.access === "blocked") return [operation, configured];
+        return [operation, { support: "supported", access: "configured_unverified",
           safeReason: "Demonstration evidence only; live inventory and booking are not verified.", verifiedAt: null }];
       }
       return [operation, product.operations[operation]];
     }));
     return { provider: declared.provider, componentType, mode: declared.mode, operations,
-      propertyTypes: null, coverage: null, rateLimit: null, sourceDeadlineMs: 8_000 };
+      propertyTypes: null, coverage: null, rateLimit: null, freshnessMaxAgeMs: null, sourceDeadlineMs: 8_000,
+      limitations: ["Property and requirement filtering are not supported.",
+        "Market, party and property coverage and supplier rate limits are not established.",
+        "Freshness requires supplier evidence; reads never hold inventory or establish booking access."] };
   });
-  return { capabilities, readOnly: true, maximumOffers: 32, overallDeadlineMs: 12_000 };
+  return { capabilities, readOnly: true, maximumOffers: 32, overallDeadlineMs: 12_000,
+    queryLimits: { maximumComponentTypes: 4, maximumDestinations: 8 } };
 }

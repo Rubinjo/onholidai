@@ -6,6 +6,7 @@ import type { TripSnapshot } from "@/domain/trip/schema";
 import { planningError, planningJson } from "./http";
 import { DestinationPicker } from "@/components/map/destination-picker";
 import { Button } from "@/components/ui/button";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { PlaceSearch } from "./place-search";
 type Destination = TripSnapshot["destinations"][number];
 type Origin = TripSnapshot["departureOrigin"];
@@ -78,7 +79,11 @@ export function Destinations({ origin, origins, destinations, onOrigin, onOrigin
       </div>
       {countryChoices.length > 0 && <div aria-label="Country regions">{countryChoices.map((place) => <Button key={place.placeId} variant="outline" onClick={() => { choose(place); setCountryChoices([]); }}>{place.name} · {place.timezone}</Button>)}</div>}
       <div className="route-order"><div><h2>Your journey</h2><p>{order === "manual" ? "Drag stops into your preferred order." : "AI will propose an order for you to review."}</p></div>
-        <div className="route-order__toggle" role="group" aria-label="Destination order"><Button aria-pressed={order === "manual"} variant={order === "manual" ? "default" : "outline"} onClick={() => onOrder?.("manual")}>My order</Button><Button aria-pressed={order === "ai"} variant={order === "ai" ? "default" : "outline"} onClick={() => onOrder?.("ai")}>Let AI arrange</Button></div></div>
+        <div className="route-order__toggle" role="group" aria-label="Destination order">
+          <Button aria-pressed={order === "manual"} variant={order === "manual" ? "default" : "outline"} onClick={() => onOrder?.("manual")}>My order</Button>
+          <Button aria-pressed={order === "ai"} variant={order === "ai" ? "default" : "outline"} onClick={() => onOrder?.("ai")}>Let AI arrange</Button>
+          <InfoTooltip label="About destination order">My order keeps destinations in the order you choose. Let AI arrange lets AI compare destination orders to find the most optimal route and best available pricing for your dates and preferences, balancing travel time and cost. You review the proposal; prices and savings are not guaranteed.</InfoTooltip>
+        </div></div>
       {replaceId && <p role="status">Search for a replacement for {destinations.find((entry) => entry.id === replaceId)?.name}. <Button variant="ghost" onClick={() => setReplaceId(undefined)}>Cancel replacement</Button></p>}
       <ol aria-label="Selected destinations" className={`destination-list route-cards route-cards--${order}`}>{destinations.map((destination, index) => <li key={destination.id} data-destination-id={destination.id} data-route-index={index}>
         <button type="button" className="route-cards__handle" disabled={order !== "manual"} aria-label={`Reorder ${destination.name}; use arrow keys`} style={{ touchAction: "none" }}
