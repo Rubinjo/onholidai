@@ -1,10 +1,6 @@
 export type OfferStatus = "available" | "changed" | "unavailable";
 export type CommitStatus = "confirmed" | "rejected";
-export type ProviderScenario =
-  | "success"
-  | "timeout_after_commit"
-  | "duplicate"
-  | "contradictory";
+export type ProviderScenario = "success" | "timeout_after_commit" | "duplicate" | "contradictory";
 
 export interface SyntheticOffer {
   readonly id: string;
@@ -53,7 +49,8 @@ const offers = [
 
 export const syntheticOffers = Object.freeze(offers);
 
-export type ReadScenario = "success" | "no_matches" | "unsupported" | "rate_limited" | "deadline" | "error";
+export type ReadScenario =
+  "success" | "no_matches" | "unsupported" | "rate_limited" | "deadline" | "error";
 export interface ReadEvidence {
   status: OfferStatus | Exclude<ReadScenario, "success">;
   offers: readonly SyntheticOffer[];
@@ -78,7 +75,8 @@ export class DeterministicClock {
   now = (): Date => new Date(this.instant);
 
   advance(milliseconds: number): void {
-    if (!Number.isSafeInteger(milliseconds) || milliseconds < 0) throw new Error("Invalid clock advance");
+    if (!Number.isSafeInteger(milliseconds) || milliseconds < 0)
+      throw new Error("Invalid clock advance");
     this.instant += milliseconds;
   }
 }
@@ -95,16 +93,24 @@ export class DeterministicProviderDouble {
   readonly counters = { search: 0, detail: 0, revalidation: 0, writeAttempts: 0, writes: 0 };
   private sequence = 0;
 
-  constructor(private readonly now: () => Date = new DeterministicClock().now, state?: ProviderFixtureState) {
+  constructor(
+    private readonly now: () => Date = new DeterministicClock().now,
+    state?: ProviderFixtureState,
+  ) {
     if (state) {
       this.sequence = state.sequence;
       this.counters.writes = state.writes;
-      for (const outcome of state.committed) this.committed.set(outcome.requestId, structuredClone(outcome));
+      for (const outcome of state.committed)
+        this.committed.set(outcome.requestId, structuredClone(outcome));
     }
   }
 
   snapshot(): ProviderFixtureState {
-    return structuredClone({ sequence: this.sequence, committed: [...this.committed.values()], writes: this.counters.writes });
+    return structuredClone({
+      sequence: this.sequence,
+      committed: [...this.committed.values()],
+      writes: this.counters.writes,
+    });
   }
 
   search(scenario: ReadScenario = "success"): ReadEvidence {
@@ -119,13 +125,26 @@ export class DeterministicProviderDouble {
     return this.read("revalidation", offerId, scenario);
   }
 
-  private read(operation: "search" | "detail" | "revalidation", offerId: string | undefined, scenario: ReadScenario): ReadEvidence {
+  private read(
+    operation: "search" | "detail" | "revalidation",
+    offerId: string | undefined,
+    scenario: ReadScenario,
+  ): ReadEvidence {
     const count = ++this.counters[operation];
     const checkedAt = this.now().toISOString();
-    const selected = scenario !== "success" ? [] : offerId ? [this.quote(offerId)] : structuredClone(syntheticOffers);
-    return { status: scenario === "success" ? selected[0]?.status ?? "no_matches" : scenario,
-      offers: selected, checkedAt, expiresAt: selected.length ? new Date(Date.parse(checkedAt) + 300_000).toISOString() : null,
-      evidenceId: `synthetic-${operation}-${count}` };
+    const selected =
+      scenario !== "success"
+        ? []
+        : offerId
+          ? [this.quote(offerId)]
+          : structuredClone(syntheticOffers);
+    return {
+      status: scenario === "success" ? (selected[0]?.status ?? "no_matches") : scenario,
+      offers: selected,
+      checkedAt,
+      expiresAt: selected.length ? new Date(Date.parse(checkedAt) + 300_000).toISOString() : null,
+      evidenceId: `synthetic-${operation}-${count}`,
+    };
   }
 
   quote(offerId: string): SyntheticOffer {
@@ -152,8 +171,7 @@ export class DeterministicProviderDouble {
       requestId,
       offerId,
       status: offer.status === "unavailable" ? "rejected" : "confirmed",
-      confirmationId:
-        offer.status === "unavailable" ? null : `synthetic-confirmation-${requestId}`,
+      confirmationId: offer.status === "unavailable" ? null : `synthetic-confirmation-${requestId}`,
       duplicate: false,
     });
 
@@ -177,9 +195,7 @@ export class DeterministicProviderDouble {
     return [confirmed];
   }
 
-  private record(
-    outcome: Omit<CommitOutcome, "sequence">,
-  ): CommitOutcome {
+  private record(outcome: Omit<CommitOutcome, "sequence">): CommitOutcome {
     const recorded = { ...outcome, sequence: ++this.sequence };
     this.counters.writes += 1;
     this.committed.set(recorded.requestId, recorded);

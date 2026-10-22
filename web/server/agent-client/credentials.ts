@@ -5,11 +5,7 @@ export const SERVICE_TOKEN_MAX_TTL_SECONDS = 300;
 
 export type ServiceAudience = "agent" | "web";
 export type ServiceScope =
-  | "context:read"
-  | "proposal:create"
-  | "pricing:read"
-  | "run:write"
-  | "trip:read";
+  "context:read" | "proposal:create" | "pricing:read" | "run:write" | "trip:read";
 
 export interface ServiceTokenContext {
   readonly userId: string;
@@ -41,9 +37,7 @@ interface VerifyServiceTokenOptions {
   readonly now?: number;
 }
 
-const AUDIENCE_SCOPES: Readonly<
-  Record<ServiceAudience, ReadonlySet<ServiceScope>>
-> = {
+const AUDIENCE_SCOPES: Readonly<Record<ServiceAudience, ReadonlySet<ServiceScope>>> = {
   agent: new Set(["trip:read", "context:read", "proposal:create"]),
   web: new Set(["run:write", "trip:read", "context:read", "proposal:create", "pricing:read"]),
 };
@@ -58,8 +52,7 @@ const CLAIM_KEYS = new Set([
   "baseTripVersion",
   "scopes",
 ]);
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export class ServiceTokenError extends Error {
@@ -98,8 +91,14 @@ export function createServiceToken(options: CreateServiceTokenOptions): string {
 
 // Match the Python callback transport's bounded issuance margin. Validators stay
 // strict; actual validity is one second shorter, never extended by clock leeway.
-export function createAgentServiceToken(options: Omit<CreateServiceTokenOptions, "audience" | "issuedAt">): string {
-  return createServiceToken({ ...options, audience: "agent", issuedAt: Math.floor(Date.now() / 1000) - 1 });
+export function createAgentServiceToken(
+  options: Omit<CreateServiceTokenOptions, "audience" | "issuedAt">,
+): string {
+  return createServiceToken({
+    ...options,
+    audience: "agent",
+    issuedAt: Math.floor(Date.now() / 1000) - 1,
+  });
 }
 
 export function createServiceAuthorization(
@@ -128,10 +127,7 @@ export function verifyServiceToken(
     throw new ServiceTokenError("Service token contains an empty segment");
   }
 
-  const expectedSignature = signBytes(
-    `${headerSegment}.${payloadSegment}`,
-    options.secret,
-  );
+  const expectedSignature = signBytes(`${headerSegment}.${payloadSegment}`, options.secret);
   const suppliedSignature = decodeSegment(signatureSegment);
   if (
     suppliedSignature.length !== expectedSignature.length ||
@@ -141,11 +137,7 @@ export function verifyServiceToken(
   }
 
   const header = decodeJsonObject(headerSegment, "header");
-  if (
-    Object.keys(header).length !== 2 ||
-    header.alg !== "HS256" ||
-    header.typ !== "JWT"
-  ) {
+  if (Object.keys(header).length !== 2 || header.alg !== "HS256" || header.typ !== "JWT") {
     throw new ServiceTokenError("Service token header is invalid");
   }
 
@@ -161,19 +153,11 @@ export function verifyServiceToken(
   if (claims.iat > now) {
     throw new ServiceTokenError("Service token is not yet valid");
   }
-  if (
-    claims.exp <= claims.iat ||
-    claims.exp - claims.iat > SERVICE_TOKEN_MAX_TTL_SECONDS
-  ) {
+  if (claims.exp <= claims.iat || claims.exp - claims.iat > SERVICE_TOKEN_MAX_TTL_SECONDS) {
     throw new ServiceTokenError("Service token lifetime is invalid");
   }
   validateContext(options.expectedContext);
-  for (const key of [
-    "userId",
-    "tripId",
-    "requestId",
-    "baseTripVersion",
-  ] as const) {
+  for (const key of ["userId", "tripId", "requestId", "baseTripVersion"] as const) {
     if (claims[key] !== options.expectedContext[key]) {
       throw new ServiceTokenError(`Service token ${key} context is invalid`);
     }
@@ -181,10 +165,10 @@ export function verifyServiceToken(
 
   // An empty requirement is meaningful: signature, audience and context are still
   // proven here, and the handler enforces its own scope through internalActor.
-  const requiredScopes = options.requiredScopes.length === 0 ? [] : validateScopes(
-    options.requiredScopes,
-    options.expectedAudience,
-  );
+  const requiredScopes =
+    options.requiredScopes.length === 0
+      ? []
+      : validateScopes(options.requiredScopes, options.expectedAudience);
   if (requiredScopes.some((scope) => !claims.scopes.includes(scope))) {
     throw new ServiceTokenError("Service token scope is insufficient");
   }
@@ -234,16 +218,11 @@ function validateContext(value: unknown): asserts value is ServiceTokenContext {
     !Number.isSafeInteger(value.baseTripVersion) ||
     value.baseTripVersion < 1
   ) {
-    throw new ServiceTokenError(
-      "Service token baseTripVersion must be a positive integer",
-    );
+    throw new ServiceTokenError("Service token baseTripVersion must be a positive integer");
   }
 }
 
-function validateScopes(
-  value: unknown,
-  audience: ServiceAudience,
-): ServiceScope[] {
+function validateScopes(value: unknown, audience: ServiceAudience): ServiceScope[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new ServiceTokenError("Service token scopes must not be empty");
   }
@@ -279,10 +258,7 @@ function validateTtl(ttlSeconds: number): void {
   }
 }
 
-function validateEpochSeconds(
-  value: unknown,
-  name: string,
-): asserts value is number {
+function validateEpochSeconds(value: unknown, name: string): asserts value is number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     throw new ServiceTokenError(`Service token ${name} must be epoch seconds`);
   }

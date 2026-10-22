@@ -250,9 +250,7 @@ def test_generated_contracts_match_the_exporter_without_drift():
     schemas = openapi["components"]["schemas"]
     for name in ("CreateAgentRunRequest", "AgentEvent", "AgentRun", "ChangeProposal", "ToolCall"):
         assert name in schemas
-    tools = json.loads(
-        (ROOT / "contracts/agent-api/tools.schema.json").read_text(encoding="utf-8")
-    )
+    tools = json.loads((ROOT / "contracts/agent-api/tools.schema.json").read_text(encoding="utf-8"))
     assert tools["$id"] == "https://onholid.ai/contracts/agent-tools/v1"
 
 

@@ -4,13 +4,13 @@ Independent test executed: a guest trip is linked to exactly one free account, h
 versions are unchanged, the guest loses access while the account keeps it, and booking
 operations stay closed to guests even by direct request.
 
-| Check | Command / file | Result |
-| --- | --- | --- |
-| Intent/link/auth contracts | `web/tests/contract/booking-auth-api.test.ts` | passed |
-| Concurrent claim/save/link/replay | `web/tests/integration/account-linking.test.ts` | passed |
-| Account != principal booking identity | `web/tests/integration/booking-planning-identity.test.ts` | passed |
-| Authorization/Temporal regressions | `web/tests/integration/booking-authorization.test.ts`, `booking-workflows.test.ts` | passed |
-| Browser boundary | `web/tests/e2e/booking-auth.spec.ts`, `refinement.spec.ts` continuation journey | passed |
+| Check                                 | Command / file                                                                     | Result |
+| ------------------------------------- | ---------------------------------------------------------------------------------- | ------ |
+| Intent/link/auth contracts            | `web/tests/contract/booking-auth-api.test.ts`                                      | passed |
+| Concurrent claim/save/link/replay     | `web/tests/integration/account-linking.test.ts`                                    | passed |
+| Account != principal booking identity | `web/tests/integration/booking-planning-identity.test.ts`                          | passed |
+| Authorization/Temporal regressions    | `web/tests/integration/booking-authorization.test.ts`, `booking-workflows.test.ts` | passed |
+| Browser boundary                      | `web/tests/e2e/booking-auth.spec.ts`, `refinement.spec.ts` continuation journey    | passed |
 
 Registration asks for identity only (no payment or subscription fields) and offers an
 existing-account path; the price bar states that finalisation, not authentication, unlocks

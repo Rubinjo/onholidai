@@ -3,7 +3,10 @@ import { z } from "zod";
 import { agentViewDetailSchema, readAgentTrip } from "@/domain/trip/read";
 import { internalPlanningApiResponse, internalActor } from "@/server/api";
 
-export async function GET(request: Request, context: { params: Promise<{ tripId: string }> }): Promise<Response> {
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ tripId: string }> },
+): Promise<Response> {
   return internalPlanningApiResponse(request, async (application) => {
     const tripId = (await context.params).tripId;
     const query = new URL(request.url).searchParams;

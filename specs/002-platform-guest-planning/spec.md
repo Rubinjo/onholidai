@@ -8,7 +8,7 @@
 
 **Input**: User description: "Make the platform inviting and self-explanatory with a marketing homepage, globe-first trip setup, account-free planning, and free registration only at the booking boundary, preserving existing architecture, planning rules, and booking safeguards."
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Start with Destinations and Build a Guest Estimate (Priority: P1)
 
@@ -111,7 +111,7 @@ As a traveller, I want a coherent, responsive interface with helpful feedback an
 - A proposal expires or live terms change during authentication: preserve accepted history, disclose stale pending work, and require new review rather than treating sign-in as consent.
 - The trip is not finalized or supported booking is unavailable: explain the existing prerequisite or unavailable capability instead of promising executable booking.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -145,7 +145,7 @@ As a traveller, I want a coherent, responsive interface with helpful feedback an
 - **FR-028**: Decorative globe entrance, selection feedback, and setup transitions MAY use subtle animation, but MUST respect reduced-motion preferences, avoid automatic rotation under reduced motion, preserve focus and state, and never delay or block actual input, validation, navigation, or booking review.
 - **FR-029**: Existing account-owned trips and accepted history MUST remain accessible after the feature is introduced. Guest ownership and incomplete drafts MUST be accommodated within the existing storage architecture with compatible transitions; the feature MUST NOT replace the authoritative trip model, reinterpret historical consent, or weaken the domain and booking rules of `001-ai-trip-agent`.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **Anonymous Planning Session**: A temporary private owner context, protected browser credential, last activity, expiry, and authority over its unlinked drafts and trips; not a registered customer account.
 - **Setup Draft**: Incomplete selected destinations and setup entries, current step, save state, and associated guest or account owner; not an accepted estimate or valid trip snapshot until validated and submitted.
@@ -155,7 +155,7 @@ As a traveller, I want a coherent, responsive interface with helpful feedback an
 - **Account Link Receipt**: Durable evidence of the proven guest-to-account ownership transition, selected trip, resulting owner, and repeatable outcome; no independent itinerary copy.
 - **Booking Continuation**: The selected trip and intended booking-review action preserved across authentication, subject to fresh ownership and lifecycle checks; never booking consent.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

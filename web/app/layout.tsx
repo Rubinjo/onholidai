@@ -5,7 +5,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "OnHolidai",
-  description: "Plan a private multi-destination holiday with AI. Start without an account, review estimated proposals, and approve every change.",
+  description:
+    "Plan a private multi-destination holiday with AI. Start without an account, review estimated proposals, and approve every change.",
   icons: {
     icon: [
       { url: "/logo/favicon-32.png", type: "image/png", sizes: "32x32" },

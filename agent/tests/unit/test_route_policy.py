@@ -9,9 +9,7 @@ def distance(first: dict[str, object], second: dict[str, object]) -> float:
     b = cast(dict[str, float], second["location"])
     lat1, lat2 = radians(a["latitude"]), radians(b["latitude"])
     dlat, dlon = lat2 - lat1, radians(b["longitude"] - a["longitude"])
-    return 2 * asin(
-        min(1, sqrt(sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2))
-    )
+    return 2 * asin(min(1, sqrt(sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2)))
 
 
 def test_manual_order_and_incomplete_geometry_are_preserved():

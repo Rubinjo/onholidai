@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   planningNotFound,
   principalAllows,
@@ -22,8 +23,7 @@ function fakeDatabase(tables: Record<string, unknown[]>) {
   return {
     selectFrom: (name: string) => {
       const builder = chain();
-      builder.executeTakeFirst = async () =>
-        (tables[name] ?? [])[0];
+      builder.executeTakeFirst = async () => (tables[name] ?? [])[0];
       builder.execute = async () => tables[name] ?? [];
       return builder;
     },
@@ -33,15 +33,23 @@ function fakeDatabase(tables: Record<string, unknown[]>) {
 describe("current planning principal binding", () => {
   it("requires current account binding after linking even with original guest proof", () => {
     const linked = { accountUserId: "account", guestSessionId: null };
-    expect(principalAllows(linked, { accountUserId: "account", guestSessionId: "old-session" })).toBe(true);
-    expect(principalAllows(linked, { accountUserId: "other", guestSessionId: "old-session" })).toBe(false);
-    expect(principalAllows(linked, { accountUserId: null, guestSessionId: "old-session" })).toBe(false);
+    expect(
+      principalAllows(linked, { accountUserId: "account", guestSessionId: "old-session" }),
+    ).toBe(true);
+    expect(principalAllows(linked, { accountUserId: "other", guestSessionId: "old-session" })).toBe(
+      false,
+    );
+    expect(principalAllows(linked, { accountUserId: null, guestSessionId: "old-session" })).toBe(
+      false,
+    );
   });
   it("does not let authentication alone claim an unlinked guest resource", () => {
     const guest = { accountUserId: null, guestSessionId: "session" };
     expect(principalAllows(guest, { accountUserId: "account", guestSessionId: null })).toBe(false);
     expect(principalAllows(guest, { accountUserId: null, guestSessionId: "other" })).toBe(false);
-    expect(principalAllows(guest, { accountUserId: "account", guestSessionId: "session" })).toBe(true);
+    expect(principalAllows(guest, { accountUserId: "account", guestSessionId: "session" })).toBe(
+      true,
+    );
   });
 });
 
@@ -67,8 +75,15 @@ describe("server-produced planning actors", () => {
       planningPrincipals: [{ id: "principal-a", accountUserId: "account-a", guestSessionId: null }],
     });
     await expect(
-      resolvePlanningActor(database as never, "principal-a", { accountUserId: "account-a", guestSessionId: null }),
-    ).resolves.toEqual({ kind: "account", planningOwnerId: "principal-a", accountUserId: "account-a" });
+      resolvePlanningActor(database as never, "principal-a", {
+        accountUserId: "account-a",
+        guestSessionId: null,
+      }),
+    ).resolves.toEqual({
+      kind: "account",
+      planningOwnerId: "principal-a",
+      accountUserId: "account-a",
+    });
   });
 
   it("resolves the guest actor only while its session is live", async () => {
@@ -77,8 +92,15 @@ describe("server-produced planning actors", () => {
       guestPlanningSessions: [liveSession],
     });
     await expect(
-      resolvePlanningActor(database as never, "principal-g", { accountUserId: null, guestSessionId: "session-1" }),
-    ).resolves.toEqual({ kind: "guest", planningOwnerId: "principal-g", guestSessionId: "session-1" });
+      resolvePlanningActor(database as never, "principal-g", {
+        accountUserId: null,
+        guestSessionId: "session-1",
+      }),
+    ).resolves.toEqual({
+      kind: "guest",
+      planningOwnerId: "principal-g",
+      guestSessionId: "session-1",
+    });
   });
 
   it("denies revoked guest sessions and mismatched authorities", async () => {
@@ -87,7 +109,10 @@ describe("server-produced planning actors", () => {
       guestPlanningSessions: [{ ...liveSession, revokedAt: now }],
     });
     await expect(
-      resolvePlanningActor(revoked as never, "principal-g", { accountUserId: null, guestSessionId: "session-1" }),
+      resolvePlanningActor(revoked as never, "principal-g", {
+        accountUserId: null,
+        guestSessionId: "session-1",
+      }),
     ).rejects.toMatchObject({ status: 404, code: "resource_not_found" });
 
     const expired = fakeDatabase({
@@ -95,7 +120,10 @@ describe("server-produced planning actors", () => {
       guestPlanningSessions: [expiredSession],
     });
     await expect(
-      resolvePlanningActor(expired as never, "principal-g", { accountUserId: null, guestSessionId: "session-1" }),
+      resolvePlanningActor(expired as never, "principal-g", {
+        accountUserId: null,
+        guestSessionId: "session-1",
+      }),
     ).rejects.toMatchObject({ status: 404 });
 
     const mismatched = fakeDatabase({
@@ -103,12 +131,18 @@ describe("server-produced planning actors", () => {
       guestPlanningSessions: [liveSession],
     });
     await expect(
-      resolvePlanningActor(mismatched as never, "principal-g", { accountUserId: "account-a", guestSessionId: null }),
+      resolvePlanningActor(mismatched as never, "principal-g", {
+        accountUserId: "account-a",
+        guestSessionId: null,
+      }),
     ).rejects.toMatchObject({ status: 404 });
 
     const unknown = fakeDatabase({});
     await expect(
-      resolvePlanningActor(unknown as never, "missing", { accountUserId: "account-a", guestSessionId: null }),
+      resolvePlanningActor(unknown as never, "missing", {
+        accountUserId: "account-a",
+        guestSessionId: null,
+      }),
     ).rejects.toMatchObject({ status: 404 });
   });
 });
@@ -124,7 +158,9 @@ describe("account-only booking authority", () => {
 
   it("denies booking when no principal links the trip to the account", async () => {
     const guestOwned = fakeDatabase({ trips: [] });
-    await expect(resolveBookingActor(guestOwned as never, "trip-1", "account-a")).rejects.toMatchObject({
+    await expect(
+      resolveBookingActor(guestOwned as never, "trip-1", "account-a"),
+    ).rejects.toMatchObject({
       status: 404,
       code: "resource_not_found",
     });

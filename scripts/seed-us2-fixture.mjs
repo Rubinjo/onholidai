@@ -21,7 +21,8 @@ import { dirname, resolve } from "node:path";
 
 function parseArguments(argv) {
   const options = {
-    baseUrl: process.env.PLAYWRIGHT_BASE_URL ?? process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+    baseUrl:
+      process.env.PLAYWRIGHT_BASE_URL ?? process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
     email: "synthetic-us2@example.invalid",
     password: "synthetic-us2-password-000000000",
     state: ".playwright/us2-storage-state.json",
@@ -47,7 +48,11 @@ function cookiesFrom(response, baseUrl) {
     const [pair, ...attributes] = raw.split(";").map((part) => part.trim());
     const separator = pair.indexOf("=");
     const attribute = (key) =>
-      attributes.find((entry) => entry.toLowerCase().startsWith(`${key}=`))?.split("=").slice(1).join("=");
+      attributes
+        .find((entry) => entry.toLowerCase().startsWith(`${key}=`))
+        ?.split("=")
+        .slice(1)
+        .join("=");
     const expires = attribute("expires");
     return {
       name: pair.slice(0, separator),
@@ -71,7 +76,11 @@ function createClient(baseUrl) {
     async call(path, body, expected = [200]) {
       const response = await fetch(`${baseUrl}${path}`, {
         method: body === undefined ? "GET" : "POST",
-        headers: { "content-type": "application/json", origin: baseUrl, ...(cookieHeader ? { cookie: cookieHeader } : {}) },
+        headers: {
+          "content-type": "application/json",
+          origin: baseUrl,
+          ...(cookieHeader ? { cookie: cookieHeader } : {}),
+        },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       const text = await response.text();
@@ -85,9 +94,27 @@ function createClient(baseUrl) {
 }
 
 function buildDraft(requestId) {
-  const destination = (name, countryCode, latitude, longitude, routePosition, arrivalDate, departureDate, plannedNights) => ({
-    id: randomUUID(), kind: "city", name, countryCode, timezone: "Asia/Tokyo", providerPlaceIds: {},
-    location: { latitude, longitude }, routePosition, arrivalDate, departureDate, plannedNights,
+  const destination = (
+    name,
+    countryCode,
+    latitude,
+    longitude,
+    routePosition,
+    arrivalDate,
+    departureDate,
+    plannedNights,
+  ) => ({
+    id: randomUUID(),
+    kind: "city",
+    name,
+    countryCode,
+    timezone: "Asia/Tokyo",
+    providerPlaceIds: {},
+    location: { latitude, longitude },
+    routePosition,
+    arrivalDate,
+    departureDate,
+    plannedNights,
   });
   return {
     requestId,
@@ -95,18 +122,36 @@ function buildDraft(requestId) {
     currency: "GBP",
     snapshot: {
       departureOrigin: {
-        kind: "airport", placeId: "synthetic-place-gb-lhr", name: "London Heathrow",
-        countryCode: "GB", timezone: "Europe/London", airportCode: "LHR", confirmedByUser: true,
+        kind: "airport",
+        placeId: "synthetic-place-gb-lhr",
+        name: "London Heathrow",
+        countryCode: "GB",
+        timezone: "Europe/London",
+        airportCode: "LHR",
+        confirmedByUser: true,
       },
       availabilityWindows: [
-        { id: randomUUID(), startDate: "2030-05-01", endDate: "2030-05-14", preference: "preferred", timezone: "Asia/Tokyo" },
+        {
+          id: randomUUID(),
+          startDate: "2030-05-01",
+          endDate: "2030-05-14",
+          preference: "preferred",
+          timezone: "Asia/Tokyo",
+        },
       ],
       duration: { minimumDays: 5, idealDays: 9, maximumDays: 12 },
       travellerParty: { adults: 2, children: [] },
       preferences: { pace: 50, spend: 45, discovery: 70, independence: 60, setting: 40 },
       constraints: [
-        { id: randomUUID(), category: "dietary", statement: "Synthetic vegetarian meal requirement",
-          priority: "required", source: { kind: "setup_text", referenceId: null }, status: "active", confirmedByUser: true },
+        {
+          id: randomUUID(),
+          category: "dietary",
+          statement: "Synthetic vegetarian meal requirement",
+          priority: "required",
+          source: { kind: "setup_text", referenceId: null },
+          status: "active",
+          confirmedByUser: true,
+        },
       ],
       destinations: [
         destination("Tokyo", "JP", 35.6762, 139.6503, 0, "2030-05-01", "2030-05-06", 5),
@@ -115,8 +160,12 @@ function buildDraft(requestId) {
       itineraryDays: [],
       components: [],
       price: {
-        currency: "GBP", finalCustomerMinor: 0, taxesMinor: 0, feesMinor: 0,
-        status: "estimated", checkedAt: new Date().toISOString(),
+        currency: "GBP",
+        finalCustomerMinor: 0,
+        taxesMinor: 0,
+        feesMinor: 0,
+        status: "estimated",
+        checkedAt: new Date().toISOString(),
       },
       warnings: [],
     },
@@ -135,9 +184,12 @@ const signUp = await fetch(`${options.baseUrl}/api/auth/sign-up/email`, {
 let authentication = signUp;
 if (!signUp.ok) {
   process.stdout.write(`Sign-up returned ${signUp.status}; signing in instead.\n`);
-  authentication = (await client.call("/api/auth/sign-in/email", {
-    email: options.email, password: options.password,
-  })).response;
+  authentication = (
+    await client.call("/api/auth/sign-in/email", {
+      email: options.email,
+      password: options.password,
+    })
+  ).response;
 }
 const cookies = cookiesFrom(authentication, options.baseUrl);
 if (cookies.length === 0) throw new Error("Authentication returned no session cookie");
@@ -151,13 +203,19 @@ process.stdout.write(`Wrote storage state to ${statePath}\n`);
 const trip = (await client.call("/api/v1/trips", buildDraft(randomUUID()), [201])).payload;
 process.stdout.write(`Created trip ${trip.tripId} at version ${trip.version}\n`);
 
-const run = (await client.call(`/api/v1/trips/${trip.tripId}/agent-runs`, {
-  requestId: randomUUID(),
-  baseTripVersion: trip.version,
-  conversationId: null,
-  purpose: "initial_estimate",
-  message: "Research a new estimate for my current reviewed settings; do not apply it.",
-}, [202])).payload;
+const run = (
+  await client.call(
+    `/api/v1/trips/${trip.tripId}/agent-runs`,
+    {
+      requestId: randomUUID(),
+      baseTripVersion: trip.version,
+      conversationId: null,
+      purpose: "initial_estimate",
+      message: "Research a new estimate for my current reviewed settings; do not apply it.",
+    },
+    [202],
+  )
+).payload;
 process.stdout.write(`Reserved research run ${run.id}; waiting for the reviewed proposal...\n`);
 
 const deadline = Date.now() + options.timeoutSeconds * 1000;
@@ -174,15 +232,21 @@ while (Date.now() < deadline) {
   await new Promise((done) => setTimeout(done, 1000));
 }
 if (clarification) {
-  throw new Error(`Research asked for clarification instead of proposing: ${clarification.question}`);
+  throw new Error(
+    `Research asked for clarification instead of proposing: ${clarification.question}`,
+  );
 }
 if (!proposal) throw new Error(`No proposal within ${options.timeoutSeconds}s`);
 
-const accepted = (await client.call(`/api/v1/trips/${trip.tripId}/proposals/${proposal.id}/accept`, {
-  requestId: randomUUID(),
-  expectedVersion: proposal.baseTripVersion,
-})).payload;
-process.stdout.write(`Accepted the estimate; the trip is now at version ${accepted.version} with ${accepted.snapshot.components.length} components.\n\n`);
+const accepted = (
+  await client.call(`/api/v1/trips/${trip.tripId}/proposals/${proposal.id}/accept`, {
+    requestId: randomUUID(),
+    expectedVersion: proposal.baseTripVersion,
+  })
+).payload;
+process.stdout.write(
+  `Accepted the estimate; the trip is now at version ${accepted.version} with ${accepted.snapshot.components.length} components.\n\n`,
+);
 process.stdout.write("Export these before running the refinement suites:\n\n");
 process.stdout.write(`  US1_STORAGE_STATE=${statePath}\n`);
 process.stdout.write(`  US2_TRIP_ID=${trip.tripId}\n`);

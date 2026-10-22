@@ -68,8 +68,7 @@ def preserve_manual_destination_order(
             result.append({**operation, "value": [*preserved, *added]})
             continue
         if operation.get("operation") != "replace" or not all(
-            isinstance(item, dict)
-            and isinstance(cast(dict[str, object], item).get("id"), str)
+            isinstance(item, dict) and isinstance(cast(dict[str, object], item).get("id"), str)
             for item in value_items
         ):
             result.append(operation)
@@ -81,10 +80,12 @@ def preserve_manual_destination_order(
         )
         added_entries = [entry for entry in entries if cast(str, entry["id"]) not in positions]
         ordered = [*existing, *added_entries]
-        result.append({
-            **operation,
-            "value": [{**entry, "routePosition": index} for index, entry in enumerate(ordered)],
-        })
+        result.append(
+            {
+                **operation,
+                "value": [{**entry, "routePosition": index} for index, entry in enumerate(ordered)],
+            }
+        )
     return result
 
 

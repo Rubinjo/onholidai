@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { evaluateFeasibility } from "../../domain/trip/feasibility";
@@ -38,13 +39,20 @@ function scoreItems(snapshot: TripSnapshot) {
   const report = evaluateFeasibility(snapshot);
   const failed = new Set(report.blocking.flatMap((issue) => issue.relatedIds));
   const items = snapshot.itineraryDays.flatMap((day) => day.items);
-  return { report, items, outcomes: items.map((item) => (failed.has(item.id) ? "fail" : "pass") as "pass" | "fail") };
+  return {
+    report,
+    items,
+    outcomes: items.map((item) => (failed.has(item.id) ? "fail" : "pass") as "pass" | "fail"),
+  };
 }
 
 describe("finalization evaluation corpus", () => {
   it("scores the frozen 100-day/500-item corpus at or above the SC-007 threshold", async () => {
     const corpus = await readCorpus();
-    const scored = corpus.itineraryDays.map((entry) => ({ entry, ...scoreItems(tripSnapshotSchema.parse(entry.input)) }));
+    const scored = corpus.itineraryDays.map((entry) => ({
+      entry,
+      ...scoreItems(tripSnapshotSchema.parse(entry.input)),
+    }));
     const totalItems = scored.reduce((total, entry) => total + entry.items.length, 0);
     const passingItems = scored.reduce(
       (total, entry) => total + entry.outcomes.filter((outcome) => outcome === "pass").length,
@@ -56,9 +64,16 @@ describe("finalization evaluation corpus", () => {
     expect(passingItems).toBeGreaterThanOrEqual(475);
 
     // The frozen per-item labels are the reviewed oracle for this corpus revision.
-    const deviations = scored.filter(
-      ({ entry, outcomes }) => JSON.stringify(outcomes) !== JSON.stringify(entry.expectedItemResults),
-    ).map(({ entry, outcomes }) => ({ id: entry.id, expected: entry.expectedItemResults, scored: outcomes }));
+    const deviations = scored
+      .filter(
+        ({ entry, outcomes }) =>
+          JSON.stringify(outcomes) !== JSON.stringify(entry.expectedItemResults),
+      )
+      .map(({ entry, outcomes }) => ({
+        id: entry.id,
+        expected: entry.expectedItemResults,
+        scored: outcomes,
+      }));
     expect(deviations).toEqual([]);
   });
 

@@ -9,10 +9,7 @@ const migrationFilePattern = /^(?<version>\d{3,})_(?<name>[a-z][a-z0-9_]*)\.sql$
 const migrationLockId = "761742826539061";
 const expectedMigrationRole = "onholidai_migration";
 
-export const defaultMigrationsDirectory = resolve(
-  process.cwd(),
-  "server/db/migrations",
-);
+export const defaultMigrationsDirectory = resolve(process.cwd(), "server/db/migrations");
 
 export interface MigrationFile {
   version: number;
@@ -45,9 +42,7 @@ export async function loadMigrationFiles(
     sqlFilenames.map(async (filename): Promise<MigrationFile> => {
       const match = migrationFilePattern.exec(filename);
       if (!match?.groups) {
-        throw new Error(
-          `Migration ${filename} must match NNN_lowercase_name.sql`,
-        );
+        throw new Error(`Migration ${filename} must match NNN_lowercase_name.sql`);
       }
 
       const sql = await readFile(resolve(directory, filename), "utf8");
@@ -66,9 +61,7 @@ export async function loadMigrationFiles(
   migrations.forEach((migration, index) => {
     const expectedVersion = index + 1;
     if (migration.version !== expectedVersion) {
-      throw new Error(
-        `Expected migration version ${expectedVersion}, found ${migration.filename}`,
-      );
+      throw new Error(`Expected migration version ${expectedVersion}, found ${migration.filename}`);
     }
   });
 
@@ -76,9 +69,7 @@ export async function loadMigrationFiles(
 }
 
 async function prepareMigrationHistory(client: PoolClient): Promise<void> {
-  const roleResult = await client.query<{ current_user: string }>(
-    "SELECT current_user",
-  );
+  const roleResult = await client.query<{ current_user: string }>("SELECT current_user");
   if (roleResult.rows[0]?.current_user !== expectedMigrationRole) {
     throw new Error(
       `Migrations must run as ${expectedMigrationRole}; connected as ${roleResult.rows[0]?.current_user ?? "unknown"}`,
@@ -105,9 +96,7 @@ function pendingMigrations(
   applied.forEach((record, index) => {
     const migration = migrations[index];
     if (!migration) {
-      throw new Error(
-        `Applied migration ${record.version}_${record.name} is missing from disk`,
-      );
+      throw new Error(`Applied migration ${record.version}_${record.name} is missing from disk`);
     }
     if (
       migration.version !== record.version ||
@@ -123,10 +112,7 @@ function pendingMigrations(
   return migrations.slice(applied.length);
 }
 
-async function applyMigration(
-  client: PoolClient,
-  migration: MigrationFile,
-): Promise<void> {
+async function applyMigration(client: PoolClient, migration: MigrationFile): Promise<void> {
   await client.query("BEGIN");
   try {
     await client.query(migration.sql);
@@ -179,14 +165,11 @@ export async function migrate(
 
 function isEntrypoint(): boolean {
   const entrypoint = process.argv[1];
-  return Boolean(
-    entrypoint && pathToFileURL(resolve(entrypoint)).href === import.meta.url,
-  );
+  return Boolean(entrypoint && pathToFileURL(resolve(entrypoint)).href === import.meta.url);
 }
 
 if (isEntrypoint()) {
-  const connectionString =
-    process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
+  const connectionString = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
 
   if (!connectionString) {
     throw new Error("MIGRATION_DATABASE_URL or DATABASE_URL is required");

@@ -8,12 +8,12 @@ First-party server identity: `onholidai-suppliers`. Transport: FastMCP in-memory
 
 Tool arguments are closed typed objects: reject unknown fields/coercions that bypass validation. No owner/trip/run/version/token/credential is model-settable. Context derives from the trusted request and is reverified by the web endpoint. Read evidence persistence is allowed; trip mutation/provider transactions are not.
 
-| Tool | Typed model-visible arguments | Structured result |
-| --- | --- | --- |
-| `supplier_search` | `componentTypes`: nonempty unique array of flight/accommodation/activity/rail, max 4; `destinationIds`: UUID array max 8; `startDate`, `endDate`: ordered ISO dates; optional `departurePlaceId`: approved place reference; optional `requirementIds`: derived IDs in the current context; optional property-type filters bounded by declared support | bounded offer summaries/references, source mode, query fingerprint, provider outcomes and relevant capability limitations |
-| `supplier_offer_details` | `offerRef`: bounded opaque reference; `revision`: positive integer | current known public PlanningOffer revision and evidence state, or explicit unavailable/expired/unknown/unsupported outcome |
-| `supplier_revalidate_offer` | `offerRef`, `revision` as above | exactly one unchanged/changed/unavailable/unknown/unsupported/expired outcome, checked/expiry, material differences and current public offer revision where established |
-| `supplier_capabilities` | optional `componentTypes` bounded as search | safe per-provider operation support/access, supported filters/types, relevant coverage/limits/prerequisites and limitations |
+| Tool                        | Typed model-visible arguments                                                                                                                                                                                                                                                                                                                         | Structured result                                                                                                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `supplier_search`           | `componentTypes`: nonempty unique array of flight/accommodation/activity/rail, max 4; `destinationIds`: UUID array max 8; `startDate`, `endDate`: ordered ISO dates; optional `departurePlaceId`: approved place reference; optional `requirementIds`: derived IDs in the current context; optional property-type filters bounded by declared support | bounded offer summaries/references, source mode, query fingerprint, provider outcomes and relevant capability limitations                                               |
+| `supplier_offer_details`    | `offerRef`: bounded opaque reference; `revision`: positive integer                                                                                                                                                                                                                                                                                    | current known public PlanningOffer revision and evidence state, or explicit unavailable/expired/unknown/unsupported outcome                                             |
+| `supplier_revalidate_offer` | `offerRef`, `revision` as above                                                                                                                                                                                                                                                                                                                       | exactly one unchanged/changed/unavailable/unknown/unsupported/expired outcome, checked/expiry, material differences and current public offer revision where established |
+| `supplier_capabilities`     | optional `componentTypes` bounded as search                                                                                                                                                                                                                                                                                                           | safe per-provider operation support/access, supported filters/types, relevant coverage/limits/prerequisites and limitations                                             |
 
 Currency, party, origin, accepted constraints, eligible requirements and trip/version are derived server-side. Search dates/destinations/origin must fit the current authoritative planning scope. If an existing planner legitimately explores a new route, use its existing validated research/proposal scope; arbitrary model arguments cannot expand it. Provider native IDs are never authority to fetch unrelated inventory.
 
@@ -27,14 +27,14 @@ Reuse the extended public PlanningOffer shape from [data-model.md](../data-model
 
 Provider search outcome is separate from inventory outcome:
 
-| Search status | Meaning |
-| --- | --- |
-| `available` | Search completed and returned offers |
-| `no_matches` | Search completed with no matching inventory |
-| `unconfigured` / `access_blocked` | Required credentials/approval/coverage not established |
-| `unsupported` | Operation/filter not supported |
-| `rate_limited` | Retry guidance applies; no inventory conclusion |
-| `deadline` / `error` | Truth could not be established; no inventory conclusion |
+| Search status                     | Meaning                                                 |
+| --------------------------------- | ------------------------------------------------------- |
+| `available`                       | Search completed and returned offers                    |
+| `no_matches`                      | Search completed with no matching inventory             |
+| `unconfigured` / `access_blocked` | Required credentials/approval/coverage not established  |
+| `unsupported`                     | Operation/filter not supported                          |
+| `rate_limited`                    | Retry guidance applies; no inventory conclusion         |
+| `deadline` / `error`              | Truth could not be established; no inventory conclusion |
 
 Each source includes a safe reason, retry eligibility/time when known and unknown-fact count. No fake successful source is manufactured when the live registry is empty. Every requested revalidation yields an explicit outcome; unchanged requires affirmative current matching evidence, and changed includes differences. Expiry cannot be extended locally without evidence. Estimated, quoted and live-revalidated labels do not imply inventory is held.
 

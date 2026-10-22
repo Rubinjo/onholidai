@@ -87,9 +87,7 @@ def test_provider_double_covers_changed_unavailable_and_commit_edge_cases() -> N
 
     provider = DeterministicProviderDouble()
     with pytest.raises(TimeoutAfterCommitError):
-        provider.commit(
-            "request-timeout-001", "offer-available-001", "timeout_after_commit"
-        )
+        provider.commit("request-timeout-001", "offer-available-001", "timeout_after_commit")
     assert provider.commit("request-timeout-001", "offer-available-001")[0].duplicate
 
     duplicate = DeterministicProviderDouble().commit(

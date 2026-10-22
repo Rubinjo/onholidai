@@ -36,16 +36,16 @@ Use source-owned Radix shadcn components and existing CSS tokens. Reuse MapLibre
 
 Pre-research and post-design gates pass without exceptions. These are design checks, not executed implementation-test evidence.
 
-| Principle | Evidence / implementation gate |
-| --- | --- |
-| I. Small modules | Focused session/principal/draft/link modules compose existing repositories; no universal framework or service. |
-| II. Explicitness | Typed PlanningActor and BookingActor, strict schemas, injected clock/randomness and no TypeScript any. |
-| III. Accessibility | Equivalent search/list, focus/status contracts, Radix primitives; required keyboard/screen-reader/contrast/zoom/motion evidence. |
-| IV. Context budget | Existing compact agent state/wire identity; no session secrets or extra default model context. |
-| V. Behavioral tests | Prove isolation, recovery, races/replay and zero unauthorized provider writes with real database constraints and doubles. |
-| VI. Increments | Shared foundation then story checkpoints; relevant migration/transaction/accessibility gates before exposure. |
-| VII. Explicit state | Partial drafts separate from snapshots; preserve proposal/commit/undo; linking changes access, not versions. |
-| VIII. Transactions | Registered account plus principal relation precedes booking; retain exact terms, expiry, immutable basis and provider-write serialization. |
+| Principle           | Evidence / implementation gate                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| I. Small modules    | Focused session/principal/draft/link modules compose existing repositories; no universal framework or service.                             |
+| II. Explicitness    | Typed PlanningActor and BookingActor, strict schemas, injected clock/randomness and no TypeScript any.                                     |
+| III. Accessibility  | Equivalent search/list, focus/status contracts, Radix primitives; required keyboard/screen-reader/contrast/zoom/motion evidence.           |
+| IV. Context budget  | Existing compact agent state/wire identity; no session secrets or extra default model context.                                             |
+| V. Behavioral tests | Prove isolation, recovery, races/replay and zero unauthorized provider writes with real database constraints and doubles.                  |
+| VI. Increments      | Shared foundation then story checkpoints; relevant migration/transaction/accessibility gates before exposure.                              |
+| VII. Explicit state | Partial drafts separate from snapshots; preserve proposal/commit/undo; linking changes access, not versions.                               |
+| VIII. Transactions  | Registered account plus principal relation precedes booking; retain exact terms, expiry, immutable basis and provider-write serialization. |
 
 Post-design compatibility review confirms unchanged owner keys/fingerprints/history, preserved account booking keys, revoked pre-link run grants and retained legal holds. Implementation must prove these invariants.
 

@@ -2,12 +2,12 @@
 
 These contracts define the boundaries among the browser, `web/`, `agent/`, Temporal workers, and travel suppliers.
 
-| Contract | Producer | Consumers | Compatibility rule |
-|---|---|---|---|
-| `web-api.openapi.yaml` | `web/` | Browser and end-to-end tests | Additive within `v1`; incompatible changes require a new version |
-| `agent-api.openapi.yaml` | `agent/` Pydantic models | `web/` internal client | Generated OpenAPI is authoritative; generated TypeScript and Zod artifacts must be current |
-| `agent-tools.schema.json` | Agent/domain design | LangGraph tool adapters and evaluation tests | Tool names and versioned schemas are allowlisted; transactional tools are forbidden |
-| `travel-supply.md` | First-party supply boundary | Search services and Temporal activities | Read and transaction capabilities remain separate; provider additions preserve normalized outcomes |
+| Contract                  | Producer                    | Consumers                                    | Compatibility rule                                                                                 |
+| ------------------------- | --------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `web-api.openapi.yaml`    | `web/`                      | Browser and end-to-end tests                 | Additive within `v1`; incompatible changes require a new version                                   |
+| `agent-api.openapi.yaml`  | `agent/` Pydantic models    | `web/` internal client                       | Generated OpenAPI is authoritative; generated TypeScript and Zod artifacts must be current         |
+| `agent-tools.schema.json` | Agent/domain design         | LangGraph tool adapters and evaluation tests | Tool names and versioned schemas are allowlisted; transactional tools are forbidden                |
+| `travel-supply.md`        | First-party supply boundary | Search services and Temporal activities      | Read and transaction capabilities remain separate; provider additions preserve normalized outcomes |
 
 The Pydantic exporter maintains identical source/promoted agent OpenAPI and tool schemas. T006 promotes the other source contracts to `contracts/agent-api/openapi.yaml`,
 `contracts/agent-api/tools.schema.json`, `contracts/trip-domain/web-api.openapi.yaml`,

@@ -27,40 +27,40 @@ current provider targets or activation requirements. Booking.com and Trainline
 are now deferred and GetYourGuide is replaced. The historical Duffel rows concern
 Flights only; they do not establish Stays implementation or access.
 
-| Provider | Operation | Implemented | Deterministic | Provider-test | Live access | External gate |
-| --- | --- | --- | --- | --- | --- | --- |
-| Booking.com | search | adapter | synthetic | unverified | unverified | blocked |
-| Booking.com | detail | missing | unverified | unverified | unverified | blocked |
-| Booking.com | read-only revalidation | missing | unverified | unverified | unverified | blocked |
-| Booking.com | book | conditional | unverified | unverified | unverified | blocked |
-| Booking.com | status | conditional | unverified | unverified | unverified | blocked |
-| Booking.com | idempotency | conditional | unverified | unverified | unverified | blocked |
-| Booking.com | cancel | conditional | unverified | unverified | unverified | blocked |
-| Booking.com | reschedule | conditional | unverified | unverified | unverified | blocked |
-| Duffel | search | adapter | synthetic | unverified | unverified | blocked |
-| Duffel | detail | missing | unverified | unverified | unverified | blocked |
-| Duffel | read-only revalidation | missing | unverified | unverified | unverified | blocked |
-| Duffel | book | conditional | unverified | unverified | unverified | blocked |
-| Duffel | status | conditional | unverified | unverified | unverified | blocked |
-| Duffel | idempotency | conditional | unverified | unverified | unverified | blocked |
-| Duffel | cancel | conditional | unverified | unverified | unverified | blocked |
-| Duffel | reschedule | conditional | unverified | unverified | unverified | blocked |
-| Trainline | search | adapter | synthetic | unverified | unverified | blocked |
-| Trainline | detail | missing | unverified | unverified | unverified | blocked |
-| Trainline | read-only revalidation | missing | unverified | unverified | unverified | blocked |
-| Trainline | book | conditional | unverified | unverified | unverified | blocked |
-| Trainline | status | conditional | unverified | unverified | unverified | blocked |
-| Trainline | idempotency | conditional | unverified | unverified | unverified | blocked |
-| Trainline | cancel | conditional | unverified | unverified | unverified | blocked |
-| Trainline | reschedule | conditional | unverified | unverified | unverified | blocked |
-| GetYourGuide | search | adapter | synthetic | unverified | unverified | blocked |
-| GetYourGuide | detail | missing | unverified | unverified | unverified | blocked |
-| GetYourGuide | read-only revalidation | missing | unverified | unverified | unverified | blocked |
-| GetYourGuide | book | conditional | unverified | unverified | unverified | blocked |
-| GetYourGuide | status | conditional | unverified | unverified | unverified | blocked |
-| GetYourGuide | idempotency | conditional | unverified | unverified | unverified | blocked |
-| GetYourGuide | cancel | conditional | unverified | unverified | unverified | blocked |
-| GetYourGuide | reschedule | conditional | unverified | unverified | unverified | blocked |
+| Provider     | Operation              | Implemented | Deterministic | Provider-test | Live access | External gate |
+| ------------ | ---------------------- | ----------- | ------------- | ------------- | ----------- | ------------- |
+| Booking.com  | search                 | adapter     | synthetic     | unverified    | unverified  | blocked       |
+| Booking.com  | detail                 | missing     | unverified    | unverified    | unverified  | blocked       |
+| Booking.com  | read-only revalidation | missing     | unverified    | unverified    | unverified  | blocked       |
+| Booking.com  | book                   | conditional | unverified    | unverified    | unverified  | blocked       |
+| Booking.com  | status                 | conditional | unverified    | unverified    | unverified  | blocked       |
+| Booking.com  | idempotency            | conditional | unverified    | unverified    | unverified  | blocked       |
+| Booking.com  | cancel                 | conditional | unverified    | unverified    | unverified  | blocked       |
+| Booking.com  | reschedule             | conditional | unverified    | unverified    | unverified  | blocked       |
+| Duffel       | search                 | adapter     | synthetic     | unverified    | unverified  | blocked       |
+| Duffel       | detail                 | missing     | unverified    | unverified    | unverified  | blocked       |
+| Duffel       | read-only revalidation | missing     | unverified    | unverified    | unverified  | blocked       |
+| Duffel       | book                   | conditional | unverified    | unverified    | unverified  | blocked       |
+| Duffel       | status                 | conditional | unverified    | unverified    | unverified  | blocked       |
+| Duffel       | idempotency            | conditional | unverified    | unverified    | unverified  | blocked       |
+| Duffel       | cancel                 | conditional | unverified    | unverified    | unverified  | blocked       |
+| Duffel       | reschedule             | conditional | unverified    | unverified    | unverified  | blocked       |
+| Trainline    | search                 | adapter     | synthetic     | unverified    | unverified  | blocked       |
+| Trainline    | detail                 | missing     | unverified    | unverified    | unverified  | blocked       |
+| Trainline    | read-only revalidation | missing     | unverified    | unverified    | unverified  | blocked       |
+| Trainline    | book                   | conditional | unverified    | unverified    | unverified  | blocked       |
+| Trainline    | status                 | conditional | unverified    | unverified    | unverified  | blocked       |
+| Trainline    | idempotency            | conditional | unverified    | unverified    | unverified  | blocked       |
+| Trainline    | cancel                 | conditional | unverified    | unverified    | unverified  | blocked       |
+| Trainline    | reschedule             | conditional | unverified    | unverified    | unverified  | blocked       |
+| GetYourGuide | search                 | adapter     | synthetic     | unverified    | unverified  | blocked       |
+| GetYourGuide | detail                 | missing     | unverified    | unverified    | unverified  | blocked       |
+| GetYourGuide | read-only revalidation | missing     | unverified    | unverified    | unverified  | blocked       |
+| GetYourGuide | book                   | conditional | unverified    | unverified    | unverified  | blocked       |
+| GetYourGuide | status                 | conditional | unverified    | unverified    | unverified  | blocked       |
+| GetYourGuide | idempotency            | conditional | unverified    | unverified    | unverified  | blocked       |
+| GetYourGuide | cancel                 | conditional | unverified    | unverified    | unverified  | blocked       |
+| GetYourGuide | reschedule             | conditional | unverified    | unverified    | unverified  | blocked       |
 
 ## Safe implementation evidence
 
@@ -106,14 +106,14 @@ T001-T008 remain historical; T093 corrects provider/key configuration before US1
 The table tracks product operations, not configuration-only verification.
 Update operation rows only after reproducible operation-specific checks.
 
-| Product | Current implementation evidence | Deterministic revision acceptance | Provider-test / live access | Activation gate |
-| --- | --- | --- | --- | --- |
-| Duffel Flights | T018 complete: fixed read search/current-offer/detail mappings retain fare, baggage and payment prerequisites; sourced timezone qualification; optional fees unknown; no orders/payments | Synthetic wire, expiry/changed-price, revision/CAS and no-write tests pass | Supplier sandbox/live unverified | Separate read/write keys, trusted IATA mapping, approved flight operation/market/pricing semantics and unresolved service/payment costs; worker transactions remain separate |
-| Duffel Stays | T017 partial: search/room-rate detail implemented; quote implementation conditionally approved on 2026-10-21, not yet implemented or enabled | Synthetic search/detail, occupancy mismatch, product isolation and unknown mandatory-fact tests pass; quote tests pending | Authorized standalone sandbox probes returned HTTP 403 for both distinct read and transaction tokens; rates/quote not run; live access unverified | Search is blocked for both tested token/access contexts; exact denial cause unconfirmed. Transaction-token diagnostic did not enable a web-read fallback. Quote-only semantics remain approved for implementation; preserve independent access gates, room allocation and pricing/payment uncertainty |
-| Viator activities | T019 complete: fixed read product/options/detail/availability mappings retain party, terms, prerequisites, retail and destination extras; zero/single/multiple-option outcomes; complete customer pricing unknown | Synthetic wire, exact-decimal extras, forbidden endpoints, cancellation, shared-key boundary and persisted unknown/unavailable revisions pass | Supplier sandbox/live unverified | One trusted upstream key, approved tier/coverage, numeric destination mapping, exact day and trusted product age bands/answers; no hold/cart/booking methods |
-| Rail / Trainline | Deferred; rail-only/mixed searches return unsupported without rail adapter calls or synthetic inventory; read/status compatibility covered by T020, restricted dispatch remains T068 | Search deferral, saved provenance and injected legacy confirmation/status reads tested | Not a current activation target | No replacement or current onboarding requirement; required unresolved rail blocks whole-trip booking |
-| Booking.com | Deferred; saved attribution and injected legacy confirmation/status compatibility tested by T020 | Deterministic read-compatibility regressions pass; no new-write guard certification | Not a current activation target | Future feature; no new writes or current setup requirement |
-| GetYourGuide | Replaced; saved attribution and injected legacy confirmation/status compatibility tested by T020 | Deterministic read-compatibility regressions pass; no new-write guard certification | Not a current activation target | No fallback, relabelling or new writes |
+| Product           | Current implementation evidence                                                                                                                                                                                   | Deterministic revision acceptance                                                                                                             | Provider-test / live access                                                                                                                       | Activation gate                                                                                                                                                                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duffel Flights    | T018 complete: fixed read search/current-offer/detail mappings retain fare, baggage and payment prerequisites; sourced timezone qualification; optional fees unknown; no orders/payments                          | Synthetic wire, expiry/changed-price, revision/CAS and no-write tests pass                                                                    | Supplier sandbox/live unverified                                                                                                                  | Separate read/write keys, trusted IATA mapping, approved flight operation/market/pricing semantics and unresolved service/payment costs; worker transactions remain separate                                                                                                                          |
+| Duffel Stays      | T017 partial: search/room-rate detail implemented; quote implementation conditionally approved on 2026-10-21, not yet implemented or enabled                                                                      | Synthetic search/detail, occupancy mismatch, product isolation and unknown mandatory-fact tests pass; quote tests pending                     | Authorized standalone sandbox probes returned HTTP 403 for both distinct read and transaction tokens; rates/quote not run; live access unverified | Search is blocked for both tested token/access contexts; exact denial cause unconfirmed. Transaction-token diagnostic did not enable a web-read fallback. Quote-only semantics remain approved for implementation; preserve independent access gates, room allocation and pricing/payment uncertainty |
+| Viator activities | T019 complete: fixed read product/options/detail/availability mappings retain party, terms, prerequisites, retail and destination extras; zero/single/multiple-option outcomes; complete customer pricing unknown | Synthetic wire, exact-decimal extras, forbidden endpoints, cancellation, shared-key boundary and persisted unknown/unavailable revisions pass | Supplier sandbox/live unverified                                                                                                                  | One trusted upstream key, approved tier/coverage, numeric destination mapping, exact day and trusted product age bands/answers; no hold/cart/booking methods                                                                                                                                          |
+| Rail / Trainline  | Deferred; rail-only/mixed searches return unsupported without rail adapter calls or synthetic inventory; read/status compatibility covered by T020, restricted dispatch remains T068                              | Search deferral, saved provenance and injected legacy confirmation/status reads tested                                                        | Not a current activation target                                                                                                                   | No replacement or current onboarding requirement; required unresolved rail blocks whole-trip booking                                                                                                                                                                                                  |
+| Booking.com       | Deferred; saved attribution and injected legacy confirmation/status compatibility tested by T020                                                                                                                  | Deterministic read-compatibility regressions pass; no new-write guard certification                                                           | Not a current activation target                                                                                                                   | Future feature; no new writes or current setup requirement                                                                                                                                                                                                                                            |
+| GetYourGuide      | Replaced; saved attribution and injected legacy confirmation/status compatibility tested by T020                                                                                                                  | Deterministic read-compatibility regressions pass; no new-write guard certification                                                           | Not a current activation target                                                                                                                   | No fallback, relabelling or new writes                                                                                                                                                                                                                                                                |
 
 Record support/access separately for every current provider, component type and
 operation. Flights evidence cannot set Stays readiness. Viator key presence
@@ -229,15 +229,15 @@ access. T017 stays unchecked until its code and required tests are complete.
 
 ### Sources checked directly
 
-| Source | Established fact and limit |
-| --- | --- |
-| [Stays integration guide](https://duffel.com/docs/guides/getting-started-with-stays) | Search, all-rates, quote and booking are separate steps. Stays access must be requested. Quote creation checks a selected rate before charging/booking; availability can change before purchase. |
-| [Flight holding guide](https://duffel.com/docs/guides/holding-orders-and-paying-later) | Holding a flight requires creating an air order with hold semantics. This is not Stays quote documentation and does not independently establish Stays behavior. Air orders remain forbidden in research. |
-| [Create/get quote and schema](https://duffel.com/docs/api/v2/quotes/create-quote) | `POST /stays/quotes` takes `rate_id`; `GET /stays/quotes/{id}` retrieves an existing quote. The create operation confirms availability and total pricing; retrieval is not documented as a fresh availability/price check. |
-| [All room rates](https://duffel.com/docs/api/v2/search-result/fetch-all-rates) and [search](https://duffel.com/docs/api/v2/search/stays-search) | Search returns cheapest-rate information but incomplete room/rate details; the all-rates action supplies complete room/rate information for a saved search result. |
-| [Authentication](https://duffel.com/docs/api/overview/making-requests) and [test mode](https://duffel.com/docs/api/overview/test-mode) | Tokens can be read-only or read-write. Test and live tokens access separate resource sets through the same API mechanism. These pages do not specify permission for each of the three Stays POST operations or prove this account's access. |
+| Source                                                                                                                                                                                                                        | Established fact and limit                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Stays integration guide](https://duffel.com/docs/guides/getting-started-with-stays)                                                                                                                                          | Search, all-rates, quote and booking are separate steps. Stays access must be requested. Quote creation checks a selected rate before charging/booking; availability can change before purchase.                                                      |
+| [Flight holding guide](https://duffel.com/docs/guides/holding-orders-and-paying-later)                                                                                                                                        | Holding a flight requires creating an air order with hold semantics. This is not Stays quote documentation and does not independently establish Stays behavior. Air orders remain forbidden in research.                                              |
+| [Create/get quote and schema](https://duffel.com/docs/api/v2/quotes/create-quote)                                                                                                                                             | `POST /stays/quotes` takes `rate_id`; `GET /stays/quotes/{id}` retrieves an existing quote. The create operation confirms availability and total pricing; retrieval is not documented as a fresh availability/price check.                            |
+| [All room rates](https://duffel.com/docs/api/v2/search-result/fetch-all-rates) and [search](https://duffel.com/docs/api/v2/search/stays-search)                                                                               | Search returns cheapest-rate information but incomplete room/rate details; the all-rates action supplies complete room/rate information for a saved search result.                                                                                    |
+| [Authentication](https://duffel.com/docs/api/overview/making-requests) and [test mode](https://duffel.com/docs/api/overview/test-mode)                                                                                        | Tokens can be read-only or read-write. Test and live tokens access separate resource sets through the same API mechanism. These pages do not specify permission for each of the three Stays POST operations or prove this account's access.           |
 | [API rate-limit article](https://help.duffel.com/hc/en-gb/articles/10229200096786-What-is-the-API-rate-limit) ([official JSON representation](https://help.duffel.com/api/v2/help_center/en-gb/articles/10229200096786.json)) | Default live **search** limit is 10 requests per 60 seconds. Limits vary by endpoint; response `ratelimit-limit` and `ratelimit-reset` describe the applicable ceiling/window. Do not apply that default to every endpoint or assume a sandbox quota. |
-| [Response handling](https://duffel.com/docs/api/overview/response-handling) | HTTP 403 / `insufficient_permissions` means the supplied token lacks permission; 429 / `rate_limit_error` is not an inventory outcome. |
+| [Response handling](https://duffel.com/docs/api/overview/response-handling)                                                                                                                                                   | HTTP 403 / `insufficient_permissions` means the supplied token lacks permission; 429 / `rate_limit_error` is not an inventory outcome.                                                                                                                |
 
 The rate-limit article's HTML returned 403, but its official public JSON
 representation was retrieved successfully (article updated 2026-09-08).
@@ -249,16 +249,16 @@ neither a booking side effect nor a required token permission.
 
 ### Mapping and eligibility requirements approved for T017
 
-| Concern | Documented mapping and required behavior |
-| --- | --- |
-| Identity and selection | Preserve search result `srr_...`, accommodation `acc_...`, chosen rate `rat_...` and returned quote `quo_...`. Create a quote only from a selected rate granted by the same saved search/query; validate that the returned nested rate belongs to that selection. The room schema has name/beds/photos/rates, but no room ID: retain sourced room association, never manufacture a supplier room ID. |
-| Occupancy and dates | Quote `rooms` is the room count, not a room array. `guests`, `check_in_date` and `check_out_date` carry party/service facts; missing guests remain unknown. Guest child age is documented at booking time, not inferred from service-date age or `ageAtTripStart`; unresolved trusted age/room allocation cannot become verified eligibility. |
-| Expiry and freshness | Search-result `expires_at` and selected nested rate `expires_at` are documented. The inspected quote schema has no top-level quote `expires_at` or separate promised quote lifetime. Preserve sourced expiries with their meaning, use the selected rate expiry conservatively and never invent a quote TTL or extend expiry locally. A GET of an existing quote alone cannot establish fresh revalidation. |
-| Mandatory price breakdown | Preserve root quote `base_amount`, `tax_amount`, `fee_amount`, `total_amount` and their currencies using exact integer minor units. Base/tax/fee components are already included in the rate total; do not add them to the total again. Nullable or missing amounts remain unknown, not zero. Keep supplier economics out of public projections. |
-| Due at accommodation | `due_at_accommodation_amount` is mandatory tax/fees not included in `total_amount` and not collected during booking. It can be payable at check-in or check-out and its currency can differ from `total_currency`. Preserve the separate amount/currency; do not silently convert, omit it or claim it is charged now. Unknown mandatory amounts or unsupported currency handling block booking. |
-| Deposit | Root `deposit_amount` is a portion of `total_amount` payable before check-in, not an extra charge. It can be null even for a deposit rate; rate conditions may then contain the missing details. Null is not a zero-deposit or no-deposit guarantee. An unresolved amount or payment schedule blocks booking. |
-| Payment timing | Selected rate `payment_type` is `pay_now`, `deposit` or `guarantee`; retain `available_payment_methods`. `pay_now` can mean at booking or before check-in, not necessarily an exact immediate charge. Deposit rates prepay part and settle the remainder at the property. Guarantee rates require a card and may incur accommodation/no-show charges. Do not fabricate payment dates, infer authorization, or collect card details in research. Unsupported schedules remain blocked. |
-| Conditions and cancellation | Preserve bounded, privacy-safe mandatory `conditions` and `cancellation_timeline` (cutoff/refund evidence); do not infer refundability from payment type. Raw rate descriptions are not a safe direct customer-display contract. |
+| Concern                     | Documented mapping and required behavior                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity and selection      | Preserve search result `srr_...`, accommodation `acc_...`, chosen rate `rat_...` and returned quote `quo_...`. Create a quote only from a selected rate granted by the same saved search/query; validate that the returned nested rate belongs to that selection. The room schema has name/beds/photos/rates, but no room ID: retain sourced room association, never manufacture a supplier room ID.                                                                                  |
+| Occupancy and dates         | Quote `rooms` is the room count, not a room array. `guests`, `check_in_date` and `check_out_date` carry party/service facts; missing guests remain unknown. Guest child age is documented at booking time, not inferred from service-date age or `ageAtTripStart`; unresolved trusted age/room allocation cannot become verified eligibility.                                                                                                                                         |
+| Expiry and freshness        | Search-result `expires_at` and selected nested rate `expires_at` are documented. The inspected quote schema has no top-level quote `expires_at` or separate promised quote lifetime. Preserve sourced expiries with their meaning, use the selected rate expiry conservatively and never invent a quote TTL or extend expiry locally. A GET of an existing quote alone cannot establish fresh revalidation.                                                                           |
+| Mandatory price breakdown   | Preserve root quote `base_amount`, `tax_amount`, `fee_amount`, `total_amount` and their currencies using exact integer minor units. Base/tax/fee components are already included in the rate total; do not add them to the total again. Nullable or missing amounts remain unknown, not zero. Keep supplier economics out of public projections.                                                                                                                                      |
+| Due at accommodation        | `due_at_accommodation_amount` is mandatory tax/fees not included in `total_amount` and not collected during booking. It can be payable at check-in or check-out and its currency can differ from `total_currency`. Preserve the separate amount/currency; do not silently convert, omit it or claim it is charged now. Unknown mandatory amounts or unsupported currency handling block booking.                                                                                      |
+| Deposit                     | Root `deposit_amount` is a portion of `total_amount` payable before check-in, not an extra charge. It can be null even for a deposit rate; rate conditions may then contain the missing details. Null is not a zero-deposit or no-deposit guarantee. An unresolved amount or payment schedule blocks booking.                                                                                                                                                                         |
+| Payment timing              | Selected rate `payment_type` is `pay_now`, `deposit` or `guarantee`; retain `available_payment_methods`. `pay_now` can mean at booking or before check-in, not necessarily an exact immediate charge. Deposit rates prepay part and settle the remainder at the property. Guarantee rates require a card and may incur accommodation/no-show charges. Do not fabricate payment dates, infer authorization, or collect card details in research. Unsupported schedules remain blocked. |
+| Conditions and cancellation | Preserve bounded, privacy-safe mandatory `conditions` and `cancellation_timeline` (cutoff/refund evidence); do not infer refundability from payment type. Raw rate descriptions are not a safe direct customer-display contract.                                                                                                                                                                                                                                                      |
 
 ### Permission probe and activation
 
@@ -312,13 +312,13 @@ unauthenticated control checked endpoint reachability without loading secrets.
 No inventory selection, rate request, quote, hold, booking, payment or order
 was performed.
 
-| Check | Observed result | Safe request reference |
-| --- | --- | --- |
-| `POST /stays/search` with the sandbox read token, 1-km radius | HTTP 403; body was not valid JSON, so no documented Duffel error type/code could be extracted | `GOB7NajSct5CC14AAa8I` |
-| Same authenticated search, bounded denial classification | HTTP 403 again; no structured `insufficient_permissions` code established | `GOB7P0ghXRxd1ccAA5yF` |
-| Same search endpoint without an Authorization header | HTTP 401 with a JSON response; the endpoint is reachable and responds differently without credentials | `GOB7RoaINKEZz3YABAWE` |
-| Fetch all rates | Not run: no granted search result was returned | None |
-| Create/get quote | Not run: no granted rate/quote was available | None |
+| Check                                                         | Observed result                                                                                       | Safe request reference |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------- |
+| `POST /stays/search` with the sandbox read token, 1-km radius | HTTP 403; body was not valid JSON, so no documented Duffel error type/code could be extracted         | `GOB7NajSct5CC14AAa8I` |
+| Same authenticated search, bounded denial classification      | HTTP 403 again; no structured `insufficient_permissions` code established                             | `GOB7P0ghXRxd1ccAA5yF` |
+| Same search endpoint without an Authorization header          | HTTP 401 with a JSON response; the endpoint is reachable and responds differently without credentials | `GOB7RoaINKEZz3YABAWE` |
+| Fetch all rates                                               | Not run: no granted search result was returned                                                        | None                   |
+| Create/get quote                                              | Not run: no granted rate/quote was available                                                          | None                   |
 
 The two authenticated responses reported `ratelimit-limit: 30`; the final
 authenticated `ratelimit-reset` value was
@@ -364,11 +364,11 @@ One authenticated search request used the transaction token, the same synthetic
 two-adult/one-room London fixture and 2026-11-20 to 2026-11-22 dates, API v2,
 1-km radius, no redirects and an eight-second deadline.
 
-| Check | Observed result | Safe request reference |
-| --- | --- | --- |
+| Check                                               | Observed result                                                            | Safe request reference |
+| --------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------- |
 | `POST /stays/search` with sandbox transaction token | HTTP 403; non-JSON response, no structured provider error code established | `GOB7hZJSg3E97nMACLuE` |
-| Fetch all rates | Not run: no granted search result | None |
-| Create quote | Not run: no granted rate | None |
+| Fetch all rates                                     | Not run: no granted search result                                          | None                   |
+| Create quote                                        | Not run: no granted rate                                                   | None                   |
 
 Response headers again reported `ratelimit-limit: 30` and
 `ratelimit-reset: Wed, 21 Oct 2026 07:42:00 GMT`; this was not a 429.

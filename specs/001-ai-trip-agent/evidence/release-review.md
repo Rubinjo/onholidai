@@ -14,14 +14,14 @@ Review basis: project constitution v1.0.1, feature specification, task plan, and
 
 ## Deferred work and owners
 
-| Work | Owner | Exit evidence |
-|---|---|---|
-| Run T108–T109 privacy and compatibility suites against isolated PostgreSQL and both language stacks | Release engineer (assign) | Passing run IDs and migration history review |
-| Run 100-session, 5,000 requests/hour and 20 booking starts/minute capacity scenarios | Performance owner (assign) | p95 results, resource profile, build/configuration and denominator |
-| Measure token budget and inspect redacted cross-service traces | Agent/observability owner (assign) | `evidence/context-telemetry.md` completed with synthetic trace IDs and measurements |
-| Complete current-browser and keyboard/screen-reader journeys | Accessibility owner (assign) | `evidence/accessibility.md` completed, including SC-012 results |
-| Execute quickstart, Scenarios 1–9, and fixed acceptance cohorts | Product/release owner (assign) | `evidence/acceptance.md` completed with failure-inclusive results |
-| Confirm retention/deletion policy, commercial provider access, and jurisdiction-specific disclosures | Legal/business owner (assign) | Approved policy identifiers, scope, and review date |
+| Work                                                                                                 | Owner                              | Exit evidence                                                                       |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------- |
+| Run T108–T109 privacy and compatibility suites against isolated PostgreSQL and both language stacks  | Release engineer (assign)          | Passing run IDs and migration history review                                        |
+| Run 100-session, 5,000 requests/hour and 20 booking starts/minute capacity scenarios                 | Performance owner (assign)         | p95 results, resource profile, build/configuration and denominator                  |
+| Measure token budget and inspect redacted cross-service traces                                       | Agent/observability owner (assign) | `evidence/context-telemetry.md` completed with synthetic trace IDs and measurements |
+| Complete current-browser and keyboard/screen-reader journeys                                         | Accessibility owner (assign)       | `evidence/accessibility.md` completed, including SC-012 results                     |
+| Execute quickstart, Scenarios 1–9, and fixed acceptance cohorts                                      | Product/release owner (assign)     | `evidence/acceptance.md` completed with failure-inclusive results                   |
+| Confirm retention/deletion policy, commercial provider access, and jurisdiction-specific disclosures | Legal/business owner (assign)      | Approved policy identifiers, scope, and review date                                 |
 
 ## Decision
 

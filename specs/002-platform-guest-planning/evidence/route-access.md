@@ -15,49 +15,49 @@ Baseline inspection: 2026-10-14. This is a route inventory, not evidence of impl
 
 The guard column is a source search aid, not a proof that every branch enforces access. Each planning entry needs a live principal check; all booking entries keep registered account authentication.
 
-| Route source | Baseline guard references |
-| --- | --- |
-| `web/app/api/auth/[...all]/route.ts` |  |
-| `web/app/api/health/route.ts` |  |
-| `web/app/api/v1/agent-runs/[runId]/clarifications/route.ts` | browserUser |
-| `web/app/api/v1/agent-runs/[runId]/events/route.ts` | browserUser |
-| `web/app/api/v1/agent-runs/[runId]/route.ts` | browserUser |
-| `web/app/api/v1/booking/revalidations/[workflowId]/route.ts` | browserUser |
-| `web/app/api/v1/bookings/[bookingId]/components/[componentId]/cancellations/route.ts` | browserUser |
-| `web/app/api/v1/bookings/[bookingId]/components/[componentId]/recovery/route.ts` | browserUser |
-| `web/app/api/v1/bookings/[bookingId]/components/[componentId]/reschedule-authorizations/route.ts` | browserUser |
-| `web/app/api/v1/bookings/[bookingId]/components/[componentId]/reschedule-revalidations/route.ts` | browserUser |
-| `web/app/api/v1/bookings/[bookingId]/components/[componentId]/reschedules/route.ts` | browserUser |
-| `web/app/api/v1/bookings/[bookingId]/route.ts` | browserUser |
-| `web/app/api/v1/internal/agent-runs/[runId]/dispatch/route.ts` | internalActor |
-| `web/app/api/v1/internal/agent-runs/[runId]/events/[cursor]/route.ts` | internalActor, provider |
-| `web/app/api/v1/internal/agent-runs/[runId]/events/route.ts` | internalActor |
-| `web/app/api/v1/internal/agent-runs/[runId]/result/route.ts` | internalActor |
-| `web/app/api/v1/internal/agent-runs/[runId]/resumes/[questionId]/route.ts` | internalActor |
-| `web/app/api/v1/internal/agent-runs/[runId]/route.ts` | internalActor |
-| `web/app/api/v1/internal/agent-runs/[runId]/validate/route.ts` | internalActor |
-| `web/app/api/v1/internal/booking/provider-callbacks/[provider]/route.ts` | provider |
-| `web/app/api/v1/internal/context/search/route.ts` | internalActor |
-| `web/app/api/v1/internal/pricing/[tripId]/route.ts` | internalActor |
-| `web/app/api/v1/internal/trips/[tripId]/agent-view/route.ts` | internalActor |
-| `web/app/api/v1/internal/trips/[tripId]/planning-search/route.ts` | internalActor, provider |
-| `web/app/api/v1/internal/trips/[tripId]/proposals/route.ts` | internalActor, provider |
-| `web/app/api/v1/places/route.ts` | browserUser, provider |
-| `web/app/api/v1/trips/[tripId]/agent-runs/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/booking/authorizations/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/booking/revalidations/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/bookings/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/commands/edit/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/commands/edit-preview/route.ts` | browserUser, provider |
-| `web/app/api/v1/trips/[tripId]/commands/finalize/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/commands/undo/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/conversations/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/events/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/proposals/[proposalId]/accept/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/proposals/[proposalId]/reject/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/route.ts` | browserUser |
-| `web/app/api/v1/trips/[tripId]/versions/route.ts` | browserUser |
-| `web/app/api/v1/trips/route.ts` | browserUser |
+| Route source                                                                                      | Baseline guard references |
+| ------------------------------------------------------------------------------------------------- | ------------------------- |
+| `web/app/api/auth/[...all]/route.ts`                                                              |                           |
+| `web/app/api/health/route.ts`                                                                     |                           |
+| `web/app/api/v1/agent-runs/[runId]/clarifications/route.ts`                                       | browserUser               |
+| `web/app/api/v1/agent-runs/[runId]/events/route.ts`                                               | browserUser               |
+| `web/app/api/v1/agent-runs/[runId]/route.ts`                                                      | browserUser               |
+| `web/app/api/v1/booking/revalidations/[workflowId]/route.ts`                                      | browserUser               |
+| `web/app/api/v1/bookings/[bookingId]/components/[componentId]/cancellations/route.ts`             | browserUser               |
+| `web/app/api/v1/bookings/[bookingId]/components/[componentId]/recovery/route.ts`                  | browserUser               |
+| `web/app/api/v1/bookings/[bookingId]/components/[componentId]/reschedule-authorizations/route.ts` | browserUser               |
+| `web/app/api/v1/bookings/[bookingId]/components/[componentId]/reschedule-revalidations/route.ts`  | browserUser               |
+| `web/app/api/v1/bookings/[bookingId]/components/[componentId]/reschedules/route.ts`               | browserUser               |
+| `web/app/api/v1/bookings/[bookingId]/route.ts`                                                    | browserUser               |
+| `web/app/api/v1/internal/agent-runs/[runId]/dispatch/route.ts`                                    | internalActor             |
+| `web/app/api/v1/internal/agent-runs/[runId]/events/[cursor]/route.ts`                             | internalActor, provider   |
+| `web/app/api/v1/internal/agent-runs/[runId]/events/route.ts`                                      | internalActor             |
+| `web/app/api/v1/internal/agent-runs/[runId]/result/route.ts`                                      | internalActor             |
+| `web/app/api/v1/internal/agent-runs/[runId]/resumes/[questionId]/route.ts`                        | internalActor             |
+| `web/app/api/v1/internal/agent-runs/[runId]/route.ts`                                             | internalActor             |
+| `web/app/api/v1/internal/agent-runs/[runId]/validate/route.ts`                                    | internalActor             |
+| `web/app/api/v1/internal/booking/provider-callbacks/[provider]/route.ts`                          | provider                  |
+| `web/app/api/v1/internal/context/search/route.ts`                                                 | internalActor             |
+| `web/app/api/v1/internal/pricing/[tripId]/route.ts`                                               | internalActor             |
+| `web/app/api/v1/internal/trips/[tripId]/agent-view/route.ts`                                      | internalActor             |
+| `web/app/api/v1/internal/trips/[tripId]/planning-search/route.ts`                                 | internalActor, provider   |
+| `web/app/api/v1/internal/trips/[tripId]/proposals/route.ts`                                       | internalActor, provider   |
+| `web/app/api/v1/places/route.ts`                                                                  | browserUser, provider     |
+| `web/app/api/v1/trips/[tripId]/agent-runs/route.ts`                                               | browserUser               |
+| `web/app/api/v1/trips/[tripId]/booking/authorizations/route.ts`                                   | browserUser               |
+| `web/app/api/v1/trips/[tripId]/booking/revalidations/route.ts`                                    | browserUser               |
+| `web/app/api/v1/trips/[tripId]/bookings/route.ts`                                                 | browserUser               |
+| `web/app/api/v1/trips/[tripId]/commands/edit/route.ts`                                            | browserUser               |
+| `web/app/api/v1/trips/[tripId]/commands/edit-preview/route.ts`                                    | browserUser, provider     |
+| `web/app/api/v1/trips/[tripId]/commands/finalize/route.ts`                                        | browserUser               |
+| `web/app/api/v1/trips/[tripId]/commands/undo/route.ts`                                            | browserUser               |
+| `web/app/api/v1/trips/[tripId]/conversations/route.ts`                                            | browserUser               |
+| `web/app/api/v1/trips/[tripId]/events/route.ts`                                                   | browserUser               |
+| `web/app/api/v1/trips/[tripId]/proposals/[proposalId]/accept/route.ts`                            | browserUser               |
+| `web/app/api/v1/trips/[tripId]/proposals/[proposalId]/reject/route.ts`                            | browserUser               |
+| `web/app/api/v1/trips/[tripId]/route.ts`                                                          | browserUser               |
+| `web/app/api/v1/trips/[tripId]/versions/route.ts`                                                 | browserUser               |
+| `web/app/api/v1/trips/route.ts`                                                                   | browserUser               |
 
 ## Required principal/account joins
 
@@ -129,4 +129,3 @@ The exhaustive valid-operation/internal-service/stream matrix and every dual-ide
 transaction recovery branch are still unfinished T098/T101, not inferred from predicate
 tests or startup success. The requested guest notice uses current authenticated session
 status and does not relax any booking authorization requirement.
-

@@ -95,12 +95,26 @@ class CreateAgentRunRequest(ContractModel):
         json_schema_extra={
             "allOf": [
                 {
-                    "if": {"properties": {"purpose": {"enum": [
-                        "initial_estimate", "refinement", "finalization",
-                    ]}}},
-                    "then": {"properties": {"actor": {"properties": {
-                        "scopes": {"contains": {"const": "proposal:create"}},
-                    }}}},
+                    "if": {
+                        "properties": {
+                            "purpose": {
+                                "enum": [
+                                    "initial_estimate",
+                                    "refinement",
+                                    "finalization",
+                                ]
+                            }
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "actor": {
+                                "properties": {
+                                    "scopes": {"contains": {"const": "proposal:create"}},
+                                }
+                            }
+                        }
+                    },
                 },
             ],
             "x-equal-fields": [
@@ -220,13 +234,21 @@ class AgentRun(ContractModel):
                     "if": {"properties": {"purpose": {"const": "supplier_research"}}},
                     "then": {
                         "properties": {
-                            "status": {"enum": [
-                                "queued", "running", "awaiting_clarification",
-                                "completed", "failed", "cancelled",
-                            ]},
-                            "result": {"properties": {
-                                "kind": {"enum": ["answer", "clarification"]},
-                            }},
+                            "status": {
+                                "enum": [
+                                    "queued",
+                                    "running",
+                                    "awaiting_clarification",
+                                    "completed",
+                                    "failed",
+                                    "cancelled",
+                                ]
+                            },
+                            "result": {
+                                "properties": {
+                                    "kind": {"enum": ["answer", "clarification"]},
+                                }
+                            },
                         },
                     },
                 },

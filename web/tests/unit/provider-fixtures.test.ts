@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+
 import { createReadAdapter } from "../../server/supply/providers/adapter";
 import { syntheticReadClient } from "../../server/supply/providers/synthetic";
 import { normalizePlanningOffer } from "../../server/supply/offers";
-import type { SupplyReadQuery } from "../../server/supply/read";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
-
 import {
   DeterministicProviderDouble,
   DeterministicClock,
@@ -13,14 +12,25 @@ import {
   TimeoutAfterCommitError,
 } from "../fixtures/providers";
 
+import type { SupplyReadQuery } from "../../server/supply/read";
+
 describe("deterministic provider fixtures", () => {
   afterEach(() => vi.useRealTimers());
 
   function readQuery(): SupplyReadQuery {
     const trip = createSyntheticTripSnapshot();
-    return { componentTypes: ["accommodation"], currency: "GBP", departureOrigin: trip.departureOrigin,
-      destinationIds: trip.destinations.map((destination) => destination.id), startDate: "2030-05-01",
-      endDate: "2030-05-08", travellerParty: { adults: 2, children: [{ id: "10000000-0000-4000-8000-000000000011", ageAtTripStart: 9 }] } };
+    return {
+      componentTypes: ["accommodation"],
+      currency: "GBP",
+      departureOrigin: trip.departureOrigin,
+      destinationIds: trip.destinations.map((destination) => destination.id),
+      startDate: "2030-05-01",
+      endDate: "2030-05-08",
+      travellerParty: {
+        adults: 2,
+        children: [{ id: "10000000-0000-4000-8000-000000000011", ageAtTripStart: 9 }],
+      },
+    };
   }
 
   it.each(["hotel", "apartment", "villa", "hostel"])(
@@ -28,31 +38,49 @@ describe("deterministic provider fixtures", () => {
     async (accommodationType) => {
       vi.useFakeTimers();
       vi.setSystemTime("2030-01-01T00:00:00Z");
-      const source = createReadAdapter("duffel", "accommodation", syntheticReadClient("accommodation", { accommodationType }));
-      const query = readQuery(), signal = new AbortController().signal;
+      const source = createReadAdapter(
+        "duffel",
+        "accommodation",
+        syntheticReadClient("accommodation", { accommodationType }),
+      );
+      const query = readQuery(),
+        signal = new AbortController().signal;
       const first = normalizePlanningOffer((await source.search(query, signal))[0]);
-      expect(first.component.planningDetails).toMatchObject({ accommodationType, eligibility: "unverified",
-        accessibility: "unverified", checkedAt: "2030-01-01T00:00:00.000Z" });
+      expect(first.component.planningDetails).toMatchObject({
+        accommodationType,
+        eligibility: "unverified",
+        accessibility: "unverified",
+        checkedAt: "2030-01-01T00:00:00.000Z",
+      });
       expect(first.component.expiresAt).toBe("2030-01-01T00:15:00.000Z");
       vi.advanceTimersByTime(1_000);
       for (const method of [source.detail!, source.revalidate!]) {
-        const current = normalizePlanningOffer(await method(first.component.supplierOfferId, query, signal));
+        const current = normalizePlanningOffer(
+          await method(first.component.supplierOfferId, query, signal),
+        );
         expect(current.component.planningDetails?.accommodationType).toBe(accommodationType);
         expect(current.component.travellerIds).toEqual(first.component.travellerIds);
         expect(current.component.checkedAt).toBe("2030-01-01T00:00:01.000Z");
         expect(current.component.bookingStatus).toBe("unbooked");
         expect(current.eligibility.status).toBe("unverified");
       }
-      expect(normalizePlanningOffer(first, new Date("2030-01-01T00:16:00Z")).component.offerStatus).toBe("expired");
+      expect(
+        normalizePlanningOffer(first, new Date("2030-01-01T00:16:00Z")).component.offerStatus,
+      ).toBe("expired");
     },
   );
 
   it("keeps anonymous adult slots stable across products and searches without inventing service-date age eligibility", async () => {
-    const query = readQuery(), signal = new AbortController().signal;
-    const raw = z.array(z.record(z.string(), z.unknown())).parse(await syntheticReadClient("activity").search(query, signal))[0];
-    const activity = createReadAdapter("viator", "activity", { search: async () => [{ ...raw,
-      minimumAge: 10, maximumAge: 15, serviceStart: null, serviceEnd: null,
-    }] });
+    const query = readQuery(),
+      signal = new AbortController().signal;
+    const raw = z
+      .array(z.record(z.string(), z.unknown()))
+      .parse(await syntheticReadClient("activity").search(query, signal))[0];
+    const activity = createReadAdapter("viator", "activity", {
+      search: async () => [
+        { ...raw, minimumAge: 10, maximumAge: 15, serviceStart: null, serviceEnd: null },
+      ],
+    });
     const first = normalizePlanningOffer((await activity.search(query, signal))[0]);
     const stay = createReadAdapter("duffel", "accommodation", syntheticReadClient("accommodation"));
     const nextQuery = { ...query, startDate: "2030-05-02", endDate: "2030-05-09" };
@@ -74,16 +102,25 @@ describe("deterministic provider fixtures", () => {
     expect(provider.revalidate("offer-changed-001").status).toBe("changed");
     clock.advance(1_000);
     expect(provider.search("rate_limited")).toMatchObject({
-      status: "rate_limited", offers: [], checkedAt: "2030-01-01T00:00:01.000Z",
+      status: "rate_limited",
+      offers: [],
+      checkedAt: "2030-01-01T00:00:01.000Z",
     });
     expect(provider.search("no_matches").offers).toEqual([]);
-    expect(provider.counters).toMatchObject({ search: 3, detail: 1, revalidation: 1, writeAttempts: 0, writes: 0 });
+    expect(provider.counters).toMatchObject({
+      search: 3,
+      detail: 1,
+      revalidation: 1,
+      writeAttempts: 0,
+      writes: 0,
+    });
   });
 
   it("restores committed provider truth across a simulated process crash", () => {
     const original = new DeterministicProviderDouble();
-    expect(() => original.commit("crash-request", "offer-available-001", "timeout_after_commit"))
-      .toThrow(TimeoutAfterCommitError);
+    expect(() =>
+      original.commit("crash-request", "offer-available-001", "timeout_after_commit"),
+    ).toThrow(TimeoutAfterCommitError);
     const restored = new DeterministicProviderDouble(undefined, original.snapshot());
     expect(restored.commit("crash-request", "offer-available-001")[0].duplicate).toBe(true);
     expect(restored.counters.writes).toBe(1);

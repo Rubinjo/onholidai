@@ -20,7 +20,7 @@ The user directed adoption of the analysis recommendations; the following five b
 - Q: How should agent progress and results survive interrupted delivery? → A: Persist scoped, redacted run events and results before acknowledging or displaying them; exact retries return the same receipt, conflicting reuse is rejected, cursor gaps do not partially commit, and interrupted runs become visibly retryable without changing the trip.
 - Q: How should feasibility and percentage targets be judged reproducibly? → A: Use the stated timing/rest policy, frozen representative synthetic cases with predetermined outcomes, and a fixed 20-person usability protocol; record denominators, failures, versioned inputs and scoring before user-story implementation.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Build an Initial Trip Estimate (Priority: P1)
 
@@ -110,7 +110,7 @@ As a traveller, I want to review live terms and explicitly authorize my holiday 
 - One booking confirmation advances the displayed trip version before the next component starts; transaction-owned status-only changes remain eligible, while an external edit or changed confirmed terms require renewed authorization.
 - The map is unavailable or cannot be operated visually, while trip creation and refinement must remain possible.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -153,7 +153,7 @@ As a traveller, I want to review live terms and explicitly authorize my holiday 
 - **FR-037**: Every interactive planning and booking action MUST be operable by keyboard, expose a logical focus order and understandable labels, support assistive technologies, and not rely on colour or the map alone to convey state.
 - **FR-038**: When the map or a third-party travel source is unavailable, the system MUST preserve the traveller's current trip and provide a clear non-map or retry path rather than silently losing changes. Agent progress, clarification, proposals and final results MUST be persisted under authorized run/trip scope before acknowledgement or display; exact replay returns the original receipt, conflicting reuse and cursor gaps fail without partial commitment. Reconnect reloads recorded events/results; a process-interrupted run becomes visibly failed with a retry option, and research retries never apply a draft or reserve inventory without the separate acceptance or authorization.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **Trip**: The authoritative holiday plan, including its current lifecycle state, departure origin, destinations, availability, duration targets, travellers, preferences, constraints, itinerary, pricing, and booking status.
 - **Departure Origin**: A traveller-confirmed city or airport, with country identity, timezone and optional airport code; the default return location and an editable authoritative transport fact.
@@ -169,7 +169,7 @@ As a traveller, I want to review live terms and explicitly authorize my holiday 
 - **Booking Transaction**: The separately authorized attempt to reserve one or more exact travel components, with an immutable execution basis identifying the approved version and terms, attributable status-only version advances, component outcomes, duplicate-prevention identity, and confirmation records.
 - **Booking Confirmation**: Provider-confirmed evidence for a committed component, including reference, final terms, status, and traveller-facing instructions.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

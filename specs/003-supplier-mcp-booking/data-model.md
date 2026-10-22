@@ -35,14 +35,14 @@ Reuse current offer records/run ownership. Add revision/evidence metadata to exi
 
 Input: one accepted trip/version, supplier evidence and durable confirmations. Output: coverage policy version, trip version, report fingerprint, safe issues and requirement entries. This report is derived, never another authoritative trip.
 
-| Field | Meaning |
-| --- | --- |
+| Field         | Meaning                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------- |
 | requirementId | Stable route-leg/date, stay-destination/night/room-party, or paid itinerary-item identity |
-| kind | transport, accommodation, activity |
-| sourceRefs | Accepted destinations, itinerary items, constraints, party slots |
-| coverage | missing, covered_unverified, eligible_unbooked, confirmed, not_required, blocked |
-| componentIds | Exact components satisfying the requirement, with bundles/room allocations |
-| issues | Safe code/message, affected references, resolution action |
+| kind          | transport, accommodation, activity                                                        |
+| sourceRefs    | Accepted destinations, itinerary items, constraints, party slots                          |
+| coverage      | missing, covered_unverified, eligible_unbooked, confirmed, not_required, blocked          |
+| componentIds  | Exact components satisfying the requirement, with bundles/room allocations                |
+| issues        | Safe code/message, affected references, resolution action                                 |
 
 Derive outbound/inter-destination/return legs unless accepted self-arranged/not-required evidence covers them. Derive stay-night and room-party coverage from dated destinations, not the count of accommodation components. Paid activities derive from accepted components and booking classification. Add optional `bookingDisposition: required | not_required | unknown` plus source/verification to current itinerary/travel facts where needed. Missing legacy classification remains unknown unless authoritative facts prove otherwise. A planning note or agent guess cannot silently waive required booking.
 
@@ -78,15 +78,15 @@ Persist provider evidence, outcome, confirmation, duplicate guard and resolved-c
 
 Present not-attempted from no dispatched attempt plus stopped/blocked execution; do not turn it into definitive failure. Add a persisted lifecycle value only if existing status/evidence cannot represent that fact. Contradictory callbacks create an evidence conflict requiring reconciliation; never silently overwrite confirmation or enable retry.
 
-| Entity | Progression | Invariant |
-| --- | --- | --- |
-| Research | estimated/quoted -> live check/changed/unavailable/unknown -> expiry/new revision | No trip mutation, reservation or transaction |
-| Proposal | proposed -> validated accepted/applied, rejected or stale | Existing manual/automatic policy, version/history |
-| Authorization | authorized -> consumed, invalidated or expired | Exact complete basis; no reuse for changed facts |
-| Attempt | claimed -> dispatched -> confirmed, failed or uncertain/action required | Possible commit blocks new writes across attempts |
-| Uncertain write | status evidence -> confirmed, definitive non-commit, or uncertainty | Time elapsed or missing status never permits retry |
-| Execution | active -> stopped/expired/invalidated/completed | May block writes; never suppress authenticated truth |
-| Continuation | unresolved work -> complete review -> new authorization -> linked attempt | Confirmed commitments excluded from writes/new amount |
+| Entity          | Progression                                                                       | Invariant                                             |
+| --------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Research        | estimated/quoted -> live check/changed/unavailable/unknown -> expiry/new revision | No trip mutation, reservation or transaction          |
+| Proposal        | proposed -> validated accepted/applied, rejected or stale                         | Existing manual/automatic policy, version/history     |
+| Authorization   | authorized -> consumed, invalidated or expired                                    | Exact complete basis; no reuse for changed facts      |
+| Attempt         | claimed -> dispatched -> confirmed, failed or uncertain/action required           | Possible commit blocks new writes across attempts     |
+| Uncertain write | status evidence -> confirmed, definitive non-commit, or uncertainty               | Time elapsed or missing status never permits retry    |
+| Execution       | active -> stopped/expired/invalidated/completed                                   | May block writes; never suppress authenticated truth  |
+| Continuation    | unresolved work -> complete review -> new authorization -> linked attempt         | Confirmed commitments excluded from writes/new amount |
 
 Use existing lock order: planning/booking trip access lock, transaction and component claims. Atomically fix the dispatch basis and reject material edits or competing claims while dispatched/unknown. Continuation reuses these locks/guards rather than a separate recovery engine.
 

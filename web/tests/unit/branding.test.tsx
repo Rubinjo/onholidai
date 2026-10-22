@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
 import { BrandLink } from "../../components/brand-link";
 import { MarketingNavigation } from "../../components/marketing/navigation";
 import { metadata } from "../../app/layout";
@@ -30,9 +32,13 @@ describe("site branding", () => {
   it("preserves the marketing navigation alongside the logo", () => {
     const container = document.createElement("div");
     container.innerHTML = renderToStaticMarkup(<MarketingNavigation />);
-    expect(container.querySelector(".brand-link img")).toHaveAttribute("src", "/logo/main_logo.svg");
-    expect(Array.from(container.querySelectorAll("nav a"), (link) => link.getAttribute("href")))
-      .toEqual(["/trips/new", "/sign-in", "/sign-up"]);
+    expect(container.querySelector(".brand-link img")).toHaveAttribute(
+      "src",
+      "/logo/main_logo.svg",
+    );
+    expect(
+      Array.from(container.querySelectorAll("nav a"), (link) => link.getAttribute("href")),
+    ).toEqual(["/trips/new", "/sign-in", "/sign-up"]);
   });
 
   it("provides global SVG, PNG fallback and Apple touch icons", () => {
@@ -43,7 +49,10 @@ describe("site branding", () => {
       ],
       apple: [{ url: "/logo/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
     });
-    for (const [name, size] of [["favicon-32.png", 32], ["apple-touch-icon.png", 180]] as const) {
+    for (const [name, size] of [
+      ["favicon-32.png", 32],
+      ["apple-touch-icon.png", 180],
+    ] as const) {
       const png = readFileSync(resolve(process.cwd(), "public", "logo", name));
       expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
       expect(png.readUInt32BE(16)).toBe(size);

@@ -51,7 +51,7 @@ Build a two-service travel-planning monorepo in which the Next.js application ow
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 - **I. Optimize for Deletion, Not Extension — PASS**: The design uses two requested deployable applications and keeps domain, agent, provider, and workflow boundaries explicit; Redis remains deferred until evidence supports it.
 - **II. Explicitness Over Magic — PASS**: Cross-service dependencies use versioned contracts and injected adapters. Zod and Pydantic validate every boundary; TypeScript `any`, implicit globals, and import-time side effects are prohibited.
@@ -94,6 +94,7 @@ specs/001-ai-trip-agent/
 ```
 
 ### Source Code (repository root)
+
 ```text
 web/
 ├── app/

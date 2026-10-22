@@ -41,9 +41,13 @@ def create_app(
                 else WebRunStore(client, settings.service_token_secret)
             )
             model = NebiusClient(
-                NebiusHttpTransport(client, settings.nebius_base_url, settings.nebius_api_key or "")
-                if settings.provider_mode == "live"
-                else DeterministicModel(),
+                (
+                    NebiusHttpTransport(
+                        client, settings.nebius_base_url, settings.nebius_api_key or ""
+                    )
+                    if settings.provider_mode == "live"
+                    else DeterministicModel()
+                ),
                 settings.nebius_model,
             )
             maps = (

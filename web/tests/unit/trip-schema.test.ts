@@ -78,7 +78,9 @@ function snapshotFixture() {
 
 describe("Trip and TripVersion schemas", () => {
   it("accepts only safe integer minor units and recognized ISO currencies", () => {
-    expect(moneySchema.safeParse({ currency: "GBP", minorUnits: Number.MAX_SAFE_INTEGER }).success).toBe(true);
+    expect(
+      moneySchema.safeParse({ currency: "GBP", minorUnits: Number.MAX_SAFE_INTEGER }).success,
+    ).toBe(true);
     for (const minorUnits of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, Infinity, NaN]) {
       expect(moneySchema.safeParse({ currency: "GBP", minorUnits }).success).toBe(false);
     }
@@ -119,11 +121,23 @@ describe("Trip and TripVersion schemas", () => {
     };
 
     expect(travelComponentSchema.safeParse(component).success).toBe(true);
-    expect(travelComponentSchema.safeParse({ ...component, serviceStart: null }).success).toBe(false);
-    expect(travelComponentSchema.safeParse({ ...component, serviceEnd: component.serviceStart }).success).toBe(false);
+    expect(travelComponentSchema.safeParse({ ...component, serviceStart: null }).success).toBe(
+      false,
+    );
+    expect(
+      travelComponentSchema.safeParse({ ...component, serviceEnd: component.serviceStart }).success,
+    ).toBe(false);
     expect(travelComponentSchema.safeParse({ ...component, unexpected: true }).success).toBe(false);
-    expect(componentPriceSchema.safeParse({ ...price, supplierAmount: { currency: "GBP", minorUnits: 0 } }).success).toBe(false);
-    expect(componentPriceSchema.safeParse({ ...price, finalCustomerAmount: { ...zero, minorUnits: 1 } }).success).toBe(false);
+    expect(
+      componentPriceSchema.safeParse({
+        ...price,
+        supplierAmount: { currency: "GBP", minorUnits: 0 },
+      }).success,
+    ).toBe(false);
+    expect(
+      componentPriceSchema.safeParse({ ...price, finalCustomerAmount: { ...zero, minorUnits: 1 } })
+        .success,
+    ).toBe(false);
   });
 
   it("accepts a complete current snapshot and immutable root metadata", () => {
@@ -157,7 +171,9 @@ describe("Trip and TripVersion schemas", () => {
   });
 
   it("rejects unsupported snapshot versions", () => {
-    expect(() => decodeTripSnapshot(2, snapshotFixture())).toThrow(UnsupportedTripSnapshotVersionError);
+    expect(() => decodeTripSnapshot(2, snapshotFixture())).toThrow(
+      UnsupportedTripSnapshotVersionError,
+    );
   });
 
   it("enforces version chains, proposal identity, and reversibility evidence", () => {

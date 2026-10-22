@@ -42,18 +42,18 @@ Commands run from the repository root; database commands use only the four
 synthetic `TEST_DATABASE_*_URL` values in their PowerShell process. The fixture
 helper creates/drops a unique database for each case.
 
-| Check | Executed result |
-| --- | --- |
-| Final web supplier/access/UI/config/refinement/agent-schema run, Vitest `--maxWorkers=2` | 154 passed across 15 files, zero skipped |
-| `corepack.cmd pnpm --dir web test:foundation --maxWorkers=2` | 43 passed across 4 files, zero skipped/unhandled errors; migration 014 applied |
-| Final query-scoping/UI/agent-schema follow-up, Vitest `--maxWorkers=2` | 51 passed across 5 files, zero skipped |
-| Provider HTTP wire subset (included in the focused run) | 44 passed; no external HTTP |
-| Python offer-completeness, integration, estimate evaluation, refinement/model/schema/API/export subset | 101 passed; includes actual MCP list/call and no-rail regressions |
-| `corepack.cmd pnpm --dir web typecheck` and focused ESLint | Passed |
-| Targeted Python Ruff and Pyright | Passed; zero type errors/warnings |
-| `node --experimental-strip-types scripts\validate-contracts.mjs` | Passed, including 15 shared supply cases |
-| `corepack.cmd pnpm --dir web snapshot:contract:check` | Passed for accepted snapshots, itinerary and internal/public discovery |
-| `corepack.cmd pnpm --dir web agent:contracts:check` and Python exporter `--check` | Passed |
+| Check                                                                                                  | Executed result                                                                |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Final web supplier/access/UI/config/refinement/agent-schema run, Vitest `--maxWorkers=2`               | 154 passed across 15 files, zero skipped                                       |
+| `corepack.cmd pnpm --dir web test:foundation --maxWorkers=2`                                           | 43 passed across 4 files, zero skipped/unhandled errors; migration 014 applied |
+| Final query-scoping/UI/agent-schema follow-up, Vitest `--maxWorkers=2`                                 | 51 passed across 5 files, zero skipped                                         |
+| Provider HTTP wire subset (included in the focused run)                                                | 44 passed; no external HTTP                                                    |
+| Python offer-completeness, integration, estimate evaluation, refinement/model/schema/API/export subset | 101 passed; includes actual MCP list/call and no-rail regressions              |
+| `corepack.cmd pnpm --dir web typecheck` and focused ESLint                                             | Passed                                                                         |
+| Targeted Python Ruff and Pyright                                                                       | Passed; zero type errors/warnings                                              |
+| `node --experimental-strip-types scripts\validate-contracts.mjs`                                       | Passed, including 15 shared supply cases                                       |
+| `corepack.cmd pnpm --dir web snapshot:contract:check`                                                  | Passed for accepted snapshots, itinerary and internal/public discovery         |
+| `corepack.cmd pnpm --dir web agent:contracts:check` and Python exporter `--check`                      | Passed                                                                         |
 
 Reproducible Python subset:
 
@@ -117,14 +117,14 @@ only in each runner's process; no environment file or supplier credential was
 read. An initial run without those URLs failed before collection, then the
 isolated foundation rerun passed.
 
-| Executed check | Result |
-| --- | --- |
-| `corepack.cmd pnpm --dir web test:foundation` with isolated test URLs | 43 passed across 4 files, zero skips |
-| Final affected web subset below, with isolated test URLs and `--maxWorkers=2` | 142 passed across 17 files, zero skips |
-| `uv run --project agent --no-sync pytest agent\tests\integration\test_supplier_mcp.py -q` | 37 passed, zero skips; actual list/call protocol |
-| `corepack.cmd pnpm --dir web typecheck` | Passed |
-| ESLint on the changed supply sources and tests with `--max-warnings=0` | Passed |
-| `corepack.cmd pnpm --dir web snapshot:contract:check` | Passed; no generated snapshot/supply schema drift |
+| Executed check                                                                            | Result                                            |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `corepack.cmd pnpm --dir web test:foundation` with isolated test URLs                     | 43 passed across 4 files, zero skips              |
+| Final affected web subset below, with isolated test URLs and `--maxWorkers=2`             | 142 passed across 17 files, zero skips            |
+| `uv run --project agent --no-sync pytest agent\tests\integration\test_supplier_mcp.py -q` | 37 passed, zero skips; actual list/call protocol  |
+| `corepack.cmd pnpm --dir web typecheck`                                                   | Passed                                            |
+| ESLint on the changed supply sources and tests with `--max-warnings=0`                    | Passed                                            |
+| `corepack.cmd pnpm --dir web snapshot:contract:check`                                     | Passed; no generated snapshot/supply schema drift |
 
 Reproducible final web selectors (provision isolated URLs as in the operations
 guide first):
@@ -213,14 +213,14 @@ regression also reproduced the saved-read availability bug before its fix.
 An initial typecheck rejected unparsed JSON database assertions; those now
 use the existing canonical normalizer instead of type casts.
 
-| Executed check | Result |
-| --- | --- |
-| Provider wire subset: `duffel-read`, `duffel-stays-read`, `viator-read`, `provider-http-read` | 53 passed across 4 files; included below |
-| Same 17-file web selector command recorded above, with isolated test URLs and `--maxWorkers=2` | 152 passed, zero skips |
-| `uv run --project agent --no-sync pytest agent\tests\integration\test_supplier_mcp.py -q` | 37 passed, zero skips; real list/call protocol |
-| `corepack.cmd pnpm --dir web typecheck` and ESLint on changed supply sources/tests with `--max-warnings=0` | Passed |
-| `corepack.cmd pnpm --dir web snapshot:contract:check` | Passed |
-| `node --experimental-strip-types scripts\validate-contracts.mjs` | Passed; includes 15 shared supply wire cases |
+| Executed check                                                                                             | Result                                         |
+| ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Provider wire subset: `duffel-read`, `duffel-stays-read`, `viator-read`, `provider-http-read`              | 53 passed across 4 files; included below       |
+| Same 17-file web selector command recorded above, with isolated test URLs and `--maxWorkers=2`             | 152 passed, zero skips                         |
+| `uv run --project agent --no-sync pytest agent\tests\integration\test_supplier_mcp.py -q`                  | 37 passed, zero skips; real list/call protocol |
+| `corepack.cmd pnpm --dir web typecheck` and ESLint on changed supply sources/tests with `--max-warnings=0` | Passed                                         |
+| `corepack.cmd pnpm --dir web snapshot:contract:check`                                                      | Passed                                         |
+| `node --experimental-strip-types scripts\validate-contracts.mjs`                                           | Passed; includes 15 shared supply wire cases   |
 
 The 17-file run used a new session-owned disposable PostgreSQL 18/PostGIS
 container and four process-only synthetic test-role URLs. Its fixture databases
@@ -274,14 +274,14 @@ PostgreSQL 18/PostGIS container with synthetic roles supplied all four test URLs
 in runner processes only. The application database and environment files were
 not read or changed.
 
-| Executed check | Result |
-| --- | --- |
-| Same 17-file web selector command recorded above, with isolated test URLs and `--maxWorkers=2` | 162 passed, zero skips |
-| Final search/persistence rerun after stale-read assertion and cancellation checks | 44 passed across 2 files, zero skips |
-| `corepack.cmd pnpm --dir web test:foundation` with isolated test URLs | 43 passed across 4 files, zero skips |
-| `uv run --project agent --no-sync pytest agent\tests\integration\test_supplier_mcp.py -q` | 37 passed, zero skips; actual four-tool protocol |
-| Web typecheck and targeted ESLint with `--max-warnings=0` | Passed |
-| Snapshot contract drift and `scripts\validate-contracts.mjs` | Passed, including 15 shared supply wire cases |
+| Executed check                                                                                 | Result                                           |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Same 17-file web selector command recorded above, with isolated test URLs and `--maxWorkers=2` | 162 passed, zero skips                           |
+| Final search/persistence rerun after stale-read assertion and cancellation checks              | 44 passed across 2 files, zero skips             |
+| `corepack.cmd pnpm --dir web test:foundation` with isolated test URLs                          | 43 passed across 4 files, zero skips             |
+| `uv run --project agent --no-sync pytest agent\tests\integration\test_supplier_mcp.py -q`      | 37 passed, zero skips; actual four-tool protocol |
+| Web typecheck and targeted ESLint with `--max-warnings=0`                                      | Passed                                           |
+| Snapshot contract drift and `scripts\validate-contracts.mjs`                                   | Passed, including 15 shared supply wire cases    |
 
 The foundation runner emitted the existing warning about a future Vite native
 config loader requiring an explicit import extension; it did not fail or skip
@@ -331,11 +331,11 @@ Only these methods/paths can leave the read clients; IDs must have been granted
 by a prior search for the same validated query. Redirects and arbitrary
 URL/method forwarding are disabled.
 
-| Product | Fixed read allowlist |
-| --- | --- |
-| Duffel Flights, API v2 | `POST /air/offer_requests?return_offers=true`; `GET /air/offers/{offerId}` |
-| Duffel Stays, API v2 | `POST /stays/search`; `POST /stays/search_results/{searchResultId}/actions/fetch_all_rates` |
-| Viator Partner API 2.0 | `POST /products/search`; `GET /products/{productCode}`; `POST /availability/check` |
+| Product                | Fixed read allowlist                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| Duffel Flights, API v2 | `POST /air/offer_requests?return_offers=true`; `GET /air/offers/{offerId}`                  |
+| Duffel Stays, API v2   | `POST /stays/search`; `POST /stays/search_results/{searchResultId}/actions/fetch_all_rates` |
+| Viator Partner API 2.0 | `POST /products/search`; `GET /products/{productCode}`; `POST /availability/check`          |
 
 Duffel uses `https://api.duffel.com` with `Duffel-Version: v2`. Viator uses only
 `https://api.viator.com/partner` or

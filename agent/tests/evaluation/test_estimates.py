@@ -35,8 +35,12 @@ def test_frozen_100_estimates_execute_real_graph_with_failure_inclusive_denomina
                             "id": f"a0000000-a000-4000-8000-a0000000000{index}",
                             "bookingStatus": "unbooked",
                             "type": kind,
-                            "price": {"currency": "EUR", "finalCustomerMinor": 100000,
-                                      "taxesMinor": 0, "feesMinor": 0},
+                            "price": {
+                                "currency": "EUR",
+                                "finalCustomerMinor": 100000,
+                                "taxesMinor": 0,
+                                "feesMinor": 0,
+                            },
                         }
                     }
                     for index, kind in enumerate(("flight", "accommodation"), 1)

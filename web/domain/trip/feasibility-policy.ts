@@ -1,22 +1,46 @@
-export const FEASIBILITY_POLICY = Object.freeze({ version: "1" as const, transitionMinutes: 15,
-  stationMinutes: 30, domesticAirportMinutes: 120, internationalAirportMinutes: 180,
-  connectionCushionMinutes: 30, overnightRestMinutes: 540, mealMinutes: 45,
-  mealCount: 2, freeMinutes: 60, occupiedMinutes: 600 });
+export const FEASIBILITY_POLICY = Object.freeze({
+  version: "1" as const,
+  transitionMinutes: 15,
+  stationMinutes: 30,
+  domesticAirportMinutes: 120,
+  internationalAirportMinutes: 180,
+  connectionCushionMinutes: 30,
+  overnightRestMinutes: 540,
+  mealMinutes: 45,
+  mealCount: 2,
+  freeMinutes: 60,
+  occupiedMinutes: 600,
+});
 
-export function paceMinutes(pace: number): number { return pace <= 33 ? 240 : pace <= 66 ? 360 : 480; }
+export function paceMinutes(pace: number): number {
+  return pace <= 33 ? 240 : pace <= 66 ? 360 : 480;
+}
 export function requiredArrivalMinutes(mode: string, international = false, provider = 0): number {
-  return Math.max(provider, mode === "flight" ? international ? 180 : 120 : ["rail", "ferry"].includes(mode) ? 30 : 0);
+  return Math.max(
+    provider,
+    mode === "flight" ? (international ? 180 : 120) : ["rail", "ferry"].includes(mode) ? 30 : 0,
+  );
 }
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
 function localAt(instant: number, timezone: string): string {
   let formatter = formatters.get(timezone);
   if (!formatter) {
-    formatter = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+    formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
     formatters.set(timezone, formatter);
   }
-  const parts = Object.fromEntries(formatter.formatToParts(instant).map((part) => [part.type, part.value]));
+  const parts = Object.fromEntries(
+    formatter.formatToParts(instant).map((part) => [part.type, part.value]),
+  );
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
@@ -31,14 +55,19 @@ export function qualifiedInstant(local: string, timezone: string, offset?: strin
       const instant = Date.parse(normalized + offset);
       return Number.isFinite(instant) && localAt(instant, timezone) === normalized ? instant : null;
     }
-    const offsets = new Set([-36, 0, 36].map((hours) => {
-      const instant = approximate + hours * 3600000;
-      return Date.parse(localAt(instant, timezone) + "Z") - instant;
-    }));
-    const candidates = [...offsets].map((difference) => approximate - difference)
+    const offsets = new Set(
+      [-36, 0, 36].map((hours) => {
+        const instant = approximate + hours * 3600000;
+        return Date.parse(localAt(instant, timezone) + "Z") - instant;
+      }),
+    );
+    const candidates = [...offsets]
+      .map((difference) => approximate - difference)
       .filter((instant) => localAt(instant, timezone) === normalized);
     return candidates.length === 1 ? candidates[0] : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export function offsetMatches(qualified: string, timezone: string): boolean {

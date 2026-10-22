@@ -41,18 +41,18 @@ completion of the feature's outstanding database, manual, deployment or particip
 The existing temporary Node 24.22.0 runtime and installed package binaries were used because
 Node/pnpm were absent from PATH. No dependency install, database migration or deployment occurred.
 
-| Check | Actual result |
-| --- | --- |
-| Full web Vitest after new summaries/history/readiness tests | 258 passed, 83 database-dependent cases skipped; 73 files |
-| Final focused SSR/chat/readiness regression | 8 passed, no skips |
-| Final automatic public-result regression | 2 passed; read-only projection, successful/non-applied outcomes and no full snapshot delivery |
-| Web TypeScript and ESLint | Passed |
-| Optimized Next production build | Passed compile, TypeScript and all 11 static pages |
-| Agent pytest | 88 passed |
-| Ruff on changed agent files | Passed |
-| Pyright with explicit existing venv interpreter | 0 errors/warnings |
-| Source/promoted OpenAPI validation and drift | Passed |
-| Rendered checkpoint layout/focus, five browser profiles × four widths | 20 passed, no skips/retries |
+| Check                                                                 | Actual result                                                                                 |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Full web Vitest after new summaries/history/readiness tests           | 258 passed, 83 database-dependent cases skipped; 73 files                                     |
+| Final focused SSR/chat/readiness regression                           | 8 passed, no skips                                                                            |
+| Final automatic public-result regression                              | 2 passed; read-only projection, successful/non-applied outcomes and no full snapshot delivery |
+| Web TypeScript and ESLint                                             | Passed                                                                                        |
+| Optimized Next production build                                       | Passed compile, TypeScript and all 11 static pages                                            |
+| Agent pytest                                                          | 88 passed                                                                                     |
+| Ruff on changed agent files                                           | Passed                                                                                        |
+| Pyright with explicit existing venv interpreter                       | 0 errors/warnings                                                                             |
+| Source/promoted OpenAPI validation and drift                          | Passed                                                                                        |
+| Rendered checkpoint layout/focus, five browser profiles × four widths | 20 passed, no skips/retries                                                                   |
 
 The initial red chat/booking tests failed because Restore trip and draft Book trip were absent.
 The summary test initially failed on the missing summary module. A subsequent failure exposed

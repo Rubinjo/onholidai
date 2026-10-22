@@ -28,17 +28,17 @@ Complete the existing booking page and harden its authorization/Temporal workflo
 
 Pre-research gate: PASS. Post-design gate: PASS. No exception requested.
 
-| Principle | Evidence and required gate |
-| --- | --- |
-| I. Optimize for deletion | Four thin MCP handlers; current ports/UI; one pure coverage evaluator; no new service/package/orchestrator. |
-| II. Explicitness | Typed schemas, injected clients, immutable per-run context, closed allowlist; no global current-user state or TypeScript any. |
-| III. Accessibility | Keyboard, screen-reader, visible focus, status/errors and 320px acceptance. |
-| IV. Context budget | Four bounded schemas, stable instructions, bounded offer summaries/references; measure token/cache impact. |
-| V. Behavior tests | Deterministic discovery, preference, authorization, partial/unknown, crash/replay and duplicate safety cases. |
-| VI. Verifiable increments | Discovery, decisions, workspace, complete review and safe recovery have independent proof. |
-| VII. Authoritative state | Reuse proposal/commit/version/undo; research cannot mutate accepted trip. |
-| VIII. Transactions | Reuse exact authorization, claims and Temporal; dispatch validation; truth recording independent of write authority. |
-| Compatibility/privacy | Preserve legacy parsers/hashes, additive migrations, explicit safe projections and opaque sensitive prerequisite references. |
+| Principle                 | Evidence and required gate                                                                                                    |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| I. Optimize for deletion  | Four thin MCP handlers; current ports/UI; one pure coverage evaluator; no new service/package/orchestrator.                   |
+| II. Explicitness          | Typed schemas, injected clients, immutable per-run context, closed allowlist; no global current-user state or TypeScript any. |
+| III. Accessibility        | Keyboard, screen-reader, visible focus, status/errors and 320px acceptance.                                                   |
+| IV. Context budget        | Four bounded schemas, stable instructions, bounded offer summaries/references; measure token/cache impact.                    |
+| V. Behavior tests         | Deterministic discovery, preference, authorization, partial/unknown, crash/replay and duplicate safety cases.                 |
+| VI. Verifiable increments | Discovery, decisions, workspace, complete review and safe recovery have independent proof.                                    |
+| VII. Authoritative state  | Reuse proposal/commit/version/undo; research cannot mutate accepted trip.                                                     |
+| VIII. Transactions        | Reuse exact authorization, claims and Temporal; dispatch validation; truth recording independent of write authority.          |
+| Compatibility/privacy     | Preserve legacy parsers/hashes, additive migrations, explicit safe projections and opaque sensitive prerequisite references.  |
 
 ## Project Structure
 
@@ -133,13 +133,13 @@ Use existing responsive CSS/UI primitives, accessible names, visible focus and s
 
 ### Delivery increments and proof
 
-| Increment | Deliverable and verification | Requirements |
-| --- | --- | --- |
-| 1. Supplier reads | Current contracts/clients, deterministic cases, approved transports, unknown facts, safe projection | FR-001–010, 027–029, 031 |
-| 2. MCP/decisions | Actual MCP protocol, concurrent isolation, preferences/clarification, Tavily/proposal regressions | FR-002–014, 028–031 |
-| 3. Workspace | Research runs, comparison/details/selection, stale/failure and accessibility cases | FR-011–014, 030 |
-| 4. Complete review | Coverage, v2 terms/migrations, page, durable read, authorization replay/subset rejection | FR-015–020, 027–031 |
-| 5. Execution/recovery | Worker composition, atomic guards, post-expiry truth, continuation, crash/concurrency | FR-021–026, 027–031 |
+| Increment             | Deliverable and verification                                                                        | Requirements             |
+| --------------------- | --------------------------------------------------------------------------------------------------- | ------------------------ |
+| 1. Supplier reads     | Current contracts/clients, deterministic cases, approved transports, unknown facts, safe projection | FR-001–010, 027–029, 031 |
+| 2. MCP/decisions      | Actual MCP protocol, concurrent isolation, preferences/clarification, Tavily/proposal regressions   | FR-002–014, 028–031      |
+| 3. Workspace          | Research runs, comparison/details/selection, stale/failure and accessibility cases                  | FR-011–014, 030          |
+| 4. Complete review    | Coverage, v2 terms/migrations, page, durable read, authorization replay/subset rejection            | FR-015–020, 027–031      |
+| 5. Execution/recovery | Worker composition, atomic guards, post-expiry truth, continuation, crash/concurrency               | FR-021–026, 027–031      |
 
 Each is independently testable in deterministic mode. Enable transactions only after complete review/execution gates. SC-001/003/005/006/009/010 use controlled acceptance; SC-002/004/007 require ten representative participants. SC-008 requires automated/manual accessibility evidence. Skipped suites are not passes. [quickstart.md](quickstart.md) provides commands and scenarios.
 

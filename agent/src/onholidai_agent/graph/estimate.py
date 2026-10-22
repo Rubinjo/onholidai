@@ -316,8 +316,13 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
             outcome = cast(dict[str, object], item)
             kind, status = outcome.get("componentType"), outcome.get("status")
             if kind in ("flight", "accommodation", "activity", "rail") and status in (
-                "unsupported", "unconfigured", "access_blocked", "rate_limited",
-                "deadline", "error", "no_matches",
+                "unsupported",
+                "unconfigured",
+                "access_blocked",
+                "rate_limited",
+                "deadline",
+                "error",
+                "no_matches",
             ):
                 warnings.append(
                     f"Supplier {kind} research is {status}; related requirements remain "

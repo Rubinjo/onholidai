@@ -38,7 +38,13 @@ def validate_output(name: str, result: dict[str, object]) -> dict[str, object]:
         raise ValueError("supplier_output_budget")
     offers: list[object] = []
     if name == "supplier_offer_details" and result.get("outcome") not in (
-        "available", "expired", "unchanged", "changed", "unknown", "unavailable", "unsupported",
+        "available",
+        "expired",
+        "unchanged",
+        "changed",
+        "unknown",
+        "unavailable",
+        "unsupported",
     ):
         raise ValueError("supplier_output_invalid")
     if (
@@ -50,7 +56,12 @@ def validate_output(name: str, result: dict[str, object]) -> dict[str, object]:
     if name == "supplier_revalidate_offer":
         outcome = result.get("outcome")
         if outcome not in (
-            "unchanged", "changed", "unavailable", "expired", "unsupported", "unknown",
+            "unchanged",
+            "changed",
+            "unavailable",
+            "expired",
+            "unsupported",
+            "unknown",
         ):
             raise ValueError("supplier_output_invalid")
         differences = result.get("differences")
@@ -92,7 +103,9 @@ class SupplierReadTool(Tool):
             description="Read supplier evidence in this run's authorized planning scope.",
             parameters=SUPPLIER_TOOL_INPUTS[name].model_json_schema(by_alias=True),
             annotations=ToolAnnotations(
-                read_only_hint=True, destructive_hint=False, open_world_hint=False,
+                read_only_hint=True,
+                destructive_hint=False,
+                open_world_hint=False,
             ),
         )
         self._read = read
@@ -102,16 +115,22 @@ class SupplierReadTool(Tool):
             # Custom tools validate raw protocol arguments, before any coercion.
             parsed = SUPPLIER_TOOL_INPUTS[self.name].model_validate(arguments, strict=True)
             async with asyncio.timeout(12):
-                result = await self._read(parsed.model_dump(
-                    mode="json", by_alias=True, exclude_none=True, exclude_unset=True,
-                ))
+                result = await self._read(
+                    parsed.model_dump(
+                        mode="json",
+                        by_alias=True,
+                        exclude_none=True,
+                        exclude_unset=True,
+                    )
+                )
             return ToolResult(structured_content=validate_output(self.name, result))
         except ValidationError:
             raise ToolError("invalid_supplier_arguments") from None
         except httpx.HTTPStatusError as error:
             code = error.response.status_code
             raise ToolError(
-                "supplier_access_denied" if code in (401, 403, 404)
+                "supplier_access_denied"
+                if code in (401, 403, 404)
                 else "supplier_stale" if code == 409 else "supplier_read_unavailable"
             ) from None
         except (ValueError, httpx.HTTPError, TimeoutError):
@@ -127,20 +146,30 @@ def supplier_server(store: RunStore, request: CreateAgentRunRequest) -> FastMCP:
 
     async def search(arguments: dict[str, object]) -> dict[str, object]:
         query = SupplierSearchInput.model_validate(arguments)
-        return await store.search(captured.model_copy(deep=True), query.model_dump(
-            mode="json", by_alias=True, exclude_none=True, exclude_unset=True,
-        ))
+        return await store.search(
+            captured.model_copy(deep=True),
+            query.model_dump(
+                mode="json",
+                by_alias=True,
+                exclude_none=True,
+                exclude_unset=True,
+            ),
+        )
 
     async def details(arguments: dict[str, object]) -> dict[str, object]:
         ref = SupplierOfferInput.model_validate(arguments)
         return await store.offer_details(
-            captured.model_copy(deep=True), ref.offer_ref, ref.revision,
+            captured.model_copy(deep=True),
+            ref.offer_ref,
+            ref.revision,
         )
 
     async def revalidate(arguments: dict[str, object]) -> dict[str, object]:
         ref = SupplierOfferInput.model_validate(arguments)
         return await store.revalidate_offer(
-            captured.model_copy(deep=True), ref.offer_ref, ref.revision,
+            captured.model_copy(deep=True),
+            ref.offer_ref,
+            ref.revision,
         )
 
     async def capabilities(arguments: dict[str, object]) -> dict[str, object]:
@@ -149,8 +178,10 @@ def supplier_server(store: RunStore, request: CreateAgentRunRequest) -> FastMCP:
         return await store.capabilities(captured.model_copy(deep=True), types)
 
     for name, handler in (
-        ("supplier_search", search), ("supplier_offer_details", details),
-        ("supplier_revalidate_offer", revalidate), ("supplier_capabilities", capabilities),
+        ("supplier_search", search),
+        ("supplier_offer_details", details),
+        ("supplier_revalidate_offer", revalidate),
+        ("supplier_capabilities", capabilities),
     ):
         server.add_tool(SupplierReadTool(name, handler))
     return server

@@ -68,20 +68,20 @@ Resolve country clicks from canonical ISO/name geometry through lookup; offer co
 
 ## Permission matrix
 
-| Route family | Authority / preserved boundary |
-| --- | --- |
-| /, /trips/new, /sign-in, /sign-up | Public; no planning registration gate. |
-| Session bootstrap/drafts/places | Guest bootstrap then private draft owner; lookup accessible without registration, bounded. |
-| Trip POST | Account default principal for legacy direct creation; guest through persisted draft submission. |
-| Trip page/GET/versions/events | Current proven planning principal; replay/history/streams equally protected. |
-| Trip agent-runs and run GET/events/clarifications | Planning principal across trip/run/conversation; quota before new guest request. |
-| Conversations/proposal accept/reject | Planning principal, existing base-version/expiry/explicit acceptance. |
-| edit-preview/edit/undo/finalize | Planning principal, existing impact/version/feasibility/write-exclusion. |
-| Booking page/revalidation/authorization/start | Registered BookingActor, eligible lifecycle, live terms and separate exact consent. |
-| Booking/revalidation status; recovery/cancel/reschedule | Registered account owns booking and related principal; separate component authorizations remain. |
+| Route family                                                | Authority / preserved boundary                                                                    |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| /, /trips/new, /sign-in, /sign-up                           | Public; no planning registration gate.                                                            |
+| Session bootstrap/drafts/places                             | Guest bootstrap then private draft owner; lookup accessible without registration, bounded.        |
+| Trip POST                                                   | Account default principal for legacy direct creation; guest through persisted draft submission.   |
+| Trip page/GET/versions/events                               | Current proven planning principal; replay/history/streams equally protected.                      |
+| Trip agent-runs and run GET/events/clarifications           | Planning principal across trip/run/conversation; quota before new guest request.                  |
+| Conversations/proposal accept/reject                        | Planning principal, existing base-version/expiry/explicit acceptance.                             |
+| edit-preview/edit/undo/finalize                             | Planning principal, existing impact/version/feasibility/write-exclusion.                          |
+| Booking page/revalidation/authorization/start               | Registered BookingActor, eligible lifecycle, live terms and separate exact consent.               |
+| Booking/revalidation status; recovery/cancel/reschedule     | Registered account owns booking and related principal; separate component authorizations remain.  |
 | Internal agent-view/search/context/proposal/run persistence | Existing service token plus unrevoked run grant/current principal; transactional checks/receipts. |
-| Internal pricing/provider callbacks/health | Existing team/independent secret/provider/health policy, not guest authority. |
-| Privacy exports/deletion/holds | Principal customer authority; registered administrative roles; legal/policy safeguards. |
+| Internal pricing/provider callbacks/health                  | Existing team/independent secret/provider/health policy, not guest authority.                     |
+| Privacy exports/deletion/holds                              | Principal customer authority; registered administrative roles; legal/policy safeguards.           |
 
 Audit every route, not just trip creation/page guards. Existing customer pricing projections and private errors remain.
 
@@ -94,4 +94,5 @@ Enforce two concurrent queued/running/awaiting_clarification runs and ten new re
 Apply guest-session/quota guard first when relevant, then principal/draft/trip/run and existing mutation/booking locks, with authority recheck before commit/replay. Count session-wide quotas without out-of-order locks and allocate quota/run atomically. A guest request resolved before linking cannot write afterward. Event streams recheck before delivery and terminate safely on link/expiry; account can recover retained evidence.
 
 Live review/revalidation follows successful link, never consent. Preserve original booking hashing/expiry/material-change/duplicate/partial-failure tests and dual-identity worker verification.
+
 > Implementation handoff (2026-10-15): these route families are implemented. New tests are unrun and comprehensive scenario matrices remain partial; this contract is not runtime acceptance evidence. See ../evidence/implementation-status.md and ../evidence/coverage.md.

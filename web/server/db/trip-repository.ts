@@ -28,9 +28,14 @@ export interface TripRepositoryPort {
 export class TripRepository implements TripRepositoryPort {
   constructor(private readonly transaction: Transaction<Database>) {}
   async auditIdentity(planningOwnerId: string): Promise<{ kind: "account" | "guest"; id: string }> {
-    const principal = await this.transaction.selectFrom("planningPrincipals").select("accountUserId")
-      .where("id", "=", planningOwnerId).executeTakeFirstOrThrow();
-    return principal.accountUserId ? { kind: "account", id: principal.accountUserId } : { kind: "guest", id: planningOwnerId };
+    const principal = await this.transaction
+      .selectFrom("planningPrincipals")
+      .select("accountUserId")
+      .where("id", "=", planningOwnerId)
+      .executeTakeFirstOrThrow();
+    return principal.accountUserId
+      ? { kind: "account", id: principal.accountUserId }
+      : { kind: "guest", id: planningOwnerId };
   }
 
   async insertTrip(trip: Insertable<TripTable>): Promise<void> {

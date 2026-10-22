@@ -20,13 +20,13 @@ V2 review contains the full trip, including existing confirmations, but only to-
 
 Keep `POST /api/v1/trips/{tripId}/booking/authorizations` and existing strict request:
 
-| Field | Whole-trip value/constraint |
-| --- | --- |
-| requestId | Persistent UUID reused on network retry |
-| tripVersion | Exact reviewed current version |
-| termsHash | Server-generated complete v2 hash |
-| operation | `book_trip` |
-| componentId | `null` |
+| Field                            | Whole-trip value/constraint                                 |
+| -------------------------------- | ----------------------------------------------------------- |
+| requestId                        | Persistent UUID reused on network retry                     |
+| tripVersion                      | Exact reviewed current version                              |
+| termsHash                        | Server-generated complete v2 hash                           |
+| operation                        | `book_trip`                                                 |
+| componentId                      | `null`                                                      |
 | acknowledgedNonReversibleActions | Exactly the required to-book IDs; explicit traveller review |
 
 The server loads immutable persisted review, recomputes current coverage/readiness and compares the exact unresolved required set. Owner, version, all components, provider/offer/inventory, party/dates, material terms, exact currency/total, commitments, expiry and non-reversible conditions bind the authorization. Neither chat nor finalization/proposal approval is consent. Requests do not accept substitute client terms or a subset. Reuse existing idempotency repository for authorization creation; altered reuse conflicts, identical reuse returns the receipt. Parallel distinct authorizations do not bypass component write guards.
@@ -43,13 +43,13 @@ Use current `bookTrip`, activities, repository, outbox and durable claims. Resol
 
 Before each dispatch, under existing lock order, verify authorization basis/version or proven same-attempt status advances, expiry, coverage, operation readiness, trusted prerequisite references, and durable component/requirement guard. Persist the fixed request fingerprint and claim before the call. Block incompatible edits/claims while dispatched or unknown. Calls happen outside database transactions and transaction credentials are injected only into the trusted worker.
 
-| Outcome | Required evidence and behavior |
-| --- | --- |
-| confirmed | Valid provider reference/evidence and established actual terms; durably preserve commitment |
-| failed | Definitive rejection/non-commit evidence, not timeout or missing response |
-| unknown | Possible commit; retain claim and stop further writes pending status |
-| action_required | Changed/contradictory evidence or manual/provider action; retain relevant guards |
-| not_attempted | No dispatched attempt after stop/block; never imply supplier rejection |
+| Outcome         | Required evidence and behavior                                                              |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| confirmed       | Valid provider reference/evidence and established actual terms; durably preserve commitment |
+| failed          | Definitive rejection/non-commit evidence, not timeout or missing response                   |
+| unknown         | Possible commit; retain claim and stop further writes pending status                        |
+| action_required | Changed/contradictory evidence or manual/provider action; retain relevant guards            |
+| not_attempted   | No dispatched attempt after stop/block; never imply supplier rejection                      |
 
 Atomically record resolved attempt/evidence/confirmation and duplicate guard before releasing a claim. Project safe status to trip versions through the current commit boundary when compatible. If the trip changed or execution expired/invalidated, authenticated provider truth must still reach durable owner-visible attempt results; mark projection/recovery action required instead of dropping it or overwriting unrelated trip changes. Confirmed-but-materially-different evidence stops remaining writes, preserves the reported commitment and requires manual/review resolution; it cannot be relabelled a harmless failed booking.
 

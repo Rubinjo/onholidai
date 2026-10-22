@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { createHmac } from "node:crypto";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { processProviderCallback, verifyProviderCallback } from "../../server/supply/callbacks";
 
 vi.mock("server-only", () => ({}));
@@ -23,9 +25,16 @@ describe("provider callback authentication", () => {
   });
 
   it("rejects unknown callback fields before opening a database transaction", async () => {
-    const raw = JSON.stringify({ providerEventId: "evt-closed-object", transactionId: "10000000-0000-4000-8000-000000000001",
-      componentId: "10000000-0000-4000-8000-000000000002", outcome: "unknown", providerReference: null,
-      confirmedTerms: null, safeReason: null, unexpected: true });
+    const raw = JSON.stringify({
+      providerEventId: "evt-closed-object",
+      transactionId: "10000000-0000-4000-8000-000000000001",
+      componentId: "10000000-0000-4000-8000-000000000002",
+      outcome: "unknown",
+      providerReference: null,
+      confirmedTerms: null,
+      safeReason: null,
+      unexpected: true,
+    });
     vi.stubEnv("DUFFEL_CALLBACK_SECRET", "synthetic-callback-secret");
     const signature = `sha256=${createHmac("sha256", "synthetic-callback-secret").update(raw).digest("hex")}`;
     await expect(processProviderCallback({} as never, "duffel", raw, signature)).rejects.toThrow();

@@ -1,15 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
 
-import {
-  CamelCasePlugin,
-  Kysely,
-  PostgresDialect,
-} from "kysely";
+import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 
-import type { Database } from "../../server/db/database";
 import { migrate } from "../../server/db/migrate";
+
+import type { Database } from "../../server/db/database";
 
 export interface IsolatedTestDatabase {
   readonly databaseName: string;
@@ -32,8 +29,9 @@ export interface IsolatedTestDatabaseOptions {
 export function hasIsolatedDatabaseConfiguration(): boolean {
   return Boolean(
     process.env.TEST_DATABASE_ADMIN_URL &&
-      (process.env.TEST_DATABASE_MIGRATION_URL ?? process.env.MIGRATION_DATABASE_URL) &&
-      process.env.TEST_DATABASE_APP_URL && process.env.TEST_DATABASE_WORKER_URL,
+    (process.env.TEST_DATABASE_MIGRATION_URL ?? process.env.MIGRATION_DATABASE_URL) &&
+    process.env.TEST_DATABASE_APP_URL &&
+    process.env.TEST_DATABASE_WORKER_URL,
   );
 }
 
@@ -46,28 +44,26 @@ function connectionStringForDatabase(connectionString: string, databaseName: str
 
 export async function createIsolatedTestDatabase({
   adminConnectionString = process.env.TEST_DATABASE_ADMIN_URL,
-  migrationConnectionString =
-    process.env.TEST_DATABASE_MIGRATION_URL ?? process.env.MIGRATION_DATABASE_URL,
-  applicationConnectionString =
-    process.env.TEST_DATABASE_APP_URL ?? process.env.DATABASE_URL,
+  migrationConnectionString = process.env.TEST_DATABASE_MIGRATION_URL ??
+    process.env.MIGRATION_DATABASE_URL,
+  applicationConnectionString = process.env.TEST_DATABASE_APP_URL ?? process.env.DATABASE_URL,
   workerConnectionString = process.env.TEST_DATABASE_WORKER_URL,
   migrationsDirectory,
 }: IsolatedTestDatabaseOptions = {}): Promise<IsolatedTestDatabase> {
-  if (!adminConnectionString || !migrationConnectionString || !applicationConnectionString || !workerConnectionString) {
+  if (
+    !adminConnectionString ||
+    !migrationConnectionString ||
+    !applicationConnectionString ||
+    !workerConnectionString
+  ) {
     throw new Error(
       "Isolated tests require admin, migration, application and worker database URLs",
     );
   }
 
   const databaseName = `onholidai_test_${randomUUID().replaceAll("-", "")}`;
-  const migrationUrl = connectionStringForDatabase(
-    migrationConnectionString,
-    databaseName,
-  );
-  const connectionString = connectionStringForDatabase(
-    applicationConnectionString,
-    databaseName,
-  );
+  const migrationUrl = connectionStringForDatabase(migrationConnectionString, databaseName);
+  const connectionString = connectionStringForDatabase(applicationConnectionString, databaseName);
   const adminPool = new Pool({
     application_name: "onholidai-test-database-admin",
     connectionString: adminConnectionString,
@@ -85,7 +81,8 @@ export async function createIsolatedTestDatabase({
       `GRANT CONNECT ON DATABASE "${databaseName}" TO onholidai_migration, onholidai_web, onholidai_worker`,
     );
     const extensionPool = new Pool({
-      connectionString: connectionStringForDatabase(adminConnectionString, databaseName), max: 1,
+      connectionString: connectionStringForDatabase(adminConnectionString, databaseName),
+      max: 1,
     });
     try {
       await extensionPool.query("CREATE EXTENSION IF NOT EXISTS postgis");
@@ -136,7 +133,9 @@ export async function createIsolatedTestDatabase({
           );
           if (!sessions.rows[0].connected) break;
           if (Date.now() >= deadline) {
-            throw new Error(`Test database ${databaseName} still has open connections after cleanup`);
+            throw new Error(
+              `Test database ${databaseName} still has open connections after cleanup`,
+            );
           }
           await setTimeout(25);
         }

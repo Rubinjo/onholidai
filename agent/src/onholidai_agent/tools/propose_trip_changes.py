@@ -26,18 +26,20 @@ def propose_trip_changes(
         if target != "/components" or not all(
             complete_planning_component(component) for component in components
         ):
-            return AgentResult.model_validate({
-                "kind": "clarification",
-                "message": "Incomplete supplier facts cannot become accepted components.",
-                "clarification": {
-                    "id": str(uuid4()),
-                    "question": (
-                        "Which complete, current supplier offer should be reviewed? "
-                        "Missing prices, dates or terms remain unknown."
-                    ),
-                    "materialReason": "feasibility",
-                },
-            })
+            return AgentResult.model_validate(
+                {
+                    "kind": "clarification",
+                    "message": "Incomplete supplier facts cannot become accepted components.",
+                    "clarification": {
+                        "id": str(uuid4()),
+                        "question": (
+                            "Which complete, current supplier offer should be reviewed? "
+                            "Missing prices, dates or terms remain unknown."
+                        ),
+                        "materialReason": "feasibility",
+                    },
+                }
+            )
     timestamp = now or datetime.now(UTC)
     return AgentResult.model_validate(
         {

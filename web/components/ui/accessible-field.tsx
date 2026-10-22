@@ -44,11 +44,7 @@ export function AccessibleField({
   const hasError = Boolean(error);
 
   const control = cloneElement(children, {
-    "aria-describedby": joinTokens(
-      children.props["aria-describedby"],
-      descriptionId,
-      errorId,
-    ),
+    "aria-describedby": joinTokens(children.props["aria-describedby"], descriptionId, errorId),
     "aria-invalid": hasError || children.props["aria-invalid"] || undefined,
     className: joinTokens("field__control", children.props.className),
     id: controlId,

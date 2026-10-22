@@ -2,7 +2,13 @@ import "server-only";
 
 import type { AuthSession, AuthUser } from "@/server/auth/auth";
 
-export const INTERNAL_TEAM_ROLES = ["support", "operations", "admin", "pricing_auditor", "administrator"] as const;
+export const INTERNAL_TEAM_ROLES = [
+  "support",
+  "operations",
+  "admin",
+  "pricing_auditor",
+  "administrator",
+] as const;
 
 export type InternalTeamRole = (typeof INTERNAL_TEAM_ROLES)[number];
 export type AuthorizationUser = Pick<AuthUser, "id"> & {
@@ -32,19 +38,14 @@ export function hasInternalTeamRole(
   user: AuthorizationUser,
   allowedRoles: readonly InternalTeamRole[],
 ): boolean {
-  return (
-    isInternalTeamRole(user.internalTeamRole) &&
-    allowedRoles.includes(user.internalTeamRole)
-  );
+  return isInternalTeamRole(user.internalTeamRole) && allowedRoles.includes(user.internalTeamRole);
 }
 
 export function isOwner(user: AuthorizationUser, ownerUserId: string): boolean {
   return user.id === ownerUserId;
 }
 
-export function requireSession(
-  session: AuthorizationSession | null,
-): AuthorizationSession {
+export function requireSession(session: AuthorizationSession | null): AuthorizationSession {
   if (!session) {
     throw new AuthorizationError("UNAUTHENTICATED");
   }

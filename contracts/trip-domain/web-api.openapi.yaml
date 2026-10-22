@@ -27,9 +27,9 @@ paths:
           schema: { type: string, minLength: 1, maxLength: 200 }
         - name: countryCode
           in: query
-          schema: { type: string, pattern: '^[A-Z]{2}$' }
+          schema: { type: string, pattern: "^[A-Z]{2}$" }
       responses:
-        '200':
+        "200":
           description: Up to twenty candidates; multiple matches require explicit selection
           content:
             application/json:
@@ -51,9 +51,9 @@ paths:
                         placeId: { type: string, minLength: 1, maxLength: 256 }
                         kind: { enum: [country, city, place, airport] }
                         name: { type: string, minLength: 1, maxLength: 120 }
-                        countryCode: { type: string, pattern: '^[A-Z]{2}$' }
+                        countryCode: { type: string, pattern: "^[A-Z]{2}$" }
                         timezone: { type: string }
-                        airportCode: { type: [string, 'null'], pattern: '^[A-Z]{3}$' }
+                        airportCode: { type: [string, "null"], pattern: "^[A-Z]{3}$" }
                         location:
                           oneOf:
                             - type: object
@@ -62,10 +62,10 @@ paths:
                               properties:
                                 latitude: { type: number, minimum: -90, maximum: 90 }
                                 longitude: { type: number, minimum: -180, maximum: 180 }
-                            - type: 'null'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '503':
+                            - type: "null"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
           description: Geographic provider unavailable; preserve current selections
   /trips:
     post:
@@ -77,38 +77,38 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateTripRequest'
+              $ref: "#/components/schemas/CreateTripRequest"
       responses:
-        '201':
+        "201":
           description: Initial trip version created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TripEnvelope'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+                $ref: "#/components/schemas/TripEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /trips/{tripId}:
     get:
       tags: [Trips]
       operationId: getTrip
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
       responses:
-        '200':
+        "200":
           description: Current authorized trip snapshot
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TripEnvelope'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/TripEnvelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /trips/{tripId}/conversations:
     get:
       tags: [Trips]
       operationId: listTripConversations
       summary: Read permitted redacted conversation history for the trip
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
         - name: timeline
           in: query
           schema: { type: boolean, default: false }
@@ -124,23 +124,23 @@ paths:
             type: string
             maxLength: 256
       responses:
-        '200':
+        "200":
           description: Authorized redacted conversations and messages
           content:
             application/json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/ConversationPage'
-                  - $ref: '#/components/schemas/ChatMessagePage'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                  - $ref: "#/components/schemas/ConversationPage"
+                  - $ref: "#/components/schemas/ChatMessagePage"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /trips/{tripId}/versions:
     get:
       tags: [Trips]
       operationId: listTripVersions
       summary: Read inspectable immutable trip versions and their change provenance
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
         - name: compact
           in: query
           schema: { type: boolean, default: false }
@@ -156,40 +156,40 @@ paths:
             type: integer
             minimum: 1
       responses:
-        '200':
+        "200":
           description: Authorized trip version history in ascending version order
           content:
             application/json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/TripVersionPage'
-                  - $ref: '#/components/schemas/ChatVersionPage'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                  - $ref: "#/components/schemas/TripVersionPage"
+                  - $ref: "#/components/schemas/ChatVersionPage"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /trips/{tripId}/commands/edit-preview:
     post:
       tags: [Trips]
       operationId: previewDirectTripEdit
       summary: Compute material impacts without mutating the authoritative trip
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DirectEditPreviewRequest'
+              $ref: "#/components/schemas/DirectEditPreviewRequest"
       responses:
-        '200':
+        "200":
           description: Reviewable impacts and preview bound to the current version
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DirectEditImpactReview'
-        '409':
-          $ref: '#/components/responses/VersionConflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+                $ref: "#/components/schemas/DirectEditImpactReview"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /trips/{tripId}/commands/edit:
     post:
       tags: [Trips]
@@ -197,31 +197,31 @@ paths:
       summary: Validate a direct UI edit and append a trip version
       description: Applies edits immediately without supplier impact research. A supplied impact fingerprint instead applies the previously reviewed snapshot.
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TripMutationRequest'
+              $ref: "#/components/schemas/TripMutationRequest"
       responses:
-        '200':
+        "200":
           description: New authoritative snapshot
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TripEnvelope'
-        '409':
-          $ref: '#/components/responses/VersionConflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+                $ref: "#/components/schemas/TripEnvelope"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /trips/{tripId}/proposals/{proposalId}/accept:
     post:
       tags: [Trips]
       operationId: acceptTripProposal
       summary: Accept, validate, and apply a non-transactional proposal
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
         - name: proposalId
           in: path
           required: true
@@ -233,50 +233,49 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VersionedCommand'
+              $ref: "#/components/schemas/VersionedCommand"
       responses:
-        '200':
+        "200":
           description: Proposal applied as a new trip version
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TripEnvelope'
-        '409':
-          $ref: '#/components/responses/VersionConflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+                $ref: "#/components/schemas/TripEnvelope"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /trips/{tripId}/proposals/{proposalId}/reject:
     post:
       tags: [Trips]
       operationId: rejectTripProposal
       summary: Reject a proposal without changing the authoritative trip
       parameters:
-        - $ref: '#/components/parameters/TripId'
-        - $ref: '#/components/parameters/ProposalId'
+        - $ref: "#/components/parameters/TripId"
+        - $ref: "#/components/parameters/ProposalId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProposalRejectionRequest'
+              $ref: "#/components/schemas/ProposalRejectionRequest"
       responses:
-        '200':
+        "200":
           description: Proposal marked rejected
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeProposal'
-        '409':
-          $ref: '#/components/responses/VersionConflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+                $ref: "#/components/schemas/ChangeProposal"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   "/trips/{tripId}/commands/undo":
     post:
       tags: ["Trips"]
       operationId: "undoTripVersion"
       parameters:
-        -
-          $ref: "#/components/parameters/TripId"
+        - $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
@@ -284,7 +283,7 @@ paths:
             schema:
               type: "object"
               additionalProperties: false
-              required: ["requestId","expectedVersion","restoreVersion"]
+              required: ["requestId", "expectedVersion", "restoreVersion"]
               properties:
                 requestId:
                   type: "string"
@@ -309,43 +308,42 @@ paths:
       tags: [Trips]
       operationId: reviewFinalization
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
       responses:
-        '200':
+        "200":
           description: Saved-version feasibility review; this read never finalizes or books
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FinalizationReview'
+                $ref: "#/components/schemas/FinalizationReview"
     post:
       tags: [Trips]
       operationId: finalizeTrip
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/FinalizeCommand'
+              $ref: "#/components/schemas/FinalizeCommand"
       responses:
-        '200':
+        "200":
           description: Finalized planning trip with disclosed unverified conditions; no booking
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TripEnvelope'
-        '409':
-          $ref: '#/components/responses/VersionConflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+                $ref: "#/components/schemas/TripEnvelope"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   "/trips/{tripId}/agent-runs":
     post:
       tags: ["Agent Runs"]
       operationId: "startAgentRun"
       parameters:
-        -
-          $ref: "#/components/parameters/TripId"
+        - $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
@@ -353,7 +351,7 @@ paths:
             schema:
               type: "object"
               additionalProperties: false
-              required: ["requestId","baseTripVersion","message","purpose"]
+              required: ["requestId", "baseTripVersion", "message", "purpose"]
               properties:
                 requestId:
                   type: "string"
@@ -362,7 +360,7 @@ paths:
                   type: "integer"
                   minimum: 1
                 conversationId:
-                  type: ["string","null"]
+                  type: ["string", "null"]
                   format: "uuid"
                   description: Omit or null for the first run; web creates the owned conversation.
                 message:
@@ -370,7 +368,7 @@ paths:
                   minLength: 1
                   maxLength: 12000
                 purpose:
-                  enum: ["initial_estimate","refinement","finalization"]
+                  enum: ["initial_estimate", "refinement", "finalization"]
                 applicationPolicy:
                   enum: [manual, automatic]
                   default: manual
@@ -389,23 +387,23 @@ paths:
       tags: [Agent Runs]
       operationId: getAgentRun
       parameters:
-        - $ref: '#/components/parameters/RunId'
+        - $ref: "#/components/parameters/RunId"
       responses:
-        '200':
+        "200":
           description: Durable run status and final result when available
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AgentRun'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/AgentRun"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /agent-runs/{runId}/events:
     get:
       tags: [Agent Runs]
       operationId: streamAgentRunEvents
       summary: Replay and follow typed run events
       parameters:
-        - $ref: '#/components/parameters/RunId'
+        - $ref: "#/components/parameters/RunId"
         - name: after
           in: query
           required: false
@@ -413,7 +411,7 @@ paths:
             type: integer
             minimum: 0
       responses:
-        '200':
+        "200":
           description: >-
             SSE stream. Each data field is an AgentEvent JSON object; event IDs are
             monotonic cursors and Last-Event-ID may resume delivery.
@@ -422,89 +420,89 @@ paths:
               schema:
                 type: string
               x-sse-event-schema:
-                $ref: '#/components/schemas/AgentEvent'
+                $ref: "#/components/schemas/AgentEvent"
               x-internal-event-schema:
-                $ref: '../agent-api/openapi.yaml#/components/schemas/AgentEvent'
+                $ref: "../agent-api/openapi.yaml#/components/schemas/AgentEvent"
   /agent-runs/{runId}/clarifications:
     post:
       tags: [Agent Runs]
       operationId: forwardAgentClarification
       summary: Resume a suspended run with the traveller's focused clarification
       parameters:
-        - $ref: '#/components/parameters/RunId'
+        - $ref: "#/components/parameters/RunId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ClarificationForwardRequest'
+              $ref: "#/components/schemas/ClarificationForwardRequest"
       responses:
-        '200':
+        "200":
           description: Clarification durably recorded and run resumed under its original request identity
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AgentRun'
-        '409':
+                $ref: "#/components/schemas/AgentRun"
+        "409":
           description: Run is not awaiting this clarification or request identity conflicts
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/Problem'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+                $ref: "#/components/schemas/Problem"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /trips/{tripId}/booking/revalidations:
     post:
       tags: [Booking]
       operationId: startBookingRevalidation
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VersionedCommand'
+              $ref: "#/components/schemas/VersionedCommand"
       responses:
-        '202':
+        "202":
           description: Revalidation workflow accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkflowReference'
-        '409':
-          $ref: '#/components/responses/VersionConflict'
+                $ref: "#/components/schemas/WorkflowReference"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
   /trips/{tripId}/booking/authorizations:
     post:
       tags: [Booking]
       operationId: authorizeBookingTerms
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BookingAuthorizationRequest'
+              $ref: "#/components/schemas/BookingAuthorizationRequest"
       responses:
-        '201':
+        "201":
           description: Exact current terms authorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BookingAuthorization'
-        '409':
+                $ref: "#/components/schemas/BookingAuthorization"
+        "409":
           description: Terms expired, changed, or trip version no longer current
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/Problem'
+                $ref: "#/components/schemas/Problem"
   /trips/{tripId}/bookings:
     post:
       tags: [Booking]
       operationId: startBooking
       parameters:
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
@@ -521,34 +519,34 @@ paths:
                   type: string
                   format: uuid
       responses:
-        '202':
+        "202":
           description: Idempotent booking workflow accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BookingTransaction'
-        '409':
+                $ref: "#/components/schemas/BookingTransaction"
+        "409":
           description: Authorization is invalid, expired, consumed, or stale
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/Problem'
+                $ref: "#/components/schemas/Problem"
   /booking/revalidations/{workflowId}:
     get:
       tags: [Booking]
       operationId: getBookingRevalidation
       summary: Read durable revalidation status and immutable customer-safe terms
       parameters:
-        - $ref: '#/components/parameters/WorkflowId'
+        - $ref: "#/components/parameters/WorkflowId"
       responses:
-        '200':
+        "200":
           description: Current workflow status and terms when revalidation is complete
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RevalidationReview'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/RevalidationReview"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /bookings/{bookingId}:
     get:
       tags: [Booking]
@@ -561,14 +559,14 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Durable transaction and per-component outcomes
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BookingTransaction'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/BookingTransaction"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /bookings/{bookingId}/components/{componentId}/reschedule-revalidations:
     post:
       tags: [Booking]
@@ -591,128 +589,128 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RescheduleRevalidationRequest'
+              $ref: "#/components/schemas/RescheduleRevalidationRequest"
       responses:
-        '202':
+        "202":
           description: Independent rescheduling revalidation accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkflowReference'
-        '409':
+                $ref: "#/components/schemas/WorkflowReference"
+        "409":
           description: Component is not eligible or has an unresolved consequential write
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/Problem'
+                $ref: "#/components/schemas/Problem"
   /bookings/{bookingId}/components/{componentId}/recovery:
     post:
       tags: [Booking]
       operationId: recoverBookingComponent
       summary: Reconcile first, then perform only an explicitly safe eligible retry
       parameters:
-        - $ref: '#/components/parameters/BookingId'
-        - $ref: '#/components/parameters/ComponentId'
+        - $ref: "#/components/parameters/BookingId"
+        - $ref: "#/components/parameters/ComponentId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ComponentRecoveryRequest'
+              $ref: "#/components/schemas/ComponentRecoveryRequest"
       responses:
-        '202':
+        "202":
           description: Recovery workflow accepted or prior durable result replayed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BookingTransaction'
-        '409':
+                $ref: "#/components/schemas/BookingTransaction"
+        "409":
           description: Retry is unsafe, unauthorized, expired, or conflicts with an in-flight claim
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/Problem'
+                $ref: "#/components/schemas/Problem"
   /bookings/{bookingId}/components/{componentId}/cancellations:
     post:
       tags: [Booking]
       operationId: cancelBookingComponent
       summary: Execute a separately authorized component cancellation
       parameters:
-        - $ref: '#/components/parameters/BookingId'
-        - $ref: '#/components/parameters/ComponentId'
+        - $ref: "#/components/parameters/BookingId"
+        - $ref: "#/components/parameters/ComponentId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AuthorizedComponentCommand'
+              $ref: "#/components/schemas/AuthorizedComponentCommand"
       responses:
-        '202':
+        "202":
           description: Cancellation workflow accepted or prior durable result replayed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BookingTransaction'
-        '409':
+                $ref: "#/components/schemas/BookingTransaction"
+        "409":
           description: Cancellation authorization is stale, expired, consumed, or mismatched
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/Problem'
+                $ref: "#/components/schemas/Problem"
   /bookings/{bookingId}/components/{componentId}/reschedule-authorizations:
     post:
       tags: [Booking]
       operationId: authorizeComponentReschedule
       summary: Authorize exact freshly revalidated terms for one component reschedule
       parameters:
-        - $ref: '#/components/parameters/BookingId'
-        - $ref: '#/components/parameters/ComponentId'
+        - $ref: "#/components/parameters/BookingId"
+        - $ref: "#/components/parameters/ComponentId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RescheduleAuthorizationRequest'
+              $ref: "#/components/schemas/RescheduleAuthorizationRequest"
       responses:
-        '201':
+        "201":
           description: Exact component reschedule terms authorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BookingAuthorization'
-        '409':
+                $ref: "#/components/schemas/BookingAuthorization"
+        "409":
           description: Revalidated terms changed, expired, or do not match this component
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/Problem'
+                $ref: "#/components/schemas/Problem"
   /bookings/{bookingId}/components/{componentId}/reschedules:
     post:
       tags: [Booking]
       operationId: rescheduleBookingComponent
       summary: Execute an authorized reschedule without changing unrelated components
       parameters:
-        - $ref: '#/components/parameters/BookingId'
-        - $ref: '#/components/parameters/ComponentId'
+        - $ref: "#/components/parameters/BookingId"
+        - $ref: "#/components/parameters/ComponentId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AuthorizedComponentCommand'
+              $ref: "#/components/schemas/AuthorizedComponentCommand"
       responses:
-        '202':
+        "202":
           description: Reschedule workflow accepted or prior durable result replayed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BookingTransaction'
-        '409':
+                $ref: "#/components/schemas/BookingTransaction"
+        "409":
           description: Reschedule authorization is stale, expired, consumed, or mismatched
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/Problem'
+                $ref: "#/components/schemas/Problem"
   /internal/trips/{tripId}/agent-view:
     get:
       tags: [Internal Agent Tools]
@@ -728,7 +726,7 @@ paths:
           in: header
           required: true
           schema: { type: string, format: uuid }
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
         - name: baseTripVersion
           in: query
           required: true
@@ -741,14 +739,14 @@ paths:
           schema:
             enum: [compact, itinerary, components, pricing, constraints]
       responses:
-        '200':
+        "200":
           description: Authorized bounded trip projection
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TripEnvelope'
-        '409':
-          $ref: '#/components/responses/VersionConflict'
+                $ref: "#/components/schemas/TripEnvelope"
+        "409":
+          $ref: "#/components/responses/VersionConflict"
   /internal/pricing/{tripId}:
     get:
       tags: [Internal Agent Tools]
@@ -770,7 +768,7 @@ paths:
           in: header
           description: Required when the version query parameter is omitted; must match the scoped token.
           schema: { type: integer, minimum: 1 }
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
         - name: version
           in: query
           required: false
@@ -778,20 +776,20 @@ paths:
             type: integer
             minimum: 1
       responses:
-        '200':
+        "200":
           description: Role-restricted internal pricing calculation
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PricingDiagnostic'
-        '403':
+                $ref: "#/components/schemas/PricingDiagnostic"
+        "403":
           description: Authenticated actor lacks an allowed pricing role
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/Problem'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/Problem"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /internal/trips/{tripId}/proposals:
     post:
       tags: [Internal Agent Tools]
@@ -807,22 +805,22 @@ paths:
           in: header
           required: true
           schema: { type: string, format: uuid }
-        - $ref: '#/components/parameters/TripId'
+        - $ref: "#/components/parameters/TripId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '../agent-api/openapi.yaml#/components/schemas/ChangeProposal'
+              $ref: "../agent-api/openapi.yaml#/components/schemas/ChangeProposal"
       responses:
-        '201':
+        "201":
           description: Proposal recorded without applying it
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChangeProposal'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+                $ref: "#/components/schemas/ChangeProposal"
+        "422":
+          $ref: "#/components/responses/ValidationError"
   /internal/context/search:
     post:
       tags: [Internal Agent Tools]
@@ -857,7 +855,7 @@ paths:
                   minimum: 1
                   maximum: 20
       responses:
-        '200':
+        "200":
           description: Redacted, bounded historical context
           content:
             application/json:
@@ -886,16 +884,13 @@ paths:
       operationId: "persistAgentRunEvent"
       summary: "Commit scoped durable agent event and return its idempotent receipt"
       security:
-        -
-          internalService: []
+        - internalService: []
       x-required-scope: "run:write"
       x-service-audience: "web"
       x-run-binding: true
       parameters:
-        -
-          $ref: "#/components/parameters/RunId"
-        -
-          name: "cursor"
+        - $ref: "#/components/parameters/RunId"
+        - name: "cursor"
           in: "path"
           required: true
           schema:
@@ -940,14 +935,12 @@ paths:
       operationId: "persistAgentRunResult"
       summary: "Commit scoped durable agent result and return its idempotent receipt"
       security:
-        -
-          internalService: []
+        - internalService: []
       x-required-scope: "run:write"
       x-service-audience: "web"
       x-run-binding: true
       parameters:
-        -
-          $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/RunId"
       requestBody:
         required: true
         content:
@@ -984,34 +977,34 @@ paths:
   /internal/agent-runs/{runId}:
     get:
       operationId: readDurableInternalRun
-      security: [{internalService: []}]
+      security: [{ internalService: [] }]
       parameters:
-        - $ref: '#/components/parameters/RunId'
-        - $ref: '#/components/parameters/InternalUserId'
-        - $ref: '#/components/parameters/InternalRequestId'
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/InternalUserId"
+        - $ref: "#/components/parameters/InternalRequestId"
       responses:
-        '200':
+        "200":
           description: Scoped durable status; never restarts research
           content:
             application/json:
               schema:
-                $ref: '../agent-api/openapi.yaml#/components/schemas/AgentRun'
+                $ref: "../agent-api/openapi.yaml#/components/schemas/AgentRun"
   /internal/agent-runs/{runId}/validate:
     post:
       operationId: bindReservedAgentDispatch
-      security: [{internalService: []}]
+      security: [{ internalService: [] }]
       parameters:
-        - $ref: '#/components/parameters/RunId'
-        - $ref: '#/components/parameters/InternalUserId'
-        - $ref: '#/components/parameters/InternalRequestId'
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/InternalUserId"
+        - $ref: "#/components/parameters/InternalRequestId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '../agent-api/openapi.yaml#/components/schemas/CreateAgentRunRequest'
+              $ref: "../agent-api/openapi.yaml#/components/schemas/CreateAgentRunRequest"
       responses:
-        '200':
+        "200":
           description: Fingerprint matches the reservation and original dispatch
           content:
             application/json:
@@ -1020,22 +1013,22 @@ paths:
                 additionalProperties: false
                 required: [accepted]
                 properties:
-                  accepted: {const: true}
-        '409':
-          $ref: '#/components/responses/VersionConflict'
+                  accepted: { const: true }
+        "409":
+          $ref: "#/components/responses/VersionConflict"
   /internal/agent-runs/{runId}/events:
     get:
       operationId: replayDurableInternalEvents
-      security: [{internalService: []}]
+      security: [{ internalService: [] }]
       parameters:
-        - $ref: '#/components/parameters/RunId'
-        - $ref: '#/components/parameters/InternalUserId'
-        - $ref: '#/components/parameters/InternalRequestId'
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/InternalUserId"
+        - $ref: "#/components/parameters/InternalRequestId"
         - in: query
           name: after
-          schema: {type: integer, minimum: 0, default: 0}
+          schema: { type: integer, minimum: 0, default: 0 }
       responses:
-        '200':
+        "200":
           description: Recorded contiguous events only
           content:
             application/json:
@@ -1043,21 +1036,21 @@ paths:
                 type: array
                 maxItems: 256
                 items:
-                  $ref: '../agent-api/openapi.yaml#/components/schemas/AgentEvent'
+                  $ref: "../agent-api/openapi.yaml#/components/schemas/AgentEvent"
   /internal/agent-runs/{runId}/resumes/{questionId}:
     get:
       operationId: readDurableResumeReceipt
-      security: [{internalService: []}]
+      security: [{ internalService: [] }]
       parameters:
-        - $ref: '#/components/parameters/RunId'
-        - $ref: '#/components/parameters/InternalUserId'
-        - $ref: '#/components/parameters/InternalRequestId'
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/InternalUserId"
+        - $ref: "#/components/parameters/InternalRequestId"
         - in: path
           name: questionId
           required: true
-          schema: {type: string, format: uuid}
+          schema: { type: string, format: uuid }
       responses:
-        '200':
+        "200":
           description: Scoped clarification fingerprint and pre-dispatch cursor
           content:
             application/json:
@@ -1066,20 +1059,20 @@ paths:
                 additionalProperties: false
                 required: [fingerprint, eventCursor]
                 properties:
-                  fingerprint: {type: string, pattern: '^[a-f0-9]{64}$'}
-                  eventCursor: {type: integer, minimum: 0}
+                  fingerprint: { type: string, pattern: "^[a-f0-9]{64}$" }
+                  eventCursor: { type: integer, minimum: 0 }
   /internal/trips/{tripId}/planning-search:
     post:
       operationId: searchScopedPlanningOffers
-      security: [{internalService: []}]
+      security: [{ internalService: [] }]
       parameters:
-        - $ref: '#/components/parameters/TripId'
-        - $ref: '#/components/parameters/InternalUserId'
-        - $ref: '#/components/parameters/InternalRequestId'
+        - $ref: "#/components/parameters/TripId"
+        - $ref: "#/components/parameters/InternalUserId"
+        - $ref: "#/components/parameters/InternalRequestId"
         - in: header
           name: x-base-trip-version
           required: true
-          schema: {type: integer, minimum: 1}
+          schema: { type: integer, minimum: 1 }
       requestBody:
         required: true
         content:
@@ -1089,15 +1082,15 @@ paths:
               additionalProperties: false
               required: [startDate, endDate, destinationIds]
               properties:
-                startDate: {type: string, format: date}
-                endDate: {type: string, format: date}
+                startDate: { type: string, format: date }
+                endDate: { type: string, format: date }
                 destinationIds:
                   type: array
                   minItems: 1
                   maxItems: 8
-                  items: {type: string, format: uuid}
+                  items: { type: string, format: uuid }
       responses:
-        '200':
+        "200":
           description: Customer-price projected, unbooked planning offers. Internal costs remain in web-owned records.
           content:
             application/json:
@@ -1106,8 +1099,8 @@ paths:
                 additionalProperties: false
                 required: [offers, outcomes]
                 properties:
-                  offers: {type: array, maxItems: 32, items: {type: object}}
-                  outcomes: {type: array, maxItems: 4, items: {type: object}}
+                  offers: { type: array, maxItems: 32, items: { type: object } }
+                  outcomes: { type: array, maxItems: 4, items: { type: object } }
 components:
   securitySchemes:
     browserSession:
@@ -1123,12 +1116,12 @@ components:
       name: x-user-id
       in: header
       required: true
-      schema: {type: string, format: uuid}
+      schema: { type: string, format: uuid }
     InternalRequestId:
       name: x-request-id
       in: header
       required: true
-      schema: {type: string, format: uuid}
+      schema: { type: string, format: uuid }
     TripId:
       name: tripId
       in: path
@@ -1178,7 +1171,7 @@ components:
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: "#/components/schemas/Problem"
     VersionConflict:
       description: "Expected trip version is stale"
       content:
@@ -1186,7 +1179,7 @@ components:
           schema:
             type: "object"
             additionalProperties: false
-            required: ["type","title","status","code","correlationId","currentVersion"]
+            required: ["type", "title", "status", "code", "correlationId", "currentVersion"]
             properties:
               type:
                 type: "string"
@@ -1211,15 +1204,16 @@ components:
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: "#/components/schemas/Problem"
   schemas:
     DepartureOrigin:
       type: "object"
       additionalProperties: false
-      required: ["kind","placeId","name","countryCode","timezone","airportCode","confirmedByUser"]
+      required:
+        ["kind", "placeId", "name", "countryCode", "timezone", "airportCode", "confirmedByUser"]
       properties:
         kind:
-          enum: ["city","airport"]
+          enum: ["city", "airport"]
         placeId:
           type: "string"
           minLength: 1
@@ -1235,14 +1229,14 @@ components:
           minLength: 1
           description: "Valid IANA timezone; domain validates registry membership."
         airportCode:
-          type: ["string","null"]
+          type: ["string", "null"]
           pattern: "^[A-Z]{3}$"
         confirmedByUser:
           const: true
         location:
-          type: ["object","null"]
+          type: ["object", "null"]
           additionalProperties: false
-          required: ["latitude","longitude"]
+          required: ["latitude", "longitude"]
           properties:
             latitude:
               type: "number"
@@ -1253,8 +1247,7 @@ components:
               minimum: -180
               maximum: 180
       allOf:
-        -
-          if:
+        - if:
             properties:
               kind:
                 const: "airport"
@@ -1270,7 +1263,7 @@ components:
     EstimatedCostRange:
       type: "object"
       additionalProperties: false
-      required: ["currency","minimumMinor","maximumMinor"]
+      required: ["currency", "minimumMinor", "maximumMinor"]
       properties:
         currency:
           type: "string"
@@ -1286,7 +1279,7 @@ components:
       type: "object"
       additionalProperties: false
       description: "Customer-safe reference to immutable approved terms; never includes internal supplier pricing or sensitive execution inputs."
-      required: ["tripVersion","termsHash","expiresAt"]
+      required: ["tripVersion", "termsHash", "expiresAt"]
       properties:
         tripVersion:
           type: "integer"
@@ -1299,15 +1292,15 @@ components:
           type: "string"
           format: "date-time"
     PersistAgentEventRequest:
-      $ref: '../agent-api/openapi.yaml#/components/schemas/PersistAgentEventRequest'
+      $ref: "../agent-api/openapi.yaml#/components/schemas/PersistAgentEventRequest"
     PersistAgentResultRequest:
-      $ref: '../agent-api/openapi.yaml#/components/schemas/PersistAgentResultRequest'
+      $ref: "../agent-api/openapi.yaml#/components/schemas/PersistAgentResultRequest"
     AgentPersistenceReceipt:
-      $ref: '../agent-api/openapi.yaml#/components/schemas/AgentPersistenceReceipt'
+      $ref: "../agent-api/openapi.yaml#/components/schemas/AgentPersistenceReceipt"
     CreateTripRequest:
       type: "object"
       additionalProperties: false
-      required: ["requestId","title","currency","snapshot"]
+      required: ["requestId", "title", "currency", "snapshot"]
       properties:
         requestId:
           type: "string"
@@ -1324,7 +1317,7 @@ components:
     VersionedCommand:
       type: "object"
       additionalProperties: false
-      required: ["requestId","expectedVersion"]
+      required: ["requestId", "expectedVersion"]
       properties:
         requestId:
           type: "string"
@@ -1335,7 +1328,7 @@ components:
     TripMutationRequest:
       type: "object"
       additionalProperties: false
-      required: ["requestId","expectedVersion","operations"]
+      required: ["requestId", "expectedVersion", "operations"]
       properties:
         requestId:
           type: "string"
@@ -1370,11 +1363,22 @@ components:
           minItems: 1
           maxItems: 32
           items:
-            $ref: '#/components/schemas/DraftOperation'
+            $ref: "#/components/schemas/DraftOperation"
     DirectEditImpactReview:
       type: object
       additionalProperties: false
-      required: [reviewId, impactFingerprint, tripId, baseTripVersion, operations, affectedFacts, impacts, previewSnapshot, expiresAt]
+      required:
+        [
+          reviewId,
+          impactFingerprint,
+          tripId,
+          baseTripVersion,
+          operations,
+          affectedFacts,
+          impacts,
+          previewSnapshot,
+          expiresAt,
+        ]
       properties:
         reviewId:
           type: string
@@ -1394,23 +1398,24 @@ components:
           minItems: 1
           maxItems: 32
           items:
-            $ref: '#/components/schemas/DraftOperation'
+            $ref: "#/components/schemas/DraftOperation"
         affectedFacts:
           type: array
           minItems: 1
           items:
             type: string
         impacts:
-          $ref: '#/components/schemas/TripImpact'
+          $ref: "#/components/schemas/TripImpact"
         previewSnapshot:
-          $ref: '#/components/schemas/TripSnapshot'
+          $ref: "#/components/schemas/TripSnapshot"
         expiresAt:
           type: string
           format: date-time
     TripImpact:
       type: object
       additionalProperties: false
-      required: [route, dates, transport, stays, activities, availability, constraints, schedule, price]
+      required:
+        [route, dates, transport, stays, activities, availability, constraints, schedule, price]
       properties:
         route:
           type: array
@@ -1437,7 +1442,7 @@ components:
           type: array
           items: { type: string }
         price:
-          $ref: '#/components/schemas/PriceImpact'
+          $ref: "#/components/schemas/PriceImpact"
     PriceImpact:
       type: object
       additionalProperties: false
@@ -1445,7 +1450,7 @@ components:
       properties:
         currency:
           type: string
-          pattern: '^[A-Z]{3}$'
+          pattern: "^[A-Z]{3}$"
         beforeMinor:
           type: integer
           minimum: 0
@@ -1471,10 +1476,10 @@ components:
     DraftOperation:
       type: "object"
       additionalProperties: false
-      required: ["operation","target","value"]
+      required: ["operation", "target", "value"]
       properties:
         operation:
-          enum: ["add","replace","remove","reorder"]
+          enum: ["add", "replace", "remove", "reorder"]
         target:
           type: "string"
           pattern: "^/(departureOrigin|departureOrigins|destinationOrder|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(/.*)?$"
@@ -1487,7 +1492,7 @@ components:
         requestId: { type: string, format: uuid }
         expectedVersion: { type: integer, minimum: 1 }
         acknowledgeUnverified: { type: boolean }
-        reviewFingerprint: { type: string, pattern: '^[a-f0-9]{64}$' }
+        reviewFingerprint: { type: string, pattern: "^[a-f0-9]{64}$" }
     FinalizationIssue:
       type: object
       additionalProperties: false
@@ -1505,22 +1510,31 @@ components:
       properties:
         tripId: { type: string, format: uuid }
         version: { type: integer, minimum: 1 }
-        reviewFingerprint: { type: string, pattern: '^[a-f0-9]{64}$' }
+        reviewFingerprint: { type: string, pattern: "^[a-f0-9]{64}$" }
         report:
           type: object
           additionalProperties: false
-          required: [policyVersion, blocking, unverified, exceptions, suggestions, totalItems, verifiedItems]
+          required:
+            [
+              policyVersion,
+              blocking,
+              unverified,
+              exceptions,
+              suggestions,
+              totalItems,
+              verifiedItems,
+            ]
           properties:
-            policyVersion: { const: '1' }
+            policyVersion: { const: "1" }
             blocking:
               type: array
-              items: { $ref: '#/components/schemas/FinalizationIssue' }
+              items: { $ref: "#/components/schemas/FinalizationIssue" }
             unverified:
               type: array
-              items: { $ref: '#/components/schemas/FinalizationIssue' }
+              items: { $ref: "#/components/schemas/FinalizationIssue" }
             exceptions:
               type: array
-              items: { $ref: '#/components/schemas/FinalizationIssue' }
+              items: { $ref: "#/components/schemas/FinalizationIssue" }
             suggestions:
               type: array
               items:
@@ -1536,7 +1550,7 @@ components:
     TripEnvelope:
       type: "object"
       additionalProperties: false
-      required: ["tripId","version","lifecycleState","snapshot","updatedAt"]
+      required: ["tripId", "version", "lifecycleState", "snapshot", "updatedAt"]
       properties:
         tripId:
           type: "string"
@@ -1545,7 +1559,7 @@ components:
           type: "integer"
           minimum: 1
         lifecycleState:
-          enum: ["draft","finalized","partially_booked","booked","cancelled"]
+          enum: ["draft", "finalized", "partially_booked", "booked", "cancelled"]
         snapshot:
           $ref: "#/components/schemas/TripSnapshot"
         updatedAt:
@@ -1554,7 +1568,20 @@ components:
     TripSnapshot:
       type: "object"
       additionalProperties: false
-      required: ["departureOrigin","availabilityWindows","duration","travellerParty","preferences","constraints","destinations","itineraryDays","components","price","warnings"]
+      required:
+        [
+          "departureOrigin",
+          "availabilityWindows",
+          "duration",
+          "travellerParty",
+          "preferences",
+          "constraints",
+          "destinations",
+          "itineraryDays",
+          "components",
+          "price",
+          "warnings",
+        ]
       properties:
         destinationOrder:
           type: "string"
@@ -1574,7 +1601,7 @@ components:
             additionalProperties: true
         duration:
           type: "object"
-          required: ["minimumDays","idealDays","maximumDays"]
+          required: ["minimumDays", "idealDays", "maximumDays"]
           properties:
             minimumDays:
               type: "integer"
@@ -1624,15 +1651,13 @@ components:
         departureOrigin:
           description: "Resolved traveller-confirmed origin for estimation. Null is a legacy/draft read projection that blocks flight estimation until explicitly confirmed."
           oneOf:
-            -
-              $ref: "#/components/schemas/DepartureOrigin"
-            -
-              type: "null"
+            - $ref: "#/components/schemas/DepartureOrigin"
+            - type: "null"
     PublicPrice:
       type: "object"
       description: "Customer projection intentionally excludes supplier amount and platform margin."
       additionalProperties: false
-      required: ["currency","finalCustomerMinor","status","checkedAt"]
+      required: ["currency", "finalCustomerMinor", "status", "checkedAt"]
       properties:
         currency:
           type: "string"
@@ -1647,17 +1672,31 @@ components:
           type: "integer"
           minimum: 0
         status:
-          enum: ["estimated","quoted","live","expired","confirmed"]
+          enum: ["estimated", "quoted", "live", "expired", "confirmed"]
         checkedAt:
           type: "string"
           format: "date-time"
         expiresAt:
-          type: ["string","null"]
+          type: ["string", "null"]
           format: "date-time"
     ChangeProposal:
       type: "object"
       additionalProperties: false
-      required: ["id","purpose","initiatingRequestId","tripId","agentRunId","baseTripVersion","operations","affectedFacts","rationale","status","createdAt","expiresAt"]
+      required:
+        [
+          "id",
+          "purpose",
+          "initiatingRequestId",
+          "tripId",
+          "agentRunId",
+          "baseTripVersion",
+          "operations",
+          "affectedFacts",
+          "rationale",
+          "status",
+          "createdAt",
+          "expiresAt",
+        ]
       properties:
         id:
           type: "string"
@@ -1692,7 +1731,7 @@ components:
           items:
             type: "string"
         status:
-          enum: ["proposed","needs_clarification","accepted","applied","rejected","stale"]
+          enum: ["proposed", "needs_clarification", "accepted", "applied", "rejected", "stale"]
         createdAt:
           type: "string"
           format: "date-time"
@@ -1700,7 +1739,7 @@ components:
           type: "string"
           format: "date-time"
         purpose:
-          enum: ["initial_estimate","refinement","finalization"]
+          enum: ["initial_estimate", "refinement", "finalization"]
         initiatingRequestId:
           type: "string"
           format: "uuid"
@@ -1735,13 +1774,19 @@ components:
           items:
             type: "string"
       allOf:
-        -
-          if:
+        - if:
             properties:
               purpose:
                 const: "initial_estimate"
           then:
-            required: ["previewSnapshot","estimatedCostRange","styleCompatibility","constraintSummary","warnings"]
+            required:
+              [
+                "previewSnapshot",
+                "estimatedCostRange",
+                "styleCompatibility",
+                "constraintSummary",
+                "warnings",
+              ]
         - if:
             properties:
               purpose: { const: refinement }
@@ -1754,12 +1799,26 @@ components:
       properties:
         id: { type: string, format: uuid }
         nights: { type: integer, minimum: 0 }
-        arrivalDate: { type: [string, 'null'], format: date }
-        departureDate: { type: [string, 'null'], format: date }
+        arrivalDate: { type: [string, "null"], format: date }
+        departureDate: { type: [string, "null"], format: date }
     AgentRun:
       type: "object"
       additionalProperties: false
-      required: ["id","requestId","tripId","conversationId","purpose","baseTripVersion","status","nextEventCursor","leaseExpiresAt","lastDurableProgressAt","interruptionReason","createdAt"]
+      required:
+        [
+          "id",
+          "requestId",
+          "tripId",
+          "conversationId",
+          "purpose",
+          "baseTripVersion",
+          "status",
+          "nextEventCursor",
+          "leaseExpiresAt",
+          "lastDurableProgressAt",
+          "interruptionReason",
+          "createdAt",
+        ]
       properties:
         id:
           type: "string"
@@ -1774,44 +1833,51 @@ components:
           type: "string"
           format: "uuid"
         purpose:
-          enum: ["initial_estimate","refinement","finalization"]
+          enum: ["initial_estimate", "refinement", "finalization"]
         baseTripVersion:
           type: "integer"
           minimum: 1
         status:
-          enum: ["queued","running","awaiting_clarification","proposed","completed","failed","cancelled"]
+          enum:
+            [
+              "queued",
+              "running",
+              "awaiting_clarification",
+              "proposed",
+              "completed",
+              "failed",
+              "cancelled",
+            ]
         result:
           oneOf:
-            -
-              $ref: "#/components/schemas/PublicAgentResult"
-            -
-              type: "null"
+            - $ref: "#/components/schemas/PublicAgentResult"
+            - type: "null"
         nextEventCursor:
           type: "integer"
           minimum: 0
         leaseExpiresAt:
-          type: ["string","null"]
+          type: ["string", "null"]
           format: "date-time"
           description: "Queued/running lease expires after 90 seconds and is suspended while awaiting clarification."
         lastDurableProgressAt:
-          type: ["string","null"]
+          type: ["string", "null"]
           format: "date-time"
           description: "Durably persisted progress renews the lease at least every 15 seconds."
         interruptionReason:
-          type: ["string","null"]
-          enum: ["lease_expired",null]
+          type: ["string", "null"]
+          enum: ["lease_expired", null]
         createdAt:
           type: "string"
           format: "date-time"
         completedAt:
-          type: ["string","null"]
+          type: ["string", "null"]
           format: "date-time"
     ClarificationForwardRequest:
-      $ref: '../agent-api/openapi.yaml#/components/schemas/AnswerClarificationRequest'
+      $ref: "../agent-api/openapi.yaml#/components/schemas/AnswerClarificationRequest"
     PublicAgentResult:
       oneOf:
-        - $ref: '../agent-api/openapi.yaml#/components/schemas/AnswerResult'
-        - $ref: '../agent-api/openapi.yaml#/components/schemas/ClarificationResult'
+        - $ref: "../agent-api/openapi.yaml#/components/schemas/AnswerResult"
+        - $ref: "../agent-api/openapi.yaml#/components/schemas/ClarificationResult"
         - type: object
           additionalProperties: false
           required: [kind, message, proposal]
@@ -1823,7 +1889,7 @@ components:
               minLength: 1
               maxLength: 12000
             proposal:
-              $ref: '#/components/schemas/ChangeProposal'
+              $ref: "#/components/schemas/ChangeProposal"
     AgentEvent:
       type: "object"
       additionalProperties: false
@@ -1831,7 +1897,7 @@ components:
         Public SSE envelope translated from the internal typed event only after its
         durable receipt. Identity fields are preserved and variant fields move under
         payload; proposals are loaded from the web repository and customer-price projected.
-      required: ["version","runId","cursor","type","occurredAt","payload"]
+      required: ["version", "runId", "cursor", "type", "occurredAt", "payload"]
       properties:
         version:
           const: "1"
@@ -1842,7 +1908,7 @@ components:
           type: "integer"
           minimum: 1
         type:
-          enum: ["progress","clarification","proposal","completed","failed"]
+          enum: ["progress", "clarification", "proposal", "completed", "failed"]
         occurredAt:
           type: "string"
           format: "date-time"
@@ -1857,9 +1923,9 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/Conversation'
+            $ref: "#/components/schemas/Conversation"
         nextCursor:
-          type: [string, 'null']
+          type: [string, "null"]
           maxLength: 256
     Conversation:
       type: object
@@ -1875,7 +1941,7 @@ components:
         messages:
           type: array
           items:
-            $ref: '#/components/schemas/ConversationMessage'
+            $ref: "#/components/schemas/ConversationMessage"
         createdAt:
           type: string
           format: date-time
@@ -1897,10 +1963,10 @@ components:
           maxLength: 12000
           description: Redacted permitted content only.
         tripVersion:
-          type: [integer, 'null']
+          type: [integer, "null"]
           minimum: 1
         agentRunId:
-          type: [string, 'null']
+          type: [string, "null"]
           format: uuid
         createdAt:
           type: string
@@ -1921,35 +1987,47 @@ components:
               messages:
                 type: array
                 maxItems: 200
-                items: { $ref: '#/components/schemas/ConversationMessage' }
-        nextMessageCursor: { type: [string, 'null'], format: uuid }
+                items: { $ref: "#/components/schemas/ConversationMessage" }
+        nextMessageCursor: { type: [string, "null"], format: uuid }
     ChatVersionPage:
       type: object
       additionalProperties: false
       required: [items, nextBeforeVersion]
       properties:
-        nextBeforeVersion: { type: [integer, 'null'], minimum: 1 }
+        nextBeforeVersion: { type: [integer, "null"], minimum: 1 }
         items:
           type: array
           maxItems: 50
           items:
             type: object
             additionalProperties: false
-            required: [version, previousVersion, actor, requestId, proposalId, summary, createdAt, runId, restorable, restoreReason]
+            required:
+              [
+                version,
+                previousVersion,
+                actor,
+                requestId,
+                proposalId,
+                summary,
+                createdAt,
+                runId,
+                restorable,
+                restoreReason,
+              ]
             properties:
               version: { type: integer, minimum: 1 }
-              previousVersion: { type: [integer, 'null'], minimum: 1 }
+              previousVersion: { type: [integer, "null"], minimum: 1 }
               actor: { enum: [user, agent_proposal, system_revalidation, booking_workflow] }
               requestId: { type: string, format: uuid }
-              proposalId: { type: [string, 'null'], format: uuid }
+              proposalId: { type: [string, "null"], format: uuid }
               summary:
                 type: array
                 maxItems: 6
                 items: { type: string, maxLength: 256 }
               createdAt: { type: string, format: date-time }
-              runId: { type: [string, 'null'], format: uuid }
+              runId: { type: [string, "null"], format: uuid }
               restorable: { type: boolean }
-              restoreReason: { type: [string, 'null'] }
+              restoreReason: { type: [string, "null"] }
     TripVersionPage:
       type: object
       additionalProperties: false
@@ -1958,11 +2036,20 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/TripVersionSummary'
+            $ref: "#/components/schemas/TripVersionSummary"
     TripVersionSummary:
       type: object
       additionalProperties: false
-      required: [version, initiatingActor, initiatingRequestId, affectedFacts, reversible, snapshot, createdAt]
+      required:
+        [
+          version,
+          initiatingActor,
+          initiatingRequestId,
+          affectedFacts,
+          reversible,
+          snapshot,
+          createdAt,
+        ]
       properties:
         version:
           type: integer
@@ -1978,10 +2065,10 @@ components:
         reversible:
           type: boolean
         reversedFromVersion:
-          type: [integer, 'null']
+          type: [integer, "null"]
           minimum: 1
         snapshot:
-          $ref: '#/components/schemas/TripSnapshot'
+          $ref: "#/components/schemas/TripSnapshot"
         createdAt:
           type: string
           format: date-time
@@ -1998,13 +2085,13 @@ components:
           minimum: 1
         currency:
           type: string
-          pattern: '^[A-Z]{3}$'
+          pattern: "^[A-Z]{3}$"
         components:
           type: array
           items:
-            $ref: '#/components/schemas/PricingDiagnosticLine'
+            $ref: "#/components/schemas/PricingDiagnosticLine"
         totals:
-          $ref: '#/components/schemas/PricingDiagnosticAmounts'
+          $ref: "#/components/schemas/PricingDiagnosticAmounts"
         calculatedAt:
           type: string
           format: date-time
@@ -2054,16 +2141,24 @@ components:
     WorkflowReference:
       type: "object"
       additionalProperties: false
-      required: ["workflowId","status"]
+      required: ["workflowId", "status"]
       properties:
         workflowId:
           type: "string"
         status:
-          enum: ["accepted","running"]
+          enum: ["accepted", "running"]
     BookingAuthorizationRequest:
       type: object
       additionalProperties: false
-      required: [requestId, tripVersion, termsHash, operation, componentId, acknowledgedNonReversibleActions]
+      required:
+        [
+          requestId,
+          tripVersion,
+          termsHash,
+          operation,
+          componentId,
+          acknowledgedNonReversibleActions,
+        ]
       properties:
         requestId:
           type: string
@@ -2078,7 +2173,7 @@ components:
         operation:
           enum: [book_trip, cancel_component]
         componentId:
-          type: [string, 'null']
+          type: [string, "null"]
           format: uuid
           description: Required by the domain for cancel_component and null for book_trip.
         acknowledgedNonReversibleActions:
@@ -2096,7 +2191,7 @@ components:
           type: string
           format: uuid
         requestedChange:
-          $ref: '#/components/schemas/RequestedComponentChange'
+          $ref: "#/components/schemas/RequestedComponentChange"
     RequestedComponentChange:
       type: object
       additionalProperties: false
@@ -2124,7 +2219,8 @@ components:
     RescheduleAuthorizationRequest:
       type: object
       additionalProperties: false
-      required: [requestId, revalidationId, tripVersion, termsHash, acknowledgedNonReversibleActions]
+      required:
+        [requestId, revalidationId, tripVersion, termsHash, acknowledgedNonReversibleActions]
       properties:
         requestId:
           type: string
@@ -2168,7 +2264,7 @@ components:
         action:
           enum: [status_check, retry]
         authorizationId:
-          type: [string, 'null']
+          type: [string, "null"]
           format: uuid
           description: Required by the domain only for a separately authorized retry.
     RevalidationReview:
@@ -2189,17 +2285,17 @@ components:
         outcomes:
           type: array
           items:
-            $ref: '#/components/schemas/RevalidationComponentOutcome'
+            $ref: "#/components/schemas/RevalidationComponentOutcome"
         termsHash:
-          type: [string, 'null']
+          type: [string, "null"]
           minLength: 32
           maxLength: 256
         terms:
           oneOf:
-            - $ref: '#/components/schemas/RevalidatedTerms'
-            - type: 'null'
+            - $ref: "#/components/schemas/RevalidatedTerms"
+            - type: "null"
         expiresAt:
-          type: [string, 'null']
+          type: [string, "null"]
           format: date-time
     RevalidationComponentOutcome:
       type: object
@@ -2213,10 +2309,10 @@ components:
           enum: [unchanged, changed, unavailable, unknown]
         terms:
           oneOf:
-            - $ref: '#/components/schemas/RevalidatedComponentTerms'
-            - type: 'null'
+            - $ref: "#/components/schemas/RevalidatedComponentTerms"
+            - type: "null"
         safeReason:
-          type: [string, 'null']
+          type: [string, "null"]
           maxLength: 500
     RevalidatedTerms:
       type: object
@@ -2224,16 +2320,16 @@ components:
       required: [departureOrigin, travellerParty, components, totalPrice, nonReversibleActions]
       properties:
         departureOrigin:
-          $ref: '#/components/schemas/DepartureOrigin'
+          $ref: "#/components/schemas/DepartureOrigin"
         travellerParty:
           type: object
           additionalProperties: true
         components:
           type: array
           items:
-            $ref: '#/components/schemas/RevalidatedComponentTerms'
+            $ref: "#/components/schemas/RevalidatedComponentTerms"
         totalPrice:
-          $ref: '#/components/schemas/PublicPrice'
+          $ref: "#/components/schemas/PublicPrice"
         nonReversibleActions:
           type: array
           items:
@@ -2242,7 +2338,20 @@ components:
     RevalidatedComponentTerms:
       type: object
       additionalProperties: false
-      required: [componentId, supplierOfferId, inventoryId, serviceStart, serviceEnd, travellerIds, finalCustomerMinor, currency, cancellationTerms, checkedAt, expiresAt]
+      required:
+        [
+          componentId,
+          supplierOfferId,
+          inventoryId,
+          serviceStart,
+          serviceEnd,
+          travellerIds,
+          finalCustomerMinor,
+          currency,
+          cancellationTerms,
+          checkedAt,
+          expiresAt,
+        ]
       properties:
         componentId:
           type: string
@@ -2276,7 +2385,7 @@ components:
           minimum: 0
         currency:
           type: string
-          pattern: '^[A-Z]{3}$'
+          pattern: "^[A-Z]{3}$"
         cancellationTerms:
           type: string
           minLength: 1
@@ -2289,7 +2398,18 @@ components:
     BookingAuthorization:
       type: "object"
       additionalProperties: false
-      required: ["id","tripId","tripVersion","termsHash","operation","componentId","status","authorizedAt","expiresAt"]
+      required:
+        [
+          "id",
+          "tripId",
+          "tripVersion",
+          "termsHash",
+          "operation",
+          "componentId",
+          "status",
+          "authorizedAt",
+          "expiresAt",
+        ]
       properties:
         id:
           type: "string"
@@ -2303,12 +2423,12 @@ components:
         termsHash:
           type: "string"
         operation:
-          enum: ["book_trip","reschedule_component","cancel_component"]
+          enum: ["book_trip", "reschedule_component", "cancel_component"]
         componentId:
-          type: ["string","null"]
+          type: ["string", "null"]
           format: "uuid"
         status:
-          enum: ["pending","authorized","invalidated","expired","consumed"]
+          enum: ["pending", "authorized", "invalidated", "expired", "consumed"]
         authorizedAt:
           type: "string"
           format: "date-time"
@@ -2318,7 +2438,19 @@ components:
     BookingTransaction:
       type: "object"
       additionalProperties: false
-      required: ["id","tripId","authorizationId","operation","status","components","startedAt","executionBasis","lastObservedTripVersion","executionStatus"]
+      required:
+        [
+          "id",
+          "tripId",
+          "authorizationId",
+          "operation",
+          "status",
+          "components",
+          "startedAt",
+          "executionBasis",
+          "lastObservedTripVersion",
+          "executionStatus",
+        ]
       properties:
         id:
           type: "string"
@@ -2330,28 +2462,47 @@ components:
           type: "string"
           format: "uuid"
         operation:
-          enum: ["book_trip","reschedule_component","cancel_component"]
+          enum: ["book_trip", "reschedule_component", "cancel_component"]
         status:
-          enum: ["requested","running","partially_confirmed","confirmed","action_required","failed","cancelled"]
+          enum:
+            [
+              "requested",
+              "running",
+              "partially_confirmed",
+              "confirmed",
+              "action_required",
+              "failed",
+              "cancelled",
+            ]
         components:
           type: "array"
           items:
             type: "object"
             additionalProperties: false
-            required: ["componentId","status"]
+            required: ["componentId", "status"]
             properties:
               componentId:
                 type: "string"
                 format: "uuid"
               status:
-                enum: ["proposed","authorized","booking","confirmed","failed","unknown","action_required","cancelled"]
+                enum:
+                  [
+                    "proposed",
+                    "authorized",
+                    "booking",
+                    "confirmed",
+                    "failed",
+                    "unknown",
+                    "action_required",
+                    "cancelled",
+                  ]
               providerReference:
-                type: ["string","null"]
+                type: ["string", "null"]
         startedAt:
           type: "string"
           format: "date-time"
         completedAt:
-          type: ["string","null"]
+          type: ["string", "null"]
           format: "date-time"
         executionBasis:
           $ref: "#/components/schemas/BookingExecutionBasis"
@@ -2359,11 +2510,11 @@ components:
           type: "integer"
           minimum: 1
         executionStatus:
-          enum: ["active","invalidated","expired","completed"]
+          enum: ["active", "invalidated", "expired", "completed"]
     Problem:
       type: "object"
       additionalProperties: false
-      required: ["type","title","status","code","correlationId"]
+      required: ["type", "title", "status", "code", "correlationId"]
       properties:
         type:
           type: "string"

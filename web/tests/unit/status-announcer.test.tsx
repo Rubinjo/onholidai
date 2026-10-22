@@ -23,13 +23,9 @@ describe("StatusAnnouncer", () => {
   });
 
   it("renders announcement content as text", () => {
-    const { container } = render(
-      <StatusAnnouncer message={'<script>alert("unsafe")</script>'} />,
-    );
+    const { container } = render(<StatusAnnouncer message={'<script>alert("unsafe")</script>'} />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      '<script>alert("unsafe")</script>',
-    );
+    expect(screen.getByRole("status")).toHaveTextContent('<script>alert("unsafe")</script>');
     expect(container.querySelector("script")).not.toBeInTheDocument();
   });
 });

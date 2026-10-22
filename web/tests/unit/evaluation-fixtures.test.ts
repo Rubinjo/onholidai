@@ -7,16 +7,10 @@ import { describe, expect, it } from "vitest";
 import { tripSnapshotSchema } from "../../domain/trip/schema";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { hasIsolatedDatabaseConfiguration } from "../helpers/database";
-import {
-  createTemporalTestEnvironment,
-  withTemporalTestEnvironment,
-} from "../helpers/temporal";
+import { createTemporalTestEnvironment, withTemporalTestEnvironment } from "../helpers/temporal";
 
 const corpusPath = join(process.cwd(), "tests/fixtures/evaluation-corpus.json");
-const agentCorpusPath = join(
-  process.cwd(),
-  "../agent/tests/fixtures/evaluation-corpus.json",
-);
+const agentCorpusPath = join(process.cwd(), "../agent/tests/fixtures/evaluation-corpus.json");
 const payloadKeys = [
   "estimates",
   "unambiguousRequests",
@@ -50,7 +44,9 @@ async function readCorpus(): Promise<EvaluationCorpus> {
 describe("evaluation policy v1 fixtures", () => {
   it("has executable US1 snapshots and a 30-second oracle, not arbitrary expected labels", async () => {
     const raw: unknown = JSON.parse(await readFile(corpusPath, "utf8"));
-    const corpus = raw as { estimates: { input: { snapshot: unknown }; expected: { timeLimitSeconds: number } }[] };
+    const corpus = raw as {
+      estimates: { input: { snapshot: unknown }; expected: { timeLimitSeconds: number } }[];
+    };
     for (const entry of corpus.estimates) {
       expect(tripSnapshotSchema.safeParse(entry.input.snapshot).success).toBe(true);
       expect(entry.expected.timeLimitSeconds).toBe(30);
@@ -61,9 +57,7 @@ describe("evaluation policy v1 fixtures", () => {
     const agentCorpus = await readFile(agentCorpusPath, "utf8");
     const corpus = JSON.parse(webCorpus) as EvaluationCorpus & Record<string, unknown>;
     const payload = Object.fromEntries(payloadKeys.map((key) => [key, corpus[key]]));
-    const hash = `sha256:${createHash("sha256")
-      .update(JSON.stringify(payload))
-      .digest("hex")}`;
+    const hash = `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
 
     expect(webCorpus).toBe(agentCorpus);
     expect(corpus.metadata).toMatchObject({
@@ -81,7 +75,8 @@ describe("evaluation policy v1 fixtures", () => {
   it("contains every exact denominator and required category coverage", async () => {
     const corpus = await readCorpus();
     const itemCount = corpus.itineraryDays.reduce(
-      (total, day) => total + day.input.itineraryDays.reduce((count, entry) => count + entry.items.length, 0),
+      (total, day) =>
+        total + day.input.itineraryDays.reduce((count, entry) => count + entry.items.length, 0),
       0,
     );
 
@@ -105,7 +100,9 @@ describe("evaluation policy v1 fixtures", () => {
       "preferences",
       "constraints",
     ]) {
-      expect(corpus.unambiguousRequests.filter((request) => request.group === group)).toHaveLength(20);
+      expect(corpus.unambiguousRequests.filter((request) => request.group === group)).toHaveLength(
+        20,
+      );
     }
     expect(corpus.ambiguities).toHaveLength(20);
     expect(corpus.itineraryDays).toHaveLength(100);

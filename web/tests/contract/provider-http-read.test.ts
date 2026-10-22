@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
+
 import { createViatorHttpClient } from "../../server/supply/providers/viator-http";
 import { decimalMinor, readJson, record } from "../../server/supply/providers/read-http";
 import { SupplyReadError, type SupplyReadQuery } from "../../server/supply/read";
@@ -8,12 +9,23 @@ import { createSyntheticTripSnapshot } from "../fixtures/trips";
 vi.mock("server-only", () => ({}));
 function query(): SupplyReadQuery {
   const trip = createSyntheticTripSnapshot();
-  return { componentTypes: ["activity"], currency: "GBP", departureOrigin: null,
-    destinationIds: [trip.destinations[0].id], startDate: "2030-05-01", endDate: "2030-05-01",
-    travellerParty: { adults: 2, children: [] } };
+  return {
+    componentTypes: ["activity"],
+    currency: "GBP",
+    departureOrigin: null,
+    destinationIds: [trip.destinations[0].id],
+    startDate: "2030-05-01",
+    endDate: "2030-05-01",
+    travellerParty: { adults: 2, children: [] },
+  };
 }
 function client(transport: typeof fetch, timeoutMs = 8000) {
-  return createViatorHttpClient({ apiKey: "synthetic-private-key", fetch: transport, timeoutMs, resolveDestination: () => "1234" });
+  return createViatorHttpClient({
+    apiKey: "synthetic-private-key",
+    fetch: transport,
+    timeoutMs,
+    resolveDestination: () => "1234",
+  });
 }
 describe("bounded read HTTP and decimal mapping", () => {
   it("enforces exact endpoint AND method allowlists before invoking fetch", async () => {
@@ -32,16 +44,25 @@ describe("bounded read HTTP and decimal mapping", () => {
     for (const operation of allowed) {
       const [method, url] = operation.split(" ") as ["GET" | "POST", string];
       await expect(request(url, method, signal)).resolves.toEqual({});
-      await expect(request(url, method === "GET" ? "POST" : "GET", signal))
-        .rejects.toMatchObject({ status: "unsupported" });
-      await expect(request(`${url}&extra=1`, method, signal)).rejects.toMatchObject({ status: "unsupported" });
+      await expect(request(url, method === "GET" ? "POST" : "GET", signal)).rejects.toMatchObject({
+        status: "unsupported",
+      });
+      await expect(request(`${url}&extra=1`, method, signal)).rejects.toMatchObject({
+        status: "unsupported",
+      });
     }
     for (const url of [
       "https://api.duffel.com/air/orders",
       "https://api.duffel.com/stays/quotes",
       "https://api.duffel.com/stays/bookings",
-      ...["bookings/hold", "bookings/book", "bookings/cart/hold", "bookings/cart/book",
-        "bookings/cancel", "bookings/amend"].map((path) => `https://api.viator.com/partner/${path}`),
+      ...[
+        "bookings/hold",
+        "bookings/book",
+        "bookings/cart/hold",
+        "bookings/cart/book",
+        "bookings/cancel",
+        "bookings/amend",
+      ].map((path) => `https://api.viator.com/partner/${path}`),
       "https://unapproved.invalid/partner/products/search",
       "http://api.viator.com/partner/products/search",
       "https://api.viator.com.evil.invalid/partner/products/search",
@@ -51,7 +72,8 @@ describe("bounded read HTTP and decimal mapping", () => {
     expect(transport).toHaveBeenCalledTimes(allowed.length);
   });
   it.each(["success", "http_failure", "malformed", "abort", "deadline"] as const)(
-    "removes caller and response-stream abort listeners after %s", async (outcome) => {
+    "removes caller and response-stream abort listeners after %s",
+    async (outcome) => {
       const caller = new AbortController();
       const addCaller = vi.spyOn(caller.signal, "addEventListener");
       const removeCaller = vi.spyOn(caller.signal, "removeEventListener");
@@ -64,16 +86,21 @@ describe("bounded read HTTP and decimal mapping", () => {
         if (outcome === "http_failure") return new Response("not forwarded", { status: 403 });
         if (outcome === "malformed") return new Response("{bad");
         if (outcome === "abort" || outcome === "deadline") {
-          return new Response(new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode('{"products":['));
-              if (outcome === "abort") queueMicrotask(() => caller.abort());
-            },
-          }));
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new TextEncoder().encode('{"products":['));
+                if (outcome === "abort") queueMicrotask(() => caller.abort());
+              },
+            }),
+          );
         }
         return new Response('{"products":[]}');
       });
-      const result = client(transport, outcome === "deadline" ? 5 : 8000).search(query(), caller.signal);
+      const result = client(transport, outcome === "deadline" ? 5 : 8000).search(
+        query(),
+        caller.signal,
+      );
       if (outcome === "success") await expect(result).resolves.toEqual([]);
       else await expect(result).rejects.toBeInstanceOf(SupplyReadError);
       // Stream cancellation/read cleanup completes in the same microtask turn.
@@ -86,25 +113,48 @@ describe("bounded read HTTP and decimal mapping", () => {
       }
       expect(addCaller).toHaveBeenCalledTimes(1);
       expect(removeCaller).toHaveBeenCalledTimes(1);
-    });
-  it.each([["0.29", "GBP", 29], ["100", "JPY", 100], ["1.234", "KWD", 1234],
-    [0.29, "GBP", 29], ["12.0300", "GBP", 1203]])("scales %s %s without float multiplication", (amount, currency, expected) => {
+    },
+  );
+  it.each([
+    ["0.29", "GBP", 29],
+    ["100", "JPY", 100],
+    ["1.234", "KWD", 1234],
+    [0.29, "GBP", 29],
+    ["12.0300", "GBP", 1203],
+  ])("scales %s %s without float multiplication", (amount, currency, expected) => {
     expect(decimalMinor(amount, currency as string)).toBe(expected);
   });
-  it.each(["-1", "0.001", "1e3", "NaN", "9007199254740992", "1.2x"])("rejects invalid, fractional-minor or unsafe amounts %s", (amount) => {
-    expect(() => decimalMinor(amount, "GBP")).toThrow(SupplyReadError);
+  it.each(["-1", "0.001", "1e3", "NaN", "9007199254740992", "1.2x"])(
+    "rejects invalid, fractional-minor or unsafe amounts %s",
+    (amount) => {
+      expect(() => decimalMinor(amount, "GBP")).toThrow(SupplyReadError);
+    },
+  );
+  it.each([
+    [401, "access_blocked"],
+    [403, "access_blocked"],
+    [429, "rate_limited"],
+    [500, "error"],
+  ])("sanitizes HTTP %s without leaking supplier response bodies", async (status, expected) => {
+    const transport = vi.fn(
+      async () =>
+        new Response("synthetic-private-upstream-body", {
+          status: status as number,
+          headers: { "retry-after": "12" },
+        }),
+    );
+    try {
+      await client(transport).search(query(), new AbortController().signal);
+      expect.fail("expected failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(SupplyReadError);
+      expect(error).toMatchObject({
+        status: expected,
+        retryAfterMs: status === 429 ? 12000 : null,
+      });
+      expect(String(error)).not.toMatch(/synthetic-private/);
+    }
   });
-  it.each([[401, "access_blocked"], [403, "access_blocked"], [429, "rate_limited"], [500, "error"]])(
-    "sanitizes HTTP %s without leaking supplier response bodies", async (status, expected) => {
-      const transport = vi.fn(async () => new Response("synthetic-private-upstream-body", {
-        status: status as number, headers: { "retry-after": "12" } }));
-      try { await client(transport).search(query(), new AbortController().signal); expect.fail("expected failure"); }
-      catch (error) {
-        expect(error).toBeInstanceOf(SupplyReadError);
-        expect(error).toMatchObject({ status: expected, retryAfterMs: status === 429 ? 12000 : null });
-        expect(String(error)).not.toMatch(/synthetic-private/);
-      }
-    });
   it("bounds declared and streamed bodies, and sanitizes malformed JSON", async () => {
     for (const response of [
       new Response("{}", { headers: { "content-length": "1048577" } }),
@@ -112,26 +162,36 @@ describe("bounded read HTTP and decimal mapping", () => {
       new Response("{malformed synthetic-private"),
       new Response(JSON.stringify({ products: "not-an-array" })),
     ]) {
-      await expect(client(vi.fn(async () => response)).search(query(), new AbortController().signal))
-        .rejects.toMatchObject({ name: "SupplyReadError", status: "error" });
+      await expect(
+        client(vi.fn(async () => response)).search(query(), new AbortController().signal),
+      ).rejects.toMatchObject({ name: "SupplyReadError", status: "error" });
     }
   });
   it("preserves the original JSON money token instead of silently rounding numeric wire amounts", async () => {
-    const valid = '{"products":[{"productCode":"SYNTHETIC1","pricing":{"currency":"GBP","summary":{"fromPrice":90071992547409.91}}}]}';
+    const valid =
+      '{"products":[{"productCode":"SYNTHETIC1","pricing":{"currency":"GBP","summary":{"fromPrice":90071992547409.91}}}]}';
     const transport = vi.fn(async () => new Response(valid));
     const hit = (await client(transport).search(query(), new AbortController().signal))[0];
     expect(JSON.parse(hit.planningDetails.fareConditions!).fromPriceMinor).toBe(9007199254740991);
     const fractionalMinor = valid.replace("90071992547409.91", "0.290000000000000000001");
-    await expect(client(vi.fn(async () => new Response(fractionalMinor))).search(query(), new AbortController().signal))
-      .rejects.toMatchObject({ status: "error" });
+    await expect(
+      client(vi.fn(async () => new Response(fractionalMinor))).search(
+        query(),
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ status: "error" });
   });
   it("preserves exact mandatory-extra charge tokens for downstream integer scaling", async () => {
-    const transport = vi.fn(async () => new Response('{"totalExtraCharges":0.290000000000000000001}'));
+    const transport = vi.fn(
+      async () => new Response('{"totalExtraCharges":0.290000000000000000001}'),
+    );
     const payload = await readJson({ fetch: transport }, ["GET https://approved.invalid/read"], {})(
-      "https://approved.invalid/read", "GET", new AbortController().signal);
+      "https://approved.invalid/read",
+      "GET",
+      new AbortController().signal,
+    );
     expect(payload).toEqual({ totalExtraCharges: "0.290000000000000000001" });
-    expect(() => decimalMinor(record(payload).totalExtraCharges, "GBP"))
-      .toThrow(SupplyReadError);
+    expect(() => decimalMinor(record(payload).totalExtraCharges, "GBP")).toThrow(SupplyReadError);
   });
   it("propagates cancellation and applies its own deadline even to an uncooperative injected fetch", async () => {
     const abortController = new AbortController();
@@ -144,25 +204,42 @@ describe("bounded read HTTP and decimal mapping", () => {
     abortController.abort();
     await expect(pending).rejects.toMatchObject({ status: "error" });
     expect((seenSignal as AbortSignal | null)?.aborted).toBe(true);
-    await expect(client(transport, 5).search(query(), new AbortController().signal))
-      .rejects.toMatchObject({ status: "error" });
+    await expect(
+      client(transport, 5).search(query(), new AbortController().signal),
+    ).rejects.toMatchObject({ status: "error" });
   });
   it("bounds stalled response bodies as well as response headers", async () => {
     let cancelled = false;
-    const transport = vi.fn(async () => new Response(new ReadableStream({
-      start(controller) { controller.enqueue(new TextEncoder().encode('{"products":[')); },
-      cancel() { cancelled = true; },
-    })));
-    await expect(client(transport, 5).search(query(), new AbortController().signal)).rejects.toMatchObject({ status: "error" });
+    const transport = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('{"products":['));
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+        ),
+    );
+    await expect(
+      client(transport, 5).search(query(), new AbortController().signal),
+    ).rejects.toMatchObject({ status: "error" });
     expect(cancelled).toBe(true);
   });
   it("never sends a pre-aborted request and redacts transport errors", async () => {
-    const transport = vi.fn(async () => { throw new Error("synthetic-private-key https://unsafe.invalid"); });
+    const transport = vi.fn(async () => {
+      throw new Error("synthetic-private-key https://unsafe.invalid");
+    });
     const controller = new AbortController();
     controller.abort();
-    await expect(client(transport).search(query(), controller.signal)).rejects.toMatchObject({ status: "error" });
+    await expect(client(transport).search(query(), controller.signal)).rejects.toMatchObject({
+      status: "error",
+    });
     expect(transport).not.toHaveBeenCalled();
     await expect(client(transport).search(query(), new AbortController().signal)).rejects.toThrow(
-      "The supplier search failed or returned invalid evidence; inventory is unknown.");
+      "The supplier search failed or returned invalid evidence; inventory is unknown.",
+    );
   });
 });

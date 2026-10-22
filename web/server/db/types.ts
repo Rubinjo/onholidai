@@ -1,11 +1,12 @@
 import type { ColumnType, Generated, JSONColumnType } from "kysely";
-
 import type { DraftOperation, TripSnapshot } from "@/domain/trip/schema";
 import type { ChangeProposal } from "@/domain/trip/proposal";
 import type { SetupDraftPayload, SetupStep } from "@/components/trip-setup/draft-schema";
 
-export type TripLifecycleState = "draft" | "finalized" | "partially_booked" | "booked" | "cancelled";
-export type TripInitiatingActor = "user" | "agent_proposal" | "system_revalidation" | "booking_workflow";
+export type TripLifecycleState =
+  "draft" | "finalized" | "partially_booked" | "booked" | "cancelled";
+export type TripInitiatingActor =
+  "user" | "agent_proposal" | "system_revalidation" | "booking_workflow";
 export type IdempotencyState = "in_progress" | "completed" | "unknown";
 export type OutboxDeliveryState = "pending" | "delivering" | "delivered" | "failed";
 
@@ -169,48 +170,110 @@ export interface TripCoreDatabase {
 }
 
 export interface BookingRevalidationTable {
-  workflowId: string; tripId: string; ownerUserId: string; requestId: string; requestFingerprint: string; tripVersion: number;
-  status: "accepted" | "running" | "completed" | "failed"; outcomes: Json<unknown[]>;
-  terms: Json<Record<string, unknown> | null>; termsHash: string | null; expiresAt: Timestamp | null;
-  createdAt: GeneratedTimestamp; updatedAt: GeneratedTimestamp;
+  workflowId: string;
+  tripId: string;
+  ownerUserId: string;
+  requestId: string;
+  requestFingerprint: string;
+  tripVersion: number;
+  status: "accepted" | "running" | "completed" | "failed";
+  outcomes: Json<unknown[]>;
+  terms: Json<Record<string, unknown> | null>;
+  termsHash: string | null;
+  expiresAt: Timestamp | null;
+  createdAt: GeneratedTimestamp;
+  updatedAt: GeneratedTimestamp;
 }
 export interface BookingAuthorizationTable {
-  id: string; tripId: string; ownerUserId: string; tripVersion: number;
-  operation: "book_trip" | "reschedule_component" | "cancel_component"; componentId: string | null;
-  terms: Json<Record<string, unknown>>; termsHash: string; acknowledgedNonReversibleActions: Json<string[]>;
-  status: "pending" | "authorized" | "invalidated" | "expired" | "consumed"; reason: string | null;
-  authorizedAt: Timestamp; expiresAt: Timestamp; createdAt: GeneratedTimestamp;
+  id: string;
+  tripId: string;
+  ownerUserId: string;
+  tripVersion: number;
+  operation: "book_trip" | "reschedule_component" | "cancel_component";
+  componentId: string | null;
+  terms: Json<Record<string, unknown>>;
+  termsHash: string;
+  acknowledgedNonReversibleActions: Json<string[]>;
+  status: "pending" | "authorized" | "invalidated" | "expired" | "consumed";
+  reason: string | null;
+  authorizedAt: Timestamp;
+  expiresAt: Timestamp;
+  createdAt: GeneratedTimestamp;
 }
 export interface BookingTransactionTable {
-  id: string; tripId: string; ownerUserId: string; authorizationId: string;
-  operation: "book_trip" | "reschedule_component" | "cancel_component"; workflowId: string;
-  requestId: string; status: "requested" | "running" | "partially_confirmed" | "confirmed" | "action_required" | "failed" | "cancelled";
-  components: Json<unknown[]>; executionBasis: Json<Record<string, unknown>>; lastObservedTripVersion: number;
-  executionStatus: "active" | "invalidated" | "expired" | "completed"; startedAt: GeneratedTimestamp; completedAt: Timestamp | null;
+  id: string;
+  tripId: string;
+  ownerUserId: string;
+  authorizationId: string;
+  operation: "book_trip" | "reschedule_component" | "cancel_component";
+  workflowId: string;
+  requestId: string;
+  status:
+    | "requested"
+    | "running"
+    | "partially_confirmed"
+    | "confirmed"
+    | "action_required"
+    | "failed"
+    | "cancelled";
+  components: Json<unknown[]>;
+  executionBasis: Json<Record<string, unknown>>;
+  lastObservedTripVersion: number;
+  executionStatus: "active" | "invalidated" | "expired" | "completed";
+  startedAt: GeneratedTimestamp;
+  completedAt: Timestamp | null;
 }
 export interface BookingComponentAttemptTable {
-  id: string; transactionId: string; tripId: string; componentId: string;
-  operation: "book_trip" | "reschedule_component" | "cancel_component"; idempotencyKey: string; requestFingerprint: string;
-  providerAttempt: number; status: "claimed" | "dispatched" | "confirmed" | "failed" | "unknown" | "reconciled";
-  providerReference: string | null; safeReason: string | null; statusCheckedAt: Timestamp | null;
-  createdAt: GeneratedTimestamp; updatedAt: GeneratedTimestamp;
+  id: string;
+  transactionId: string;
+  tripId: string;
+  componentId: string;
+  operation: "book_trip" | "reschedule_component" | "cancel_component";
+  idempotencyKey: string;
+  requestFingerprint: string;
+  providerAttempt: number;
+  status: "claimed" | "dispatched" | "confirmed" | "failed" | "unknown" | "reconciled";
+  providerReference: string | null;
+  safeReason: string | null;
+  statusCheckedAt: Timestamp | null;
+  createdAt: GeneratedTimestamp;
+  updatedAt: GeneratedTimestamp;
 }
 export interface BookingWriteClaimTable {
-  tripId: string; componentId: string; transactionId: string; attemptId: string;
-  state: "claimed" | "unknown"; evidence: Json<Record<string, unknown> | null>;
-  createdAt: GeneratedTimestamp; updatedAt: GeneratedTimestamp;
+  tripId: string;
+  componentId: string;
+  transactionId: string;
+  attemptId: string;
+  state: "claimed" | "unknown";
+  evidence: Json<Record<string, unknown> | null>;
+  createdAt: GeneratedTimestamp;
+  updatedAt: GeneratedTimestamp;
 }
 export interface BookingConfirmationTable {
-  id: string; transactionId: string; tripId: string; componentId: string;
-  providerReference: string; terms: Json<Record<string, unknown>>; confirmedAt: Timestamp;
+  id: string;
+  transactionId: string;
+  tripId: string;
+  componentId: string;
+  providerReference: string;
+  terms: Json<Record<string, unknown>>;
+  confirmedAt: Timestamp;
 }
 export interface BookingVersionEvidenceTable {
-  tripId: string; tripVersion: number; transactionId: string; materialTermsHash: string; createdAt: GeneratedTimestamp;
+  tripId: string;
+  tripVersion: number;
+  transactionId: string;
+  materialTermsHash: string;
+  createdAt: GeneratedTimestamp;
 }
 export interface BookingProviderCallbackTable {
-  provider: "duffel" | "booking" | "getyourguide" | "trainline"; providerEventId: string; fingerprint: string;
-  transactionId: string; componentId: string; outcome: "confirmed" | "failed" | "unknown" | "action_required";
-  result: Json<Record<string, unknown>>; receivedAt: GeneratedTimestamp;
+  provider: "duffel" | "booking" | "getyourguide" | "trainline";
+  providerEventId: string;
+  fingerprint: string;
+  transactionId: string;
+  componentId: string;
+  outcome: "confirmed" | "failed" | "unknown" | "action_required";
+  result: Json<Record<string, unknown>>;
+  receivedAt: GeneratedTimestamp;
 }
 
 export interface AgentRunTable {
@@ -221,7 +284,11 @@ export interface AgentRunTable {
   dispatchFingerprint: Generated<string | null>;
   activeElapsedMs: Generated<number>;
   phaseStartedAt: GeneratedTimestamp;
-  lastDurableProgressAt: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
+  lastDurableProgressAt: ColumnType<
+    Date | null,
+    Date | string | null | undefined,
+    Date | string | null
+  >;
   resultFingerprint: Generated<string | null>;
   resultCursor: Generated<number | null>;
   id: string;
@@ -232,7 +299,15 @@ export interface AgentRunTable {
   baseTripVersion: number;
   purpose: ChangeProposal["purpose"] | "supplier_research";
   requestFingerprint: string;
-  status: Generated<"queued" | "running" | "awaiting_clarification" | "proposed" | "completed" | "failed" | "cancelled">;
+  status: Generated<
+    | "queued"
+    | "running"
+    | "awaiting_clarification"
+    | "proposed"
+    | "completed"
+    | "failed"
+    | "cancelled"
+  >;
   eventCursor: Generated<number>;
   leaseExpiresAt: Timestamp | null;
   startedAt: GeneratedTimestamp;
@@ -242,56 +317,113 @@ export interface AgentRunTable {
 }
 
 export interface GuestPlanningSessionTable {
-  id: string; credentialDigest: string; createdAt: Timestamp; lastActivityAt: Timestamp;
-  expiresAt: Timestamp; revokedAt: Timestamp | null;
+  id: string;
+  credentialDigest: string;
+  createdAt: Timestamp;
+  lastActivityAt: Timestamp;
+  expiresAt: Timestamp;
+  revokedAt: Timestamp | null;
 }
 export interface PlanningPrincipalTable {
-  id: string; accountUserId: string | null; guestSessionId: string | null;
-  originKind: "account" | "guest"; isDefault: boolean; createdAt: GeneratedTimestamp; linkedAt: Timestamp | null;
+  id: string;
+  accountUserId: string | null;
+  guestSessionId: string | null;
+  originKind: "account" | "guest";
+  isDefault: boolean;
+  createdAt: GeneratedTimestamp;
+  linkedAt: Timestamp | null;
 }
 export interface SetupDraftTable {
-  id: string; planningOwnerId: string; revision: number; currentStep: SetupStep; payload: Json<SetupDraftPayload>;
-  schemaVersion: number; creationRequestId: string; researchRequestId: string; submittedTripId: string | null;
-  createdAt: Timestamp; updatedAt: Timestamp;
+  id: string;
+  planningOwnerId: string;
+  revision: number;
+  currentStep: SetupStep;
+  payload: Json<SetupDraftPayload>;
+  schemaVersion: number;
+  creationRequestId: string;
+  researchRequestId: string;
+  submittedTripId: string | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 export interface BookingIntentTable {
-  id: string; tripId: string; planningOwnerId: string; guestSessionId: string; requestId: string;
-  fingerprint: string; action: "review_booking"; state: "pending" | "consumed" | "expired";
-  createdAt: Timestamp; expiresAt: Timestamp; consumedByUserId: string | null; consumedAt: Timestamp | null;
+  id: string;
+  tripId: string;
+  planningOwnerId: string;
+  guestSessionId: string;
+  requestId: string;
+  fingerprint: string;
+  action: "review_booking";
+  state: "pending" | "consumed" | "expired";
+  createdAt: Timestamp;
+  expiresAt: Timestamp;
+  consumedByUserId: string | null;
+  consumedAt: Timestamp | null;
 }
 export interface PlanningAccountLinkTable {
-  planningOwnerId: string; tripId: string; guestSessionId: string; accountUserId: string; intentId: string;
-  requestId: string; fingerprint: string; linkedAt: Timestamp; tripVersionAtLink: number;
+  planningOwnerId: string;
+  tripId: string;
+  guestSessionId: string;
+  accountUserId: string;
+  intentId: string;
+  requestId: string;
+  fingerprint: string;
+  linkedAt: Timestamp;
+  tripVersionAtLink: number;
 }
 export interface GuestResearchRequestTable {
-  guestSessionId: string; requestId: string; runId: string; acceptedAt: Timestamp;
+  guestSessionId: string;
+  requestId: string;
+  runId: string;
+  acceptedAt: Timestamp;
 }
 export interface GuestBootstrapBucketTable {
-  networkDigest: string; startedAt: Timestamp; sessionCount: number;
+  networkDigest: string;
+  startedAt: Timestamp;
+  sessionCount: number;
 }
 
 export interface DraftEditReviewTable {
-  id: string; tripId: string; ownerUserId: string; baseTripVersion: number;
-  fingerprint: string; operations: Json<unknown[]>; review: Json<Record<string, unknown>>;
-  snapshot: Json<TripSnapshot>; expiresAt: Timestamp;
+  id: string;
+  tripId: string;
+  ownerUserId: string;
+  baseTripVersion: number;
+  fingerprint: string;
+  operations: Json<unknown[]>;
+  review: Json<Record<string, unknown>>;
+  snapshot: Json<TripSnapshot>;
+  expiresAt: Timestamp;
 }
 
 export interface AgentRunEventTable {
-  runId: string; cursor: number; fingerprint: string;
-  event: Json<Record<string, unknown>>; receipt: Json<Record<string, unknown>>;
+  runId: string;
+  cursor: number;
+  fingerprint: string;
+  event: Json<Record<string, unknown>>;
+  receipt: Json<Record<string, unknown>>;
   createdAt: GeneratedTimestamp;
 }
 export interface AgentRunResumeTable {
-  runId: string; questionId: string; requestId: string; fingerprint: string;
+  runId: string;
+  questionId: string;
+  requestId: string;
+  fingerprint: string;
   eventCursor: number;
   createdAt: GeneratedTimestamp;
 }
 export interface PlanningOfferRecordTable {
-  offerRef: Generated<string>; revision: Generated<number>;
-  runId: string; componentId: string; offer: Json<Record<string, unknown>>; createdAt: GeneratedTimestamp;
+  offerRef: Generated<string>;
+  revision: Generated<number>;
+  runId: string;
+  componentId: string;
+  offer: Json<Record<string, unknown>>;
+  createdAt: GeneratedTimestamp;
   query: Json<Record<string, unknown>>;
 }
-export interface EstimateCandidateTable { proposalId: string; snapshot: Json<TripSnapshot> }
+export interface EstimateCandidateTable {
+  proposalId: string;
+  snapshot: Json<TripSnapshot>;
+}
 
 export interface ChangeProposalTable {
   id: string;

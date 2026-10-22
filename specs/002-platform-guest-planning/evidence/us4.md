@@ -1,7 +1,7 @@
 # US4 evidence — verified end to end
 
-| Check | Command / file | Result |
-| --- | --- | --- |
+| Check                        | Command / file                                | Result |
+| ---------------------------- | --------------------------------------------- | ------ |
 | Homepage content/CTA/browser | `web/tests/e2e/homepage.spec.ts` (5 projects) | passed |
 
 An anonymous visitor sees the value proposition, process and clearly illustrative itinerary

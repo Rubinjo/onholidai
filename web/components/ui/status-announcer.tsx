@@ -7,11 +7,7 @@ type StatusAnnouncerProps = Omit<
   message?: string | null;
 };
 
-export function StatusAnnouncer({
-  className,
-  message,
-  ...containerProps
-}: StatusAnnouncerProps) {
+export function StatusAnnouncer({ className, message, ...containerProps }: StatusAnnouncerProps) {
   const classes = ["sr-only", className].filter(Boolean).join(" ");
 
   return (

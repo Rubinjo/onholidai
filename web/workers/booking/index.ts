@@ -1,14 +1,20 @@
 import "server-only";
 
-import { NativeConnection, Worker } from "@temporalio/worker";
 import { fileURLToPath } from "node:url";
+
+import { NativeConnection, Worker } from "@temporalio/worker";
+
 import { createBookingActivities } from "@/server/workflows/activities";
-import type { Kysely } from "kysely";
-import type { Database } from "@/server/db/database";
 import { TransactionProviderRegistry } from "@/server/supply/transactions";
 import { runBookingOutboxDispatcher } from "@/server/workflows/outbox-dispatcher";
 
-export async function runBookingWorker(database: Kysely<Database>, providers: TransactionProviderRegistry): Promise<void> {
+import type { Kysely } from "kysely";
+import type { Database } from "@/server/db/database";
+
+export async function runBookingWorker(
+  database: Kysely<Database>,
+  providers: TransactionProviderRegistry,
+): Promise<void> {
   const address = process.env.TEMPORAL_ADDRESS;
   if (!address) throw new Error("TEMPORAL_ADDRESS is required to run the booking worker");
   const connection = await NativeConnection.connect({ address });
@@ -21,12 +27,15 @@ export async function runBookingWorker(database: Kysely<Database>, providers: Tr
   });
   const abort = new AbortController();
   let closePromise: Promise<void> | undefined;
-  const close = () => closePromise ??= (async () => {
-    abort.abort();
-    await worker.shutdown();
-    await connection.close();
-  })();
-  const onSignal = () => { void close(); };
+  const close = () =>
+    (closePromise ??= (async () => {
+      abort.abort();
+      await worker.shutdown();
+      await connection.close();
+    })());
+  const onSignal = () => {
+    void close();
+  };
   process.once("SIGINT", onSignal);
   process.once("SIGTERM", onSignal);
   try {

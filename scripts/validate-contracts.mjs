@@ -114,7 +114,12 @@ for (const field of [
 }
 
 const agentRunRequired = new Set(sourceAgentApi.components.schemas.AgentRun.required);
-for (const field of ["requestId", "leaseExpiresAt", "lastDurableProgressAt", "interruptionReason"]) {
+for (const field of [
+  "requestId",
+  "leaseExpiresAt",
+  "lastDurableProgressAt",
+  "interruptionReason",
+]) {
   assert(agentRunRequired.has(field), `internal AgentRun is missing required ${field}`);
 }
 
@@ -186,14 +191,15 @@ checkClosedComposition(sourceWebApi, "source web OpenAPI");
 
 const offersPath = path.join(promotedRoot, "supply", "offers-v1.schema.json");
 const offersSchema = JSON.parse(await read(offersPath));
-assert.equal(offersSchema.properties.component.oneOf.length, 5, "Discovery must retain all canonical component types");
+assert.equal(
+  offersSchema.properties.component.oneOf.length,
+  5,
+  "Discovery must retain all canonical component types",
+);
 z.fromJSONSchema(offersSchema);
 checkClosedComposition(offersSchema, "planning offer schema");
 
-const [sourceWebText, promotedWebText] = await Promise.all([
-  read(sourceWeb),
-  read(promotedWeb),
-]);
+const [sourceWebText, promotedWebText] = await Promise.all([read(sourceWeb), read(promotedWeb)]);
 assert.equal(
   promotedWebText,
   sourceWebText.replaceAll("./agent-api.openapi.yaml", "../agent-api/openapi.yaml"),
@@ -208,11 +214,20 @@ assert.equal(promotedSupplyText, sourceSupplyText, "promoted supply contract has
 
 console.log("Validated source and promoted contracts, references, operations, and drift.");
 
-const publicSupplySchema = JSON.parse(await read(path.join(promotedRoot, "supply", "public-offers-v1.schema.json")));
-const supplierTools = JSON.parse(await read(path.join(promotedRoot, "supply", "supplier-tools-v1.schema.json")));
-const supplyCases = JSON.parse(await read(path.join(promotedRoot, "supply", "validation-cases.json")));
+const publicSupplySchema = JSON.parse(
+  await read(path.join(promotedRoot, "supply", "public-offers-v1.schema.json")),
+);
+const supplierTools = JSON.parse(
+  await read(path.join(promotedRoot, "supply", "supplier-tools-v1.schema.json")),
+);
+const supplyCases = JSON.parse(
+  await read(path.join(promotedRoot, "supply", "validation-cases.json")),
+);
 assert.deepEqual(Object.keys(supplierTools.tools).sort(), [
-  "supplier_capabilities", "supplier_offer_details", "supplier_revalidate_offer", "supplier_search",
+  "supplier_capabilities",
+  "supplier_offer_details",
+  "supplier_revalidate_offer",
+  "supplier_search",
 ]);
 for (const [name, schema] of Object.entries(supplierTools.tools)) {
   assert.equal(schema.additionalProperties, false, `${name} must reject extra arguments`);
@@ -221,14 +236,26 @@ for (const [name, schema] of Object.entries(supplierTools.tools)) {
   }
 }
 for (const fixture of supplyCases.toolCases) {
-  assert.equal(z.fromJSONSchema(supplierTools.tools[fixture.tool]).safeParse(fixture.input).success,
-    fixture.valid, `supplier tool wire case: ${fixture.id}`);
+  assert.equal(
+    z.fromJSONSchema(supplierTools.tools[fixture.tool]).safeParse(fixture.input).success,
+    fixture.valid,
+    `supplier tool wire case: ${fixture.id}`,
+  );
 }
 for (const fixture of supplyCases.offerCases) {
-  assert.equal(z.fromJSONSchema(publicSupplySchema).safeParse(fixture.value).success,
-    fixture.valid, `public supply wire case: ${fixture.id}`);
+  assert.equal(
+    z.fromJSONSchema(publicSupplySchema).safeParse(fixture.value).success,
+    fixture.valid,
+    `public supply wire case: ${fixture.id}`,
+  );
 }
-assert(!/"(?:supplierAmount|platformMargin|supplierTotal|platformMarginTotal)"/.test(JSON.stringify(publicSupplySchema)),
-  "Public supply schemas cannot expose internal pricing fields");
+assert(
+  !/"(?:supplierAmount|platformMargin|supplierTotal|platformMarginTotal)"/.test(
+    JSON.stringify(publicSupplySchema),
+  ),
+  "Public supply schemas cannot expose internal pricing fields",
+);
 checkClosedComposition(publicSupplySchema, "public supply schema");
-console.log(`Validated ${supplyCases.toolCases.length + supplyCases.offerCases.length} shared supply wire cases.`);
+console.log(
+  `Validated ${supplyCases.toolCases.length + supplyCases.offerCases.length} shared supply wire cases.`,
+);

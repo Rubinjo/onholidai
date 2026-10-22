@@ -43,6 +43,7 @@ pnpm dev                                  # or: pnpm --dir web build && pnpm --d
 Run baseline checks in separate commands:
 
 ```bash
+pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -50,6 +51,12 @@ uv run --project agent pytest
 pnpm test:contracts
 pnpm test:e2e
 ```
+
+Use `pnpm format` to apply Black formatting to Python files and Prettier formatting to maintained TypeScript, JavaScript, CSS, JSON, YAML and Markdown files; `pnpm format:check` verifies both without rewriting files. Run `pnpm --dir web exec eslint . --fix` when imports need grouping, then run `pnpm format`.
+
+Black is the only Python formatter; Ruff handles linting and Python import sorting. Prettier is the only JavaScript/TypeScript formatter; ESLint handles code quality, import grouping (Node built-ins, external packages, internal aliases, relative imports, then type-only imports), and separation after imports. Keep logically distinct top-level declarations separated by a blank line during review. Tailwind sorting uses the application's v4 stylesheet and recognizes `cn`, `clsx` and `cva`. Git attributes and EditorConfig keep text files LF-terminated with spaces for indentation.
+
+The exclusions in the root `.prettierignore` preserve vendored public assets, tool-managed metadata, package-manager lock output, generated evaluation fixtures and generated JSON/OpenAPI schemas. Those artifacts retain their generator's deterministic formatting and drift checks; generated TypeScript is already formatted by its generator. Markdown wrapping preserves author-chosen line breaks. No commit hooks or format-on-save configuration is installed.
 
 Each story runs its implemented suites and the applicable foundation/compatibility/accessibility checks; setup verifies shells/tooling only. Run the complete command matrix and all scenarios after US4. Do not waive failures in implemented behavior, or require a later story's UI/workflow to pass an earlier checkpoint. Corpus and participant protocols are defined in spec.md; record versions, seeds and denominators before implementation.
 

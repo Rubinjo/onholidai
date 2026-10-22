@@ -44,7 +44,7 @@ Measured with `tests/evaluation/evaluation-corpus.test.ts` (SC-007 gate):
   commit while any blocking issue exists, so every case leaves the trip a draft.
 - The four `date_window_violation` inputs are rejected by the authoritative v1 snapshot contract (availability window
   start after end) that finalization itself applies, so they can never be persisted and never reach policy review. The
-  policy still reports `date_duration` when such state is evaluated defensively. Recording a *schema-valid* date/duration
+  policy still reports `date_duration` when such state is evaluated defensively. Recording a _schema-valid_ date/duration
   hard conflict needs a corpus revision and stays with T128.
 
 ## Deferred validation and commands

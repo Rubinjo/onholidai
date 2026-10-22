@@ -194,15 +194,21 @@ For example, this intentionally unverified configuration uses one upstream Viato
     "readSecretRef": "DUFFEL_READ_SECRET",
     "transactionSecretRef": "DUFFEL_WRITE_SECRET",
     "products": {
-      "flight": { "operations": { "search": { "support": "supported", "access": "configured_unverified" } } },
-      "accommodation": { "operations": { "search": { "support": "unknown", "access": "unconfigured" } } }
+      "flight": {
+        "operations": { "search": { "support": "supported", "access": "configured_unverified" } }
+      },
+      "accommodation": {
+        "operations": { "search": { "support": "unknown", "access": "unconfigured" } }
+      }
     }
   },
   "viator": {
     "readSecretRef": "VIATOR_SECRET",
     "transactionSecretRef": "VIATOR_SECRET",
     "products": {
-      "activity": { "operations": { "search": { "support": "supported", "access": "configured_unverified" } } }
+      "activity": {
+        "operations": { "search": { "support": "supported", "access": "configured_unverified" } }
+      }
     }
   }
 }

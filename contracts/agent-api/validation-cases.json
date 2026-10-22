@@ -15,10 +15,7 @@
           "userId": "10000000-0000-4000-8000-000000000001",
           "tripId": "10000000-0000-4000-8000-000000000002",
           "baseTripVersion": 3,
-          "scopes": [
-            "trip:read",
-            "proposal:create"
-          ]
+          "scopes": ["trip:read", "proposal:create"]
         },
         "context": {
           "tripSummary": {
@@ -45,10 +42,7 @@
           "userId": "10000000-0000-4000-8000-000000000001",
           "tripId": "10000000-0000-4000-8000-000000000002",
           "baseTripVersion": 3,
-          "scopes": [
-            "trip:read",
-            "proposal:create"
-          ]
+          "scopes": ["trip:read", "proposal:create"]
         },
         "context": {
           "tripSummary": {
@@ -75,10 +69,7 @@
           "userId": "10000000-0000-4000-8000-000000000001",
           "tripId": "10000000-0000-4000-8000-000000000002",
           "baseTripVersion": 3,
-          "scopes": [
-            "trip:read",
-            "proposal:create"
-          ]
+          "scopes": ["trip:read", "proposal:create"]
         },
         "context": {
           "tripSummary": {
@@ -105,9 +96,7 @@
           "userId": "10000000-0000-4000-8000-000000000001",
           "tripId": "10000000-0000-4000-8000-000000000002",
           "baseTripVersion": 3,
-          "scopes": [
-            "trip:read"
-          ]
+          "scopes": ["trip:read"]
         },
         "context": {
           "tripSummary": {
@@ -134,11 +123,7 @@
           "userId": "10000000-0000-4000-8000-000000000001",
           "tripId": "10000000-0000-4000-8000-000000000002",
           "baseTripVersion": 3,
-          "scopes": [
-            "trip:read",
-            "proposal:create",
-            "trip:read"
-          ]
+          "scopes": ["trip:read", "proposal:create", "trip:read"]
         },
         "context": {
           "tripSummary": {
@@ -165,10 +150,7 @@
           "userId": "10000000-0000-4000-8000-000000000001",
           "tripId": "10000000-0000-4000-8000-000000000002",
           "baseTripVersion": 3,
-          "scopes": [
-            "trip:read",
-            "proposal:create"
-          ]
+          "scopes": ["trip:read", "proposal:create"]
         },
         "context": {
           "tripSummary": {
@@ -195,10 +177,7 @@
           "userId": "10000000-0000-4000-8000-000000000001",
           "tripId": "10000000-0000-4000-8000-000000000002",
           "baseTripVersion": 3,
-          "scopes": [
-            "trip:read",
-            "proposal:create"
-          ]
+          "scopes": ["trip:read", "proposal:create"]
         },
         "context": {
           "tripSummary": {
@@ -240,9 +219,7 @@
                 "value": 60
               }
             ],
-            "affectedFacts": [
-              "pace"
-            ],
+            "affectedFacts": ["pace"],
             "rationale": "A relaxed pace",
             "tradeoffs": [],
             "warnings": [],
@@ -278,9 +255,7 @@
                 "value": 60
               }
             ],
-            "affectedFacts": [
-              "pace"
-            ],
+            "affectedFacts": ["pace"],
             "rationale": "A relaxed pace",
             "tradeoffs": [],
             "warnings": [],
@@ -316,9 +291,7 @@
                 "value": 60
               }
             ],
-            "affectedFacts": [
-              "pace"
-            ],
+            "affectedFacts": ["pace"],
             "rationale": "A relaxed pace",
             "tradeoffs": [],
             "warnings": [],
@@ -354,9 +327,7 @@
                 "value": 60
               }
             ],
-            "affectedFacts": [
-              "pace"
-            ],
+            "affectedFacts": ["pace"],
             "rationale": "A relaxed pace",
             "tradeoffs": [],
             "warnings": [],
@@ -392,9 +363,7 @@
                 "value": 60
               }
             ],
-            "affectedFacts": [
-              "pace"
-            ],
+            "affectedFacts": ["pace"],
             "rationale": "A relaxed pace",
             "tradeoffs": [],
             "warnings": [],
@@ -445,9 +414,7 @@
                 "value": 60
               }
             ],
-            "affectedFacts": [
-              "pace"
-            ],
+            "affectedFacts": ["pace"],
             "rationale": "A relaxed pace",
             "tradeoffs": [],
             "warnings": [],
@@ -492,9 +459,7 @@
               "value": 60
             }
           ],
-          "affectedFacts": [
-            "pace"
-          ],
+          "affectedFacts": ["pace"],
           "rationale": "A relaxed pace",
           "tradeoffs": [],
           "warnings": [],
@@ -621,9 +586,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },
@@ -651,9 +614,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },
@@ -681,9 +642,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },
@@ -711,9 +670,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },
@@ -741,9 +698,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },
@@ -771,9 +726,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },
@@ -807,9 +760,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },
@@ -837,9 +788,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },
@@ -867,9 +816,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },
@@ -897,9 +844,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },
@@ -927,9 +872,7 @@
             }
           ],
           "rationale": "Review",
-          "affectedFacts": [
-            "pace"
-          ]
+          "affectedFacts": ["pace"]
         }
       }
     },

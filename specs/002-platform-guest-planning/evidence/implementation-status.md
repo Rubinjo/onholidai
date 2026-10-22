@@ -24,18 +24,18 @@ the reviewed lockfile, an isolated test database and the real deterministic agen
 
 Verification is green:
 
-| Check | Command | Result |
-| --- | --- | --- |
-| Install | `pnpm install --frozen-lockfile` | passed |
-| Web lint | `pnpm --dir web lint` | 0 problems |
-| Web typecheck | `pnpm --dir web typecheck` | passed |
-| Repo lint (web + agent ruff) | `pnpm lint` | passed |
-| Repo typecheck (tsc + pyright) | `pnpm typecheck` | 0 errors, 0 warnings |
-| Web unit/contract/integration | `pnpm --dir web test` with `TEST_DATABASE_*` | 55 files, 283 tests, 0 failed, 0 skipped |
-| Browser journeys | `pnpm --dir web test:e2e` (5 projects) | 82 passed, 0 failed, 20 fixture-gated skips |
-| Production build | `pnpm --dir web build` | passed |
-| Agent tests | `uv run --project agent pytest agent/tests` | 75 passed |
-| Contract checks | `pnpm test:contracts` | web 75 passed/3 skipped, agent exports verified |
+| Check                          | Command                                      | Result                                          |
+| ------------------------------ | -------------------------------------------- | ----------------------------------------------- |
+| Install                        | `pnpm install --frozen-lockfile`             | passed                                          |
+| Web lint                       | `pnpm --dir web lint`                        | 0 problems                                      |
+| Web typecheck                  | `pnpm --dir web typecheck`                   | passed                                          |
+| Repo lint (web + agent ruff)   | `pnpm lint`                                  | passed                                          |
+| Repo typecheck (tsc + pyright) | `pnpm typecheck`                             | 0 errors, 0 warnings                            |
+| Web unit/contract/integration  | `pnpm --dir web test` with `TEST_DATABASE_*` | 55 files, 283 tests, 0 failed, 0 skipped        |
+| Browser journeys               | `pnpm --dir web test:e2e` (5 projects)       | 82 passed, 0 failed, 20 fixture-gated skips     |
+| Production build               | `pnpm --dir web build`                       | passed                                          |
+| Agent tests                    | `uv run --project agent pytest agent/tests`  | 75 passed                                       |
+| Contract checks                | `pnpm test:contracts`                        | web 75 passed/3 skipped, agent exports verified |
 
 ## Defects found by running the stack, and fixed
 
@@ -45,7 +45,7 @@ Every item below reproduced, was fixed, and is covered by the suite recorded abo
    route still passed `{ status: 201 }`; `pnpm --dir web typecheck` failed. Options are
    forwarded again.
 2. `reserveBootstrap` incremented an unqualified `session_count` inside `ON CONFLICT DO
-   UPDATE`, which Postgres rejects as ambiguous. Every guest bootstrap returned 500, so no
+UPDATE`, which Postgres rejects as ambiguous. Every guest bootstrap returned 500, so no
    guest could plan at all. The column is now qualified.
 3. `use-setup-draft` compared saved and local payloads with `JSON.stringify`. Postgres jsonb
    does not preserve key order, so the comparison never matched: autosave looped and a

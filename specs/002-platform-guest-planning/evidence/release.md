@@ -4,19 +4,19 @@ Executed this pass with Node.js 24.21.0, pnpm 12.11.2 and Docker Desktop 29.6.1 
 migrated local stack (PostGIS 18-3.6, Temporal 1.27.2, deterministic providers) and an
 isolated test database. Real output, not source review.
 
-| Command | Result |
-| --- | --- |
-| `pnpm install --frozen-lockfile` | passed |
-| `pnpm --dir web lint` | 0 problems |
-| `pnpm --dir web typecheck` | passed |
-| `pnpm lint` (web eslint + agent ruff) | passed |
-| `pnpm typecheck` (tsc + pyright) | 0 errors, 0 warnings |
-| `pnpm --dir web test` (isolated DB) | 55 files, 283 tests passed, 0 skipped |
-| `pnpm --dir web test:e2e` (chromium, firefox, webkit, mobile-chromium, mobile-webkit) | 82 passed, 0 failed, 20 fixture-gated skips |
-| `pnpm --dir web build` | passed (must run with `NODE_ENV=production`) |
-| `uv run --project agent pytest agent/tests` | 75 passed |
-| `pnpm test:contracts` | web contracts 75 passed/3 skipped; agent contract exports verified |
-| `git diff --check` | no tracked whitespace errors |
+| Command                                                                               | Result                                                             |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `pnpm install --frozen-lockfile`                                                      | passed                                                             |
+| `pnpm --dir web lint`                                                                 | 0 problems                                                         |
+| `pnpm --dir web typecheck`                                                            | passed                                                             |
+| `pnpm lint` (web eslint + agent ruff)                                                 | passed                                                             |
+| `pnpm typecheck` (tsc + pyright)                                                      | 0 errors, 0 warnings                                               |
+| `pnpm --dir web test` (isolated DB)                                                   | 55 files, 283 tests passed, 0 skipped                              |
+| `pnpm --dir web test:e2e` (chromium, firefox, webkit, mobile-chromium, mobile-webkit) | 82 passed, 0 failed, 20 fixture-gated skips                        |
+| `pnpm --dir web build`                                                                | passed (must run with `NODE_ENV=production`)                       |
+| `uv run --project agent pytest agent/tests`                                           | 75 passed                                                          |
+| `pnpm test:contracts`                                                                 | web contracts 75 passed/3 skipped; agent contract exports verified |
+| `git diff --check`                                                                    | no tracked whitespace errors                                       |
 
 ## Gates that remain open
 

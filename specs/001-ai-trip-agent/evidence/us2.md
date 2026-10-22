@@ -63,15 +63,15 @@ Open `http://localhost:3000/sign-in` and sign in with the synthetic account `syn
 
 **Reviewer-reported manual pass (2026-10-14)**, on the production build in Firefox 157.0.1 (64-bit) on Windows 10, desktop PC. Recorded as T161.
 
-| Journey | Result | Notes |
-| --- | --- | --- |
-| `Review edit impacts` with no changes | Failed, then fixed | Returned the generic failure `Unable to complete the request. Check your inputs and retry; your saved trip has not been silently changed.` The editor posted an empty operation list, which the review contract rejects (minimum one operation). It now explains `No settings have changed. Change a setting to review its impact.` and never sends the empty request. |
-| Pace 60 → review → accept | Pass | Overview of changes rendered and acceptance applied them. |
-| `Add two nights there` → clarification → `Kyoto, JP` | Pass | One focused question, resuming with the original intent and producing a reviewable overview. |
-| Reject proposal | Pass | No other screen changed. |
-| Undo latest draft, then reload | Pass | A new draft version was created and Pace returned to 50. |
-| `Booking unavailable` throughout | Pass | Disabled with no warnings or colour-only signalling. |
-| Windows Narrator review | Pass | The reviewer reported no issues with the clear text or the explanation of visual elements across the same journeys. |
+| Journey                                              | Result             | Notes                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Review edit impacts` with no changes                | Failed, then fixed | Returned the generic failure `Unable to complete the request. Check your inputs and retry; your saved trip has not been silently changed.` The editor posted an empty operation list, which the review contract rejects (minimum one operation). It now explains `No settings have changed. Change a setting to review its impact.` and never sends the empty request. |
+| Pace 60 → review → accept                            | Pass               | Overview of changes rendered and acceptance applied them.                                                                                                                                                                                                                                                                                                              |
+| `Add two nights there` → clarification → `Kyoto, JP` | Pass               | One focused question, resuming with the original intent and producing a reviewable overview.                                                                                                                                                                                                                                                                           |
+| Reject proposal                                      | Pass               | No other screen changed.                                                                                                                                                                                                                                                                                                                                               |
+| Undo latest draft, then reload                       | Pass               | A new draft version was created and Pace returned to 50.                                                                                                                                                                                                                                                                                                               |
+| `Booking unavailable` throughout                     | Pass               | Disabled with no warnings or colour-only signalling.                                                                                                                                                                                                                                                                                                                   |
+| Windows Narrator review                              | Pass               | The reviewer reported no issues with the clear text or the explanation of visual elements across the same journeys.                                                                                                                                                                                                                                                    |
 
 The reviewer deferred the SC-006 cohort and the T138 recommendation-understanding measurements until the experience is more finished, so those remain open on T069/T138. The recorded coverage is the configuration above; broader engine and viewport coverage (Chromium, WebKit, 400 px widths) has not been verified by a human.
 
@@ -82,8 +82,8 @@ Usability protocol v1: one fixed cohort of at least 20 leisure travellers, at le
 Brief to read verbatim: "Accept a change you would consider taking. When the recommendation appears, tell me why it was suggested and what it does to the price."
 
 | Participant | Interaction mode | Reason correct | Impact direction | Impact amount | Impact currency | SC-006 pass |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 |  |  |  |  |  |  |
+| ----------- | ---------------- | -------------- | ---------------- | ------------- | --------------- | ----------- |
+| 1           |                  |                |                  |               |                 |             |
 
 Cohort size: ___ / 20 · Passes: ___ · Failures: ___ · Date and location: ___
 

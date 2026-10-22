@@ -8,7 +8,12 @@ import type { OutboxEventTable } from "@/server/db/types";
 export type ClaimedOutboxEvent = Selectable<OutboxEventTable>;
 
 export interface OutboxRepositoryPort {
-  claimBatch(now: Date, batchSize: number, leaseMilliseconds: number, eventTypes?: readonly string[]): Promise<ClaimedOutboxEvent[]>;
+  claimBatch(
+    now: Date,
+    batchSize: number,
+    leaseMilliseconds: number,
+    eventTypes?: readonly string[],
+  ): Promise<ClaimedOutboxEvent[]>;
   markDelivered(eventId: string, deliveredAt: Date): Promise<void>;
   markFailed(eventId: string, nextAttemptAt: Date, errorCategory: string): Promise<void>;
 }
@@ -16,7 +21,12 @@ export interface OutboxRepositoryPort {
 export class OutboxRepository implements OutboxRepositoryPort {
   constructor(private readonly database: Kysely<Database>) {}
 
-  claimBatch(now: Date, batchSize: number, leaseMilliseconds: number, eventTypes?: readonly string[]): Promise<ClaimedOutboxEvent[]> {
+  claimBatch(
+    now: Date,
+    batchSize: number,
+    leaseMilliseconds: number,
+    eventTypes?: readonly string[],
+  ): Promise<ClaimedOutboxEvent[]> {
     const leaseExpiresAt = new Date(now.getTime() + leaseMilliseconds);
     return this.database.transaction().execute(async (transaction) => {
       let query = transaction
@@ -38,7 +48,12 @@ export class OutboxRepository implements OutboxRepositoryPort {
       if (eventTypes && eventTypes.length > 0) {
         query = query.where("eventType", "in", [...eventTypes]);
       }
-      const candidates = await query.orderBy("createdAt").forUpdate().skipLocked().limit(batchSize).execute();
+      const candidates = await query
+        .orderBy("createdAt")
+        .forUpdate()
+        .skipLocked()
+        .limit(batchSize)
+        .execute();
 
       const ids = candidates.map(({ id }) => id);
       if (ids.length === 0) return [];

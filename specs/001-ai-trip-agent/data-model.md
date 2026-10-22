@@ -16,11 +16,11 @@ The current trip is identified by `Trip.currentVersion`. Every accepted draft ch
 
 Customer identity owned by Better Auth.
 
-| Field | Type | Rules |
-|---|---|---|
-| `id` | UUID | Primary identity referenced by owned records |
-| `locale` | locale code | Controls customer-facing formatting only |
-| `defaultCurrency` | ISO 4217 code | May be overridden per trip |
+| Field             | Type          | Rules                                        |
+| ----------------- | ------------- | -------------------------------------------- |
+| `id`              | UUID          | Primary identity referenced by owned records |
+| `locale`          | locale code   | Controls customer-facing formatting only     |
+| `defaultCurrency` | ISO 4217 code | May be overridden per trip                   |
 
 Sensitive identity and payment details are not copied into trip snapshots unless required for a specific authorized transaction.
 
@@ -28,16 +28,16 @@ Sensitive identity and payment details are not copied into trip snapshots unless
 
 Stable identity and current lifecycle pointer for one holiday plan.
 
-| Field | Type | Rules |
-|---|---|---|
-| `id` | UUID | Immutable |
-| `ownerUserId` | UUID | Required; authorization boundary |
-| `title` | string | 1-120 characters |
-| `lifecycleState` | enum | `draft`, `finalized`, `partially_booked`, `booked`, `cancelled` |
-| `currentVersion` | positive integer | Monotonically increases on each accepted mutation |
-| `currency` | ISO 4217 code | One presentation currency per version |
-| `createdAt`, `updatedAt` | timestamp | UTC |
-| `lastActivityAt` | timestamp | Drives retention review |
+| Field                    | Type             | Rules                                                           |
+| ------------------------ | ---------------- | --------------------------------------------------------------- |
+| `id`                     | UUID             | Immutable                                                       |
+| `ownerUserId`            | UUID             | Required; authorization boundary                                |
+| `title`                  | string           | 1-120 characters                                                |
+| `lifecycleState`         | enum             | `draft`, `finalized`, `partially_booked`, `booked`, `cancelled` |
+| `currentVersion`         | positive integer | Monotonically increases on each accepted mutation               |
+| `currency`               | ISO 4217 code    | One presentation currency per version                           |
+| `createdAt`, `updatedAt` | timestamp        | UTC                                                             |
+| `lastActivityAt`         | timestamp        | Drives retention review                                         |
 
 **Relationships**: has many `TripVersion`, `Conversation`, `AgentRun`, `ChangeProposal`, `BookingAuthorization`, and `BookingTransaction` records.
 
@@ -45,20 +45,20 @@ Stable identity and current lifecycle pointer for one holiday plan.
 
 Immutable, complete, validated snapshot of the trip aggregate.
 
-| Field | Type | Rules |
-|---|---|---|
-| `tripId` | UUID | Part of composite key |
-| `version` | positive integer | Part of composite key; previous + 1 |
-| `previousVersion` | integer or null | Null only for initial version |
-| `schemaVersion` | positive integer | Enables compatible snapshot evolution |
-| `snapshot` | TripSnapshot | Complete aggregate described below |
-| `initiatingActor` | enum + identifier | `user`, `agent_proposal`, `system_revalidation`, `booking_workflow` |
-| `initiatingRequestId` | UUID | Correlation and replay protection |
-| `proposalId` | UUID or null | Required for proposal-initiated changes |
-| `changeSummary` | structured list | Material fields and components affected |
-| `inverseOperation` | structured command or null | Null requires `nonReversibleReason` |
-| `nonReversibleReason` | string or null | Required when no inverse exists |
-| `createdAt` | timestamp | UTC, immutable |
+| Field                 | Type                       | Rules                                                               |
+| --------------------- | -------------------------- | ------------------------------------------------------------------- |
+| `tripId`              | UUID                       | Part of composite key                                               |
+| `version`             | positive integer           | Part of composite key; previous + 1                                 |
+| `previousVersion`     | integer or null            | Null only for initial version                                       |
+| `schemaVersion`       | positive integer           | Enables compatible snapshot evolution                               |
+| `snapshot`            | TripSnapshot               | Complete aggregate described below                                  |
+| `initiatingActor`     | enum + identifier          | `user`, `agent_proposal`, `system_revalidation`, `booking_workflow` |
+| `initiatingRequestId` | UUID                       | Correlation and replay protection                                   |
+| `proposalId`          | UUID or null               | Required for proposal-initiated changes                             |
+| `changeSummary`       | structured list            | Material fields and components affected                             |
+| `inverseOperation`    | structured command or null | Null requires `nonReversibleReason`                                 |
+| `nonReversibleReason` | string or null             | Required when no inverse exists                                     |
+| `createdAt`           | timestamp                  | UTC, immutable                                                      |
 
 A database transaction inserts the candidate version and advances `Trip.currentVersion` only when it still equals the command's `expectedVersion`. No historical row is updated or deleted. Undo creates a new version from a prior snapshot.
 
@@ -66,60 +66,60 @@ A database transaction inserts the candidate version and advances `Trip.currentV
 
 Root value object contained in each `TripVersion`.
 
-| Field | Type | Rules |
-|---|---|---|
-| `departureOrigin` | DepartureOrigin | Required, resolved and traveller-confirmed before flight estimation |
-| `availabilityWindows` | AvailabilityWindow[] | At least one before estimation |
-| `duration` | DurationPreference | Must fit at least one availability window |
-| `travellerParty` | TravellerParty | At least one adult for initial scope |
-| `preferences` | PreferenceProfile | All five dimensions present |
-| `constraints` | TripConstraint[] | Reviewable and source-attributed |
-| `destinations` | Destination[] | 1-8, unique ordered positions |
-| `itineraryDays` | ItineraryDay[] | Unique date within the trip |
-| `components` | TravelComponent[] | Maximum 32 |
-| `price` | TripPrice | Currency-consistent totals |
-| `warnings` | TripWarning[] | Unresolved material conflicts visible |
+| Field                 | Type                 | Rules                                                               |
+| --------------------- | -------------------- | ------------------------------------------------------------------- |
+| `departureOrigin`     | DepartureOrigin      | Required, resolved and traveller-confirmed before flight estimation |
+| `availabilityWindows` | AvailabilityWindow[] | At least one before estimation                                      |
+| `duration`            | DurationPreference   | Must fit at least one availability window                           |
+| `travellerParty`      | TravellerParty       | At least one adult for initial scope                                |
+| `preferences`         | PreferenceProfile    | All five dimensions present                                         |
+| `constraints`         | TripConstraint[]     | Reviewable and source-attributed                                    |
+| `destinations`        | Destination[]        | 1-8, unique ordered positions                                       |
+| `itineraryDays`       | ItineraryDay[]       | Unique date within the trip                                         |
+| `components`          | TravelComponent[]    | Maximum 32                                                          |
+| `price`               | TripPrice            | Currency-consistent totals                                          |
+| `warnings`            | TripWarning[]        | Unresolved material conflicts visible                               |
 
 ### DepartureOrigin
 
-| Field | Type | Rules |
-|---|---|---|
-| `kind` | enum | `city` or `airport` |
-| `placeId` | opaque place identity | Required; disambiguated within country |
-| `name` | string | 1-120 characters |
-| `countryCode` | ISO 3166-1 alpha-2 code | Required |
-| `timezone` | IANA timezone | Required and valid |
-| `airportCode` | IATA code or null | Three uppercase letters for airport; null for city |
-| `confirmedByUser` | boolean | Must be true before flight estimation |
+| Field             | Type                    | Rules                                              |
+| ----------------- | ----------------------- | -------------------------------------------------- |
+| `kind`            | enum                    | `city` or `airport`                                |
+| `placeId`         | opaque place identity   | Required; disambiguated within country             |
+| `name`            | string                  | 1-120 characters                                   |
+| `countryCode`     | ISO 3166-1 alpha-2 code | Required                                           |
+| `timezone`        | IANA timezone           | Required and valid                                 |
+| `airportCode`     | IATA code or null       | Three uppercase letters for airport; null for city |
+| `confirmedByUser` | boolean                 | Must be true before flight estimation              |
 
 Return travel defaults to this origin. City-level searches may consider its airports but must disclose the proposed airport; a different city requires an accepted origin change. Never infer origin from IP or identity. Legacy snapshots missing origin remain readable under their prior schemaVersion; upgrading them requires explicit origin confirmation before new flight estimates and never fabricates a value.
 
 ### AvailabilityWindow
 
-| Field | Type | Rules |
-|---|---|---|
-| `id` | UUID | Stable within trip |
-| `startDate`, `endDate` | local date | Inclusive; end is not before start |
-| `preference` | enum | `preferred` or `flexible` |
-| `timezone` | IANA timezone | Used for date boundaries |
+| Field                  | Type          | Rules                              |
+| ---------------------- | ------------- | ---------------------------------- |
+| `id`                   | UUID          | Stable within trip                 |
+| `startDate`, `endDate` | local date    | Inclusive; end is not before start |
+| `preference`           | enum          | `preferred` or `flexible`          |
+| `timezone`             | IANA timezone | Used for date boundaries           |
 
 Windows may overlap but are normalized for optimization. Flexible dates never replace preferred dates without an accepted proposal.
 
 ### DurationPreference
 
-| Field | Type | Rules |
-|---|---|---|
-| `minimumDays` | integer | At least 1 |
-| `idealDays` | integer | `minimumDays <= idealDays` |
+| Field         | Type    | Rules                                                   |
+| ------------- | ------- | ------------------------------------------------------- |
+| `minimumDays` | integer | At least 1                                              |
+| `idealDays`   | integer | `minimumDays <= idealDays`                              |
 | `maximumDays` | integer | `idealDays <= maximumDays`; fits an availability window |
 
 A recommendation outside the ideal duration records a material benefit in its proposal rationale.
 
 ### TravellerParty
 
-| Field | Type | Rules |
-|---|---|---|
-| `adults` | integer | 1-10 |
+| Field      | Type             | Rules                            |
+| ---------- | ---------------- | -------------------------------- |
+| `adults`   | integer          | 1-10                             |
 | `children` | ChildTraveller[] | Total party size no more than 10 |
 
 `ChildTraveller` contains a stable trip-local ID and age at trip start. Names, passport details, and payment information are not part of draft trip snapshots.
@@ -136,28 +136,28 @@ Each dimension is an integer from 0 to 100 with 50 neutral:
 
 ### TripConstraint
 
-| Field | Type | Rules |
-|---|---|---|
-| `id` | UUID | Stable within trip |
-| `category` | enum | accessibility, dietary, schedule, lodging, budget, occasion, transport, other |
-| `statement` | string | Traveller-reviewable wording |
-| `priority` | enum | `required`, `strong`, `preference` |
-| `source` | enum + reference | setup text, direct edit, conversation message, system inference |
-| `status` | enum | `active`, `conflicting`, `unverified`, `removed` |
-| `confirmedByUser` | boolean | Required for material inferred constraints before booking |
+| Field             | Type             | Rules                                                                         |
+| ----------------- | ---------------- | ----------------------------------------------------------------------------- |
+| `id`              | UUID             | Stable within trip                                                            |
+| `category`        | enum             | accessibility, dietary, schedule, lodging, budget, occasion, transport, other |
+| `statement`       | string           | Traveller-reviewable wording                                                  |
+| `priority`        | enum             | `required`, `strong`, `preference`                                            |
+| `source`          | enum + reference | setup text, direct edit, conversation message, system inference               |
+| `status`          | enum             | `active`, `conflicting`, `unverified`, `removed`                              |
+| `confirmedByUser` | boolean          | Required for material inferred constraints before booking                     |
 
 ### Destination
 
-| Field | Type | Rules |
-|---|---|---|
-| `id` | UUID | Stable within trip |
-| `kind` | enum | `country`, `city`, `place` |
-| `name`, `countryCode` | string | Human-readable and ISO country identity |
-| `providerPlaceIds` | map | Optional source identifiers |
-| `location` | geography point | SRID 4326 when known |
-| `routePosition` | integer | Unique contiguous order |
+| Field                          | Type               | Rules                                         |
+| ------------------------------ | ------------------ | --------------------------------------------- |
+| `id`                           | UUID               | Stable within trip                            |
+| `kind`                         | enum               | `country`, `city`, `place`                    |
+| `name`, `countryCode`          | string             | Human-readable and ISO country identity       |
+| `providerPlaceIds`             | map                | Optional source identifiers                   |
+| `location`                     | geography point    | SRID 4326 when known                          |
+| `routePosition`                | integer            | Unique contiguous order                       |
 | `arrivalDate`, `departureDate` | local date or null | Ordered and within trip window when scheduled |
-| `plannedNights` | integer | Non-negative and consistent with dates |
+| `plannedNights`                | integer            | Non-negative and consistent with dates        |
 
 ### ItineraryDay and ItineraryItem
 
@@ -197,33 +197,33 @@ Versioned summary with `constraints`, `preferences`, `decisions`, `rejectedOptio
 
 ### AgentRun
 
-| Field | Type | Rules |
-|---|---|---|
-| `id` | UUID | Used for status and event replay |
-| `tripId`, `conversationId` | UUID | Required and authorized |
-| `baseTripVersion` | integer | Proposal concurrency basis |
-| `requestId` | UUID | Idempotency/correlation |
-| `status` | enum | `queued`, `running`, `awaiting_clarification`, `proposed`, `completed`, `failed`, `cancelled` |
-| `eventCursor` | integer | Monotonic replay position |
-| `startedAt`, `completedAt` | timestamp | UTC |
-| `errorCategory` | safe enum or null | No raw sensitive error payload |
-| `leaseExpiresAt` | UTC timestamp or null | 90-second queued/running lease renewed by durable progress every 15 seconds; suspended while awaiting clarification |
+| Field                      | Type                  | Rules                                                                                                               |
+| -------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | UUID                  | Used for status and event replay                                                                                    |
+| `tripId`, `conversationId` | UUID                  | Required and authorized                                                                                             |
+| `baseTripVersion`          | integer               | Proposal concurrency basis                                                                                          |
+| `requestId`                | UUID                  | Idempotency/correlation                                                                                             |
+| `status`                   | enum                  | `queued`, `running`, `awaiting_clarification`, `proposed`, `completed`, `failed`, `cancelled`                       |
+| `eventCursor`              | integer               | Monotonic replay position                                                                                           |
+| `startedAt`, `completedAt` | timestamp             | UTC                                                                                                                 |
+| `errorCategory`            | safe enum or null     | No raw sensitive error payload                                                                                      |
+| `leaseExpiresAt`           | UTC timestamp or null | 90-second queued/running lease renewed by durable progress every 15 seconds; suspended while awaiting clarification |
 
 ### ChangeProposal
 
-| Field | Type | Rules |
-|---|---|---|
-| `id`, `tripId`, `agentRunId` | UUID | Required |
-| `baseTripVersion` | integer | Must equal current version at apply time |
-| `purpose` | enum | `initial_estimate`, `refinement`, `finalization` |
-| `initiatingRequestId` | UUID | Required; must match the scoped run request |
-| `operations` | typed operation[] | Allowlisted draft-only operations |
-| `affectedFacts` | structured paths/IDs | Required for impact review |
-| `rationale`, `tradeoffs` | string/list | Traveller-facing |
-| `priceImpact`, `scheduleImpact` | structured delta | Required when affected |
-| `ambiguities`, `warnings` | list | Material uncertainty surfaced |
-| `status` | enum | State machine below |
-| `createdAt`, `expiresAt` | timestamp | Stale proposals cannot apply |
+| Field                           | Type                 | Rules                                            |
+| ------------------------------- | -------------------- | ------------------------------------------------ |
+| `id`, `tripId`, `agentRunId`    | UUID                 | Required                                         |
+| `baseTripVersion`               | integer              | Must equal current version at apply time         |
+| `purpose`                       | enum                 | `initial_estimate`, `refinement`, `finalization` |
+| `initiatingRequestId`           | UUID                 | Required; must match the scoped run request      |
+| `operations`                    | typed operation[]    | Allowlisted draft-only operations                |
+| `affectedFacts`                 | structured paths/IDs | Required for impact review                       |
+| `rationale`, `tradeoffs`        | string/list          | Traveller-facing                                 |
+| `priceImpact`, `scheduleImpact` | structured delta     | Required when affected                           |
+| `ambiguities`, `warnings`       | list                 | Material uncertainty surfaced                    |
+| `status`                        | enum                 | State machine below                              |
+| `createdAt`, `expiresAt`        | timestamp            | Stale proposals cannot apply                     |
 
 Permitted operations include departure origin, destination, date, duration, traveller, preference, constraint, itinerary-item, and draft-component changes. Booking, payment, cancellation, and rescheduling operations are not valid proposal operations. Initial estimates use the same proposal/acceptance machinery in US1; the agent supplies draft operations and rationale, while web resolves trusted offer facts and recomputes price/impacts. No top-level price write is a valid operation. Requesting research never implies proposal acceptance.
 
@@ -233,32 +233,32 @@ Permitted operations include departure origin, destination, date, duration, trav
 
 Immutable authorization bound to exact revalidated terms.
 
-| Field | Type | Rules |
-|---|---|---|
-| `id`, `tripId`, `userId` | UUID | Required |
-| `tripVersion` | integer | Must match current version at execution start and before the first provider write |
-| `termsSnapshot` | canonical structured data | Exact components, travellers, dates, prices, taxes, terms, currency, expiry |
-| `termsHash` | cryptographic digest | Computed from canonical snapshot |
-| `status` | enum | `pending`, `authorized`, `invalidated`, `expired`, `consumed` |
-| `authorizedAt`, `expiresAt` | timestamp | Execution must occur in window |
-| `invalidatedReason` | enum or null | Material change reason |
+| Field                       | Type                      | Rules                                                                             |
+| --------------------------- | ------------------------- | --------------------------------------------------------------------------------- |
+| `id`, `tripId`, `userId`    | UUID                      | Required                                                                          |
+| `tripVersion`               | integer                   | Must match current version at execution start and before the first provider write |
+| `termsSnapshot`             | canonical structured data | Exact components, travellers, dates, prices, taxes, terms, currency, expiry       |
+| `termsHash`                 | cryptographic digest      | Computed from canonical snapshot                                                  |
+| `status`                    | enum                      | `pending`, `authorized`, `invalidated`, `expired`, `consumed`                     |
+| `authorizedAt`, `expiresAt` | timestamp                 | Execution must occur in window                                                    |
+| `invalidatedReason`         | enum or null              | Material change reason                                                            |
 
 Authorization is invalidated by material changes to price, dates, travellers, departure origin, inventory, components, or cancellation terms. Starting execution consumes the one-shot authorization into an immutable transaction-owned execution basis; consumption never grants permission to use changed or expired terms.
 
 ### BookingTransaction
 
-| Field | Type | Rules |
-|---|---|---|
-| `id`, `tripId`, `authorizationId` | UUID | Required |
-| `operation` | enum | `book_trip`, `reschedule_component`, `cancel_component` |
-| `idempotencyKey` | string | Globally unique for operation and terms hash |
-| `workflowId` | string | Unique Temporal workflow identity |
-| `executionBasis` | immutable value | Authorized user, operation, authorization ID, starting tripVersion, canonical terms snapshot/hash and expiry |
-| `lastObservedTripVersion` | positive integer | Mutable execution checkpoint; advances only through proven same-transaction status/evidence versions |
-| `executionStatus` | enum | `active`, `invalidated`, `expired`, `completed` |
-| `status` | enum | State machine below |
-| `startedAt`, `completedAt` | timestamp | UTC |
-| `requestedBy` | UUID | Authorized actor |
+| Field                             | Type             | Rules                                                                                                        |
+| --------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `id`, `tripId`, `authorizationId` | UUID             | Required                                                                                                     |
+| `operation`                       | enum             | `book_trip`, `reschedule_component`, `cancel_component`                                                      |
+| `idempotencyKey`                  | string           | Globally unique for operation and terms hash                                                                 |
+| `workflowId`                      | string           | Unique Temporal workflow identity                                                                            |
+| `executionBasis`                  | immutable value  | Authorized user, operation, authorization ID, starting tripVersion, canonical terms snapshot/hash and expiry |
+| `lastObservedTripVersion`         | positive integer | Mutable execution checkpoint; advances only through proven same-transaction status/evidence versions         |
+| `executionStatus`                 | enum             | `active`, `invalidated`, `expired`, `completed`                                                              |
+| `status`                          | enum             | State machine below                                                                                          |
+| `startedAt`, `completedAt`        | timestamp        | UTC                                                                                                          |
+| `requestedBy`                     | UUID             | Authorized actor                                                                                             |
 
 The initial execution basis is claimed with the authorization and idempotency record in one database transaction. Its original authorization is consumed once; later material changes invalidate executionStatus rather than rewriting that authorization. Before every provider write, compare current version and material terms against the basis. Later version advances are allowed only if every intervening version identifies this transaction and changes only status, lifecycle or evidence fields. Canonical material terms exclude those status/evidence fields, but retain exact offer/inventory IDs, departure origin, dates, travellers, amounts/currency, cancellation conditions and other authorized terms. A provider confirmation with changed material facts invalidates execution and stops pending writes. Any external version advance requires renewed authorization; it is never silently merged. A short database transaction serializes the durable provider-write claim with trip-edit acceptance; affected material edits are rejected while a claim is in flight or unknown. Do not hold a database transaction across a provider network call. Reconciliation resolves the claim, and earlier successful confirmations remain durable.
 

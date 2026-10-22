@@ -41,19 +41,19 @@ Node 24.21.0 was extracted from the existing local installer into a temporary di
 no runtime installation, dependency update or permanent PATH change was made. Commands
 used the installed package binaries directly because pnpm/node were absent from PATH.
 
-| Check | Actual result |
-| --- | --- |
-| Full web Vitest run before final legacy-normalization regression | 248 passed, 81 database-dependent cases skipped, 70 files |
-| Final calendar/style/editor/propagation regression selection | 19 passed, no skips, including saved overlap/duration normalization |
-| Web TypeScript and ESLint | Passed |
-| Next.js optimized production build | Passed: compile, TypeScript and all 11 static pages |
-| Full agent pytest | 88 passed |
-| Agent Ruff and Pyright on changed agent modules | Passed |
-| Snapshot contract drift and source/promoted OpenAPI validation | Passed |
-| Homepage and planning controls across Chromium, Firefox, WebKit and both mobile profiles | 45 passed, no skips/retries |
-| Final calendar sizing, normalization, subtraction/reset and integer preferences across all five profiles | 30 passed, no skips/retries |
-| Actual Workspace rendered markup in Chromium, 320/390/768/1440 widths | No page overflow; focus outline contained at both edges |
-| Same synthetic workspace, forced colors and 200% text enlargement/reduced motion | Visible focus retained; no page overflow |
+| Check                                                                                                    | Actual result                                                       |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Full web Vitest run before final legacy-normalization regression                                         | 248 passed, 81 database-dependent cases skipped, 70 files           |
+| Final calendar/style/editor/propagation regression selection                                             | 19 passed, no skips, including saved overlap/duration normalization |
+| Web TypeScript and ESLint                                                                                | Passed                                                              |
+| Next.js optimized production build                                                                       | Passed: compile, TypeScript and all 11 static pages                 |
+| Full agent pytest                                                                                        | 88 passed                                                           |
+| Agent Ruff and Pyright on changed agent modules                                                          | Passed                                                              |
+| Snapshot contract drift and source/promoted OpenAPI validation                                           | Passed                                                              |
+| Homepage and planning controls across Chromium, Firefox, WebKit and both mobile profiles                 | 45 passed, no skips/retries                                         |
+| Final calendar sizing, normalization, subtraction/reset and integer preferences across all five profiles | 30 passed, no skips/retries                                         |
+| Actual Workspace rendered markup in Chromium, 320/390/768/1440 widths                                    | No page overflow; focus outline contained at both edges             |
+| Same synthetic workspace, forced colors and 200% text enlargement/reduced motion                         | Visible focus retained; no page overflow                            |
 
 The final 30-case pass follows the last CSS-specificity corrections and legacy-window
 normalization. It supplements the earlier 45-case pass rather than counting 75 distinct

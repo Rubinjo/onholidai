@@ -71,13 +71,19 @@ const internalProblem = {
 } as const;
 
 export function problemResponse(error: unknown, correlationId: string): Response {
-  const safeCorrelationId = isValidCorrelationId(correlationId)
-    ? correlationId
-    : randomUUID();
-  const safeProblem = error instanceof ProblemError && ![
-    error.type, error.title, error.code, error.detail ?? "", error.nextPath ?? "",
-    ...(error.fieldErrors ?? []).flatMap((field) => [field.path, field.message]),
-  ].some(containsSensitiveText) ? error : internalProblem;
+  const safeCorrelationId = isValidCorrelationId(correlationId) ? correlationId : randomUUID();
+  const safeProblem =
+    error instanceof ProblemError &&
+    ![
+      error.type,
+      error.title,
+      error.code,
+      error.detail ?? "",
+      error.nextPath ?? "",
+      ...(error.fieldErrors ?? []).flatMap((field) => [field.path, field.message]),
+    ].some(containsSensitiveText)
+      ? error
+      : internalProblem;
   const body: Problem = {
     type: safeProblem.type,
     title: safeProblem.title,
@@ -87,9 +93,15 @@ export function problemResponse(error: unknown, correlationId: string): Response
       ? { detail: safeProblem.detail }
       : {}),
     correlationId: safeCorrelationId,
-    ...(safeProblem instanceof ProblemError && safeProblem.currentRevision !== undefined ? { currentRevision: safeProblem.currentRevision } : {}),
-    ...(safeProblem instanceof ProblemError && safeProblem.nextPath ? { nextPath: safeProblem.nextPath } : {}),
-    ...(safeProblem instanceof ProblemError && safeProblem.fieldErrors ? { fieldErrors: safeProblem.fieldErrors } : {}),
+    ...(safeProblem instanceof ProblemError && safeProblem.currentRevision !== undefined
+      ? { currentRevision: safeProblem.currentRevision }
+      : {}),
+    ...(safeProblem instanceof ProblemError && safeProblem.nextPath
+      ? { nextPath: safeProblem.nextPath }
+      : {}),
+    ...(safeProblem instanceof ProblemError && safeProblem.fieldErrors
+      ? { fieldErrors: safeProblem.fieldErrors }
+      : {}),
   };
 
   const headers: Record<string, string> = {

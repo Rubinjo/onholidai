@@ -4,13 +4,16 @@ import { expect, type Locator, type Page } from "@playwright/test";
 // arrives before React has hydrated, so retry until the application accepts it.
 export async function enterValue(field: Locator, value: string): Promise<void> {
   const section = field.locator("xpath=ancestor::details[1]");
-  if (await section.count() && await section.getAttribute("open") === null) await section.locator("summary").first().click();
-  if (await field.getAttribute("type") === "range") {
+  if ((await section.count()) && (await section.getAttribute("open")) === null)
+    await section.locator("summary").first().click();
+  if ((await field.getAttribute("type")) === "range") {
     await field.focus();
-    const step = Number(await field.getAttribute("step") ?? 1);
+    const step = Number((await field.getAttribute("step")) ?? 1);
     const difference = Math.round((Number(value) - Number(await field.inputValue())) / step);
-    for (let index = 0; index < Math.abs(difference); index++) await field.press(difference > 0 ? "ArrowRight" : "ArrowLeft");
-    await expect(field).toHaveValue(value); return;
+    for (let index = 0; index < Math.abs(difference); index++)
+      await field.press(difference > 0 ? "ArrowRight" : "ArrowLeft");
+    await expect(field).toHaveValue(value);
+    return;
   }
   await expect(async () => {
     await field.fill(value);
@@ -43,8 +46,12 @@ async function search(page: Page, field: Locator, submit: Locator, value: string
 }
 
 export async function searchDestinations(page: Page, name: string): Promise<void> {
-  await search(page, page.getByLabel("Destination search"),
-    page.getByRole("button", { name: "Find destinations" }), name);
+  await search(
+    page,
+    page.getByLabel("Destination search"),
+    page.getByRole("button", { name: "Find destinations" }),
+    name,
+  );
 }
 
 export async function addDestination(page: Page, name: string, countryCode: string): Promise<void> {
@@ -52,10 +59,20 @@ export async function addDestination(page: Page, name: string, countryCode: stri
   await page.getByRole("option", { name: new RegExp(`${name}.*${countryCode}`) }).click();
 }
 
-export async function confirmOrigin(page: Page, origin = "Amsterdam", originLabel = `${origin}, NL`): Promise<void> {
-  await search(page, page.getByLabel("Departure search"),
-    page.getByRole("button", { name: "Find departure locations" }), origin);
-  await page.getByRole("option", { name: new RegExp("^" + originLabel.replace(", ", " ") + "\\b") }).click();
+export async function confirmOrigin(
+  page: Page,
+  origin = "Amsterdam",
+  originLabel = `${origin}, NL`,
+): Promise<void> {
+  await search(
+    page,
+    page.getByLabel("Departure search"),
+    page.getByRole("button", { name: "Find departure locations" }),
+    origin,
+  );
+  await page
+    .getByRole("option", { name: new RegExp("^" + originLabel.replace(", ", " ") + "\\b") })
+    .click();
 }
 
 export async function calendarDate(page: Page, date: string): Promise<Locator> {
@@ -71,9 +88,16 @@ export async function selectAvailability(page: Page, start: string, end: string)
 }
 
 // Walks the steps after destinations, which callers may already have arranged.
-export async function finishSetup(page: Page, options: {
-  origin?: string; originLabel?: string; start?: string; end?: string; title?: string;
-} = {}): Promise<void> {
+export async function finishSetup(
+  page: Page,
+  options: {
+    origin?: string;
+    originLabel?: string;
+    start?: string;
+    end?: string;
+    title?: string;
+  } = {},
+): Promise<void> {
   await continueStep(page);
   await confirmOrigin(page, options.origin, options.originLabel);
   await continueStep(page);
@@ -85,14 +109,25 @@ export async function finishSetup(page: Page, options: {
   await enterValue(page.getByLabel("Adults", { exact: true }), "2");
   await continueStep(page);
   await continueStep(page);
-  await enterValue(page.getByLabel("Trip title", { exact: true }), options.title ?? "Tokyo holiday");
+  await enterValue(
+    page.getByLabel("Trip title", { exact: true }),
+    options.title ?? "Tokyo holiday",
+  );
   await page.getByRole("button", { name: "Create trip and research estimate" }).click();
 }
 
-export async function completeSetup(page: Page, options: {
-  destination?: string; countryCode?: string; origin?: string; originLabel?: string;
-  start?: string; end?: string; title?: string;
-} = {}): Promise<void> {
+export async function completeSetup(
+  page: Page,
+  options: {
+    destination?: string;
+    countryCode?: string;
+    origin?: string;
+    originLabel?: string;
+    start?: string;
+    end?: string;
+    title?: string;
+  } = {},
+): Promise<void> {
   await openBuilder(page);
   await addDestination(page, options.destination ?? "Tokyo", options.countryCode ?? "JP");
   await finishSetup(page, options);
@@ -101,5 +136,7 @@ export async function completeSetup(page: Page, options: {
 // The route pane and the destination editor both render an optional map, so the
 // workspace layout hook names which one a journey means.
 export function routeMapToggle(page: Page): Locator {
-  return page.locator(".trip-workspace__map").getByRole("button", { name: "Show optional route map" });
+  return page
+    .locator(".trip-workspace__map")
+    .getByRole("button", { name: "Show optional route map" });
 }

@@ -43,7 +43,11 @@ export interface SanitizedSpan {
   endTimeUnixNano: string;
   statusCode: 1 | 2;
   attributes: Record<string, string | number | boolean>;
-  events: Array<{ name: string; timeUnixNano: string; attributes: Record<string, string | number | boolean> }>;
+  events: Array<{
+    name: string;
+    timeUnixNano: string;
+    attributes: Record<string, string | number | boolean>;
+  }>;
 }
 export interface SpanSink {
   export(spans: readonly SanitizedSpan[]): Promise<void>;
@@ -57,7 +61,9 @@ function nanoseconds(at: Date): string {
 
 function identity(value: string | undefined, bytes: number): string {
   if (value && value.length === bytes * 2 && hexPattern.test(value)) return value;
-  return randomUUID().replaceAll("-", "").slice(0, bytes * 2);
+  return randomUUID()
+    .replaceAll("-", "")
+    .slice(0, bytes * 2);
 }
 
 // Collapses concrete path segments (UUIDs and opaque ids) so a span never carries a raw trip,
@@ -100,11 +106,14 @@ type AttributeInput = Readonly<Record<string, AttributeValue>>;
 
 function otlpValue(value: AttributeValue): Record<string, unknown> {
   if (typeof value === "boolean") return { boolValue: value };
-  if (typeof value === "number") return Number.isInteger(value) ? { intValue: String(value) } : { doubleValue: value };
+  if (typeof value === "number")
+    return Number.isInteger(value) ? { intValue: String(value) } : { doubleValue: value };
   return { stringValue: value };
 }
 
-function otlpAttributes(attributes: AttributeInput): Array<{ key: string; value: Record<string, unknown> }> {
+function otlpAttributes(
+  attributes: AttributeInput,
+): Array<{ key: string; value: Record<string, unknown> }> {
   return Object.entries(attributes).map(([key, value]) => ({ key, value: otlpValue(value) }));
 }
 

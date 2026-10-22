@@ -3,3 +3,23 @@
 *.sh text eol=lf
 *.sql text eol=lf
 Dockerfile* text eol=lf
+
+# Keep maintained source/configuration consistent with Black, Prettier and editors.
+*.py text eol=lf
+*.pyi text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.jsonc text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+.editorconfig text eol=lf
+.gitattributes text eol=lf
+.prettierignore text eol=lf

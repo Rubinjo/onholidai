@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 import { itemEvidenceFields, segmentGuidanceFields, planningDetailsSchema } from "./itinerary.ts";
 
 export const CURRENT_TRIP_SNAPSHOT_SCHEMA_VERSION = 1 as const;
@@ -57,7 +58,10 @@ export const currencySchema = z
   .regex(/^[A-Z]{3}$/, "Expected an uppercase ISO 4217 currency code")
   .refine(isIsoCurrency, "Expected a recognized ISO 4217 currency code");
 
-export const timezoneSchema = z.string().min(1).refine(isIanaTimezone, "Expected a valid IANA timezone");
+export const timezoneSchema = z
+  .string()
+  .min(1)
+  .refine(isIanaTimezone, "Expected a valid IANA timezone");
 export const geographyPointSchema = z
   .object({
     latitude: z.number().min(-90).max(90),
@@ -79,7 +83,10 @@ export const departureOriginSchema = z
     name: nonBlank(120),
     countryCode: z.string().regex(/^[A-Z]{2}$/),
     timezone: timezoneSchema,
-    airportCode: z.string().regex(/^[A-Z]{3}$/).nullable(),
+    airportCode: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .nullable(),
     location: geographyPointSchema.nullable().optional(),
     confirmedByUser: z.literal(true),
   })
@@ -195,7 +202,11 @@ export const tripConstraintSchema = z
       constraint.priority !== "preference" &&
       !constraint.confirmedByUser
     ) {
-      addIssue(context, ["confirmedByUser"], "Material inferred constraints require user confirmation");
+      addIssue(
+        context,
+        ["confirmedByUser"],
+        "Material inferred constraints require user confirmation",
+      );
     }
   });
 
@@ -216,14 +227,21 @@ export const destinationSchema = z
   .strict()
   .superRefine((destination, context) => {
     if ((destination.arrivalDate === null) !== (destination.departureDate === null)) {
-      addIssue(context, ["arrivalDate"], "Scheduled destinations require both arrival and departure dates");
+      addIssue(
+        context,
+        ["arrivalDate"],
+        "Scheduled destinations require both arrival and departure dates",
+      );
       return;
     }
     if (destination.arrivalDate !== null && destination.departureDate !== null) {
       if (destination.departureDate < destination.arrivalDate) {
         addIssue(context, ["departureDate"], "Destination departure cannot precede arrival");
       }
-      const nights = Math.max(0, daysInclusive(destination.arrivalDate, destination.departureDate) - 1);
+      const nights = Math.max(
+        0,
+        daysInclusive(destination.arrivalDate, destination.departureDate) - 1,
+      );
       if (destination.plannedNights !== nights) {
         addIssue(context, ["plannedNights"], "plannedNights must match scheduled dates");
       }
@@ -242,7 +260,17 @@ export const travelPlaceSchema = z
 export const travelSegmentSchema = z
   .object({
     ...segmentGuidanceFields,
-    mode: z.enum(["walk", "public_transport", "bus", "drive", "flight", "rail", "transfer", "ferry", "other"]),
+    mode: z.enum([
+      "walk",
+      "public_transport",
+      "bus",
+      "drive",
+      "flight",
+      "rail",
+      "transfer",
+      "ferry",
+      "other",
+    ]),
     origin: travelPlaceSchema,
     destination: travelPlaceSchema,
     plannedDeparture: offsetDateTimeSchema,
@@ -266,7 +294,11 @@ export const travelSegmentSchema = z
       segment.durationUpperBoundMinutes !== null &&
       segment.durationUpperBoundMinutes < segment.durationMinutes
     ) {
-      addIssue(context, ["durationUpperBoundMinutes"], "Duration upper bound cannot be below duration");
+      addIssue(
+        context,
+        ["durationUpperBoundMinutes"],
+        "Duration upper bound cannot be below duration",
+      );
     }
     if (segment.verificationStatus === "verified" && segment.timingEvidence.length === 0) {
       addIssue(context, ["timingEvidence"], "Verified travel requires timing evidence");
@@ -297,7 +329,11 @@ export const componentPriceSchema = z
       price.finalCustomerAmount,
     ];
     if (!amounts.every((amount) => amount.currency === price.finalCustomerAmount.currency)) {
-      addIssue(context, ["finalCustomerAmount", "currency"], "Component price currencies must match");
+      addIssue(
+        context,
+        ["finalCustomerAmount", "currency"],
+        "Component price currencies must match",
+      );
     }
     const expectedFinal =
       price.supplierAmount.minorUnits +
@@ -305,7 +341,11 @@ export const componentPriceSchema = z
       price.customerPayableTaxes.minorUnits +
       price.customerPayableFees.minorUnits;
     if (price.finalCustomerAmount.minorUnits !== expectedFinal) {
-      addIssue(context, ["finalCustomerAmount", "minorUnits"], "Final customer amount must equal all price parts");
+      addIssue(
+        context,
+        ["finalCustomerAmount", "minorUnits"],
+        "Final customer amount must equal all price parts",
+      );
     }
     if (price.expiresAt !== null && epoch(price.expiresAt) <= epoch(price.checkedAt)) {
       addIssue(context, ["expiresAt"], "Price expiry must follow its checked timestamp");
@@ -331,7 +371,14 @@ export const componentBaseFields = {
   price: componentPriceSchema,
   checkedAt: utcDateTimeSchema,
   expiresAt: utcDateTimeSchema.nullable(),
-  bookingStatus: z.enum(["unbooked", "pending", "confirmed", "cancelled", "unknown", "action_required"]),
+  bookingStatus: z.enum([
+    "unbooked",
+    "pending",
+    "confirmed",
+    "cancelled",
+    "unknown",
+    "action_required",
+  ]),
 };
 
 const flightDetailsSchema = z
@@ -352,11 +399,33 @@ const transferDetailsSchema = z
 
 export const travelComponentSchema = z
   .discriminatedUnion("type", [
-    z.object({ ...componentBaseFields, type: z.literal("flight"), details: flightDetailsSchema }).strict(),
-    z.object({ ...componentBaseFields, type: z.literal("accommodation"), details: accommodationDetailsSchema }).strict(),
-    z.object({ ...componentBaseFields, type: z.literal("activity"), details: activityDetailsSchema }).strict(),
-    z.object({ ...componentBaseFields, type: z.literal("rail"), details: railDetailsSchema }).strict(),
-    z.object({ ...componentBaseFields, type: z.literal("transfer"), details: transferDetailsSchema }).strict(),
+    z
+      .object({ ...componentBaseFields, type: z.literal("flight"), details: flightDetailsSchema })
+      .strict(),
+    z
+      .object({
+        ...componentBaseFields,
+        type: z.literal("accommodation"),
+        details: accommodationDetailsSchema,
+      })
+      .strict(),
+    z
+      .object({
+        ...componentBaseFields,
+        type: z.literal("activity"),
+        details: activityDetailsSchema,
+      })
+      .strict(),
+    z
+      .object({ ...componentBaseFields, type: z.literal("rail"), details: railDetailsSchema })
+      .strict(),
+    z
+      .object({
+        ...componentBaseFields,
+        type: z.literal("transfer"),
+        details: transferDetailsSchema,
+      })
+      .strict(),
   ])
   .superRefine((component, context) => {
     if (!unique(component.itineraryItemIds)) {
@@ -421,7 +490,11 @@ export const itineraryDaySchema = z
       const previous = day.items[index - 1];
       const current = day.items[index];
       if (current.start < previous.start) {
-        addIssue(context, ["items", index, "start"], "Itinerary items must be ordered by start time");
+        addIssue(
+          context,
+          ["items", index, "start"],
+          "Itinerary items must be ordered by start time",
+        );
       }
     }
   });
@@ -466,7 +539,11 @@ export const tripPriceSchema = z
       price.customerPayableTaxesTotal.minorUnits +
       price.customerPayableFeesTotal.minorUnits;
     if (price.finalCustomerTotal.minorUnits !== expectedFinal) {
-      addIssue(context, ["finalCustomerTotal", "minorUnits"], "Final trip total must equal all price parts");
+      addIssue(
+        context,
+        ["finalCustomerTotal", "minorUnits"],
+        "Final trip total must equal all price parts",
+      );
     }
   });
 
@@ -507,22 +584,37 @@ const snapshotFields = {
   warnings: z.array(tripWarningSchema).max(64),
 };
 
-type SnapshotForValidation = Omit<z.infer<z.ZodObject<typeof snapshotFields>>, "departureOrigin"> & {
+type SnapshotForValidation = Omit<
+  z.infer<z.ZodObject<typeof snapshotFields>>,
+  "departureOrigin"
+> & {
   departureOrigin?: z.infer<typeof departureOriginSchema> | null;
 };
 
 function validateSnapshot(snapshot: SnapshotForValidation, context: z.RefinementCtx): void {
   if (snapshot.departureOrigins?.length) {
-    if (!unique(snapshot.departureOrigins.map((origin) => origin.placeId))) addIssue(context, ["departureOrigins"], "Departure alternatives must be unique");
-    if (!snapshot.departureOrigins.some((origin) => origin.placeId === snapshot.departureOrigin?.placeId)) addIssue(context, ["departureOrigin"], "Selected departure must be a confirmed alternative");
+    if (!unique(snapshot.departureOrigins.map((origin) => origin.placeId)))
+      addIssue(context, ["departureOrigins"], "Departure alternatives must be unique");
+    if (
+      !snapshot.departureOrigins.some(
+        (origin) => origin.placeId === snapshot.departureOrigin?.placeId,
+      )
+    )
+      addIssue(context, ["departureOrigin"], "Selected departure must be a confirmed alternative");
   }
   if (!unique(snapshot.availabilityWindows.map((window) => window.id))) {
     addIssue(context, ["availabilityWindows"], "Availability window IDs must be unique");
   }
-  if (!snapshot.availabilityWindows.some(
-    (window) => daysInclusive(window.startDate, window.endDate) >= snapshot.duration.maximumDays,
-  )) {
-    addIssue(context, ["duration", "maximumDays"], "Maximum duration must fit at least one availability window");
+  if (
+    !snapshot.availabilityWindows.some(
+      (window) => daysInclusive(window.startDate, window.endDate) >= snapshot.duration.maximumDays,
+    )
+  ) {
+    addIssue(
+      context,
+      ["duration", "maximumDays"],
+      "Maximum duration must fit at least one availability window",
+    );
   }
 
   const destinationIds = snapshot.destinations.map((destination) => destination.id);
@@ -533,9 +625,15 @@ function validateSnapshot(snapshot: SnapshotForValidation, context: z.Refinement
   if (
     firstPosition === undefined ||
     (firstPosition !== 0 && firstPosition !== 1) ||
-    snapshot.destinations.some((destination, index) => destination.routePosition !== firstPosition + index)
+    snapshot.destinations.some(
+      (destination, index) => destination.routePosition !== firstPosition + index,
+    )
   ) {
-    addIssue(context, ["destinations"], "Destination route positions must be unique, contiguous, and ordered");
+    addIssue(
+      context,
+      ["destinations"],
+      "Destination route positions must be unique, contiguous, and ordered",
+    );
   }
 
   for (const [index, destination] of snapshot.destinations.entries()) {
@@ -543,10 +641,16 @@ function validateSnapshot(snapshot: SnapshotForValidation, context: z.Refinement
       destination.arrivalDate !== null &&
       destination.departureDate !== null &&
       !snapshot.availabilityWindows.some(
-        (window) => destination.arrivalDate! >= window.startDate && destination.departureDate! <= window.endDate,
+        (window) =>
+          destination.arrivalDate! >= window.startDate &&
+          destination.departureDate! <= window.endDate,
       )
     ) {
-      addIssue(context, ["destinations", index], "Scheduled destination dates must fit an availability window");
+      addIssue(
+        context,
+        ["destinations", index],
+        "Scheduled destination dates must fit an availability window",
+      );
     }
   }
 
@@ -568,27 +672,58 @@ function validateSnapshot(snapshot: SnapshotForValidation, context: z.Refinement
 
   for (const [dayIndex, day] of snapshot.itineraryDays.entries()) {
     if (!destinationIds.includes(day.destinationId)) {
-      addIssue(context, ["itineraryDays", dayIndex, "destinationId"], "Itinerary day references an unknown destination");
+      addIssue(
+        context,
+        ["itineraryDays", dayIndex, "destinationId"],
+        "Itinerary day references an unknown destination",
+      );
     }
-    if (!snapshot.availabilityWindows.some((window) => day.date >= window.startDate && day.date <= window.endDate)) {
-      addIssue(context, ["itineraryDays", dayIndex, "date"], "Itinerary date must fit an availability window");
+    if (
+      !snapshot.availabilityWindows.some(
+        (window) => day.date >= window.startDate && day.date <= window.endDate,
+      )
+    ) {
+      addIssue(
+        context,
+        ["itineraryDays", dayIndex, "date"],
+        "Itinerary date must fit an availability window",
+      );
     }
     for (const [itemIndex, item] of day.items.entries()) {
       if (item.componentId !== null && !componentIds.includes(item.componentId)) {
-        addIssue(context, ["itineraryDays", dayIndex, "items", itemIndex, "componentId"], "Unknown component reference");
+        addIssue(
+          context,
+          ["itineraryDays", dayIndex, "items", itemIndex, "componentId"],
+          "Unknown component reference",
+        );
       }
-      if (item.start.slice(0, 10) !== day.date || (item.type !== "travel" && item.end.slice(0, 10) !== day.date)) {
-        addIssue(context, ["itineraryDays", dayIndex, "items", itemIndex], "Itinerary item local times must fall on the day date");
+      if (
+        item.start.slice(0, 10) !== day.date ||
+        (item.type !== "travel" && item.end.slice(0, 10) !== day.date)
+      ) {
+        addIssue(
+          context,
+          ["itineraryDays", dayIndex, "items", itemIndex],
+          "Itinerary item local times must fall on the day date",
+        );
       }
     }
   }
 
   for (const [index, component] of snapshot.components.entries()) {
     if (!component.itineraryItemIds.every((id) => allItemIds.includes(id))) {
-      addIssue(context, ["components", index, "itineraryItemIds"], "Component references an unknown itinerary item");
+      addIssue(
+        context,
+        ["components", index, "itineraryItemIds"],
+        "Component references an unknown itinerary item",
+      );
     }
     if (component.price.finalCustomerAmount.currency !== snapshot.price.currency) {
-      addIssue(context, ["components", index, "price"], "Component and trip prices must use the same currency");
+      addIssue(
+        context,
+        ["components", index, "price"],
+        "Component and trip prices must use the same currency",
+      );
     }
   }
 
@@ -647,7 +782,11 @@ export const tripSchema = z
 export const draftOperationSchema = z
   .object({
     operation: z.enum(["add", "replace", "remove", "reorder"]),
-    target: z.string().regex(/^\/((departureOrigin|departureOrigins|destinationOrder|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components|price|warnings)(\/.*)?)?$/),
+    target: z
+      .string()
+      .regex(
+        /^\/((departureOrigin|departureOrigins|destinationOrder|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components|price|warnings)(\/.*)?)?$/,
+      ),
     value: z.unknown(),
   })
   .strict();
@@ -671,7 +810,11 @@ export const tripVersionSchema = z
   .superRefine((version, context) => {
     const expectedPrevious = version.version === 1 ? null : version.version - 1;
     if (version.previousVersion !== expectedPrevious) {
-      addIssue(context, ["previousVersion"], "previousVersion must be null for v1 and otherwise version - 1");
+      addIssue(
+        context,
+        ["previousVersion"],
+        "previousVersion must be null for v1 and otherwise version - 1",
+      );
     }
     if (version.initiatingActor === "agent_proposal" && version.proposalId === null) {
       addIssue(context, ["proposalId"], "Proposal-initiated versions require proposalId");
@@ -683,7 +826,11 @@ export const tripVersionSchema = z
       addIssue(context, ["nonReversibleReason"], "A non-reversible version requires a reason");
     }
     if (version.inverseOperation !== null && version.nonReversibleReason !== null) {
-      addIssue(context, ["nonReversibleReason"], "A reversible version cannot have a non-reversible reason");
+      addIssue(
+        context,
+        ["nonReversibleReason"],
+        "A reversible version cannot have a non-reversible reason",
+      );
     }
     if (!unique(version.changeSummary)) {
       addIssue(context, ["changeSummary"], "Change summary entries must be unique");
@@ -699,10 +846,21 @@ export const tripAggregateSchema = z
   .superRefine((aggregate, context) => {
     for (const [index, version] of aggregate.versions.entries()) {
       if (version.tripId !== aggregate.trip.id) {
-        addIssue(context, ["versions", index, "tripId"], "Every version must belong to the aggregate trip");
+        addIssue(
+          context,
+          ["versions", index, "tripId"],
+          "Every version must belong to the aggregate trip",
+        );
       }
-      if (version.version !== index + 1 || version.previousVersion !== (index === 0 ? null : index)) {
-        addIssue(context, ["versions", index, "version"], "Versions must form an ordered, gap-free chain from 1");
+      if (
+        version.version !== index + 1 ||
+        version.previousVersion !== (index === 0 ? null : index)
+      ) {
+        addIssue(
+          context,
+          ["versions", index, "version"],
+          "Versions must form an ordered, gap-free chain from 1",
+        );
       }
       if (index > 0 && epoch(version.createdAt) < epoch(aggregate.versions[index - 1].createdAt)) {
         addIssue(context, ["versions", index, "createdAt"], "Version timestamps must be monotonic");
@@ -710,10 +868,18 @@ export const tripAggregateSchema = z
     }
     const current = aggregate.versions.at(-1);
     if (current?.version !== aggregate.trip.currentVersion) {
-      addIssue(context, ["trip", "currentVersion"], "currentVersion must point to the last aggregate version");
+      addIssue(
+        context,
+        ["trip", "currentVersion"],
+        "currentVersion must point to the last aggregate version",
+      );
     }
     if (current?.snapshot.price.currency !== aggregate.trip.currency) {
-      addIssue(context, ["trip", "currency"], "Trip currency must match the current version presentation currency");
+      addIssue(
+        context,
+        ["trip", "currency"],
+        "Trip currency must match the current version presentation currency",
+      );
     }
   });
 
@@ -735,13 +901,30 @@ export type TripVersion = z.infer<typeof tripVersionSchema>;
 export type TripAggregate = z.infer<typeof tripAggregateSchema>;
 
 export type DecodedTripSnapshot =
-  | { schemaVersion: 1; compatibility: "current"; snapshot: TripSnapshot; requiresDepartureOrigin: false }
-  | { schemaVersion: 0; compatibility: "legacy"; snapshot: LegacyTripSnapshot; requiresDepartureOrigin: boolean };
+  | {
+      schemaVersion: 1;
+      compatibility: "current";
+      snapshot: TripSnapshot;
+      requiresDepartureOrigin: false;
+    }
+  | {
+      schemaVersion: 0;
+      compatibility: "legacy";
+      snapshot: LegacyTripSnapshot;
+      requiresDepartureOrigin: boolean;
+    };
 
-export function decodeTripSnapshot(schemaVersion: number | null | undefined, snapshot: unknown): DecodedTripSnapshot;
-export function decodeTripSnapshot(envelope: { schemaVersion?: number | null; snapshot: unknown }): DecodedTripSnapshot;
 export function decodeTripSnapshot(
-  versionOrEnvelope: number | null | undefined | { schemaVersion?: number | null; snapshot: unknown },
+  schemaVersion: number | null | undefined,
+  snapshot: unknown,
+): DecodedTripSnapshot;
+export function decodeTripSnapshot(envelope: {
+  schemaVersion?: number | null;
+  snapshot: unknown;
+}): DecodedTripSnapshot;
+export function decodeTripSnapshot(
+  versionOrEnvelope:
+    number | null | undefined | { schemaVersion?: number | null; snapshot: unknown },
   snapshotArgument?: unknown,
 ): DecodedTripSnapshot {
   const envelope =

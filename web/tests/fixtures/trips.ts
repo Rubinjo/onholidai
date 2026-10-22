@@ -1,7 +1,4 @@
-import {
-  tripSnapshotSchema,
-  type TripSnapshot,
-} from "../../domain/trip/schema";
+import { tripSnapshotSchema, type TripSnapshot } from "../../domain/trip/schema";
 
 const availabilityWindowId = "10000000-0000-4000-8000-000000000001";
 const constraintId = "10000000-0000-4000-8000-000000000002";

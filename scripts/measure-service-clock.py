@@ -76,9 +76,7 @@ for _ in range(10000):
         except ValueError as error:
             status = str(error)
         payload = token.split(".")[1]
-        issued = json.loads(
-            base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
-        )["iat"]
+        issued = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))["iat"]
         result = {"result": status, "delta": issued - int(time.time())}
     outcomes[(result["result"], result["delta"])] += 1
 process.stdin.close()

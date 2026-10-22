@@ -5,9 +5,7 @@ from typing import Literal
 
 OfferStatus = Literal["available", "changed", "unavailable"]
 CommitStatus = Literal["confirmed", "rejected"]
-ProviderScenario = Literal[
-    "success", "timeout_after_commit", "duplicate", "contradictory"
-]
+ProviderScenario = Literal["success", "timeout_after_commit", "duplicate", "contradictory"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,8 +43,14 @@ type ReadScenario = Literal[
     "success", "no_matches", "unsupported", "rate_limited", "deadline", "error"
 ]
 type ReadStatus = Literal[
-    "available", "changed", "unavailable", "no_matches", "unsupported", "rate_limited",
-    "deadline", "error"
+    "available",
+    "changed",
+    "unavailable",
+    "no_matches",
+    "unsupported",
+    "rate_limited",
+    "deadline",
+    "error",
 ]
 
 
@@ -94,12 +98,15 @@ class DeterministicProviderDouble:
         state: ProviderFixtureState | None = None,
     ) -> None:
         self._now = now or DeterministicClock().now
-        self.committed: dict[str, CommitOutcome] = {
-            outcome.request_id: outcome for outcome in state.committed
-        } if state else {}
+        self.committed: dict[str, CommitOutcome] = (
+            {outcome.request_id: outcome for outcome in state.committed} if state else {}
+        )
         self._sequence = state.sequence if state else 0
         self.counters = {
-            "search": 0, "detail": 0, "revalidation": 0, "write_attempts": 0,
+            "search": 0,
+            "detail": 0,
+            "revalidation": 0,
+            "write_attempts": 0,
             "writes": state.writes if state else 0,
         }
 
@@ -127,15 +134,18 @@ class DeterministicProviderDouble:
         checked_at = self._now()
         selected = (
             ((self.quote(offer_id),) if offer_id else SYNTHETIC_OFFERS)
-            if scenario == "success" else ()
+            if scenario == "success"
+            else ()
         )
         status: ReadStatus = (
             (selected[0].status if selected else "no_matches")
-            if scenario == "success" else scenario
+            if scenario == "success"
+            else scenario
         )
         expiry = checked_at + timedelta(minutes=5) if selected else None
         return ReadEvidence(
-            status, selected,
+            status,
+            selected,
             checked_at.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
             expiry.isoformat(timespec="milliseconds").replace("+00:00", "Z") if expiry else None,
             f"synthetic-{operation}-{self.counters[operation]}",

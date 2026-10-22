@@ -1,8 +1,20 @@
 import { expect, test } from "@playwright/test";
-import { addDestination, confirmOrigin, continueStep, enterValue, openBuilder, selectAvailability } from "../helpers/setup-wizard";
+
+import {
+  addDestination,
+  confirmOrigin,
+  continueStep,
+  enterValue,
+  openBuilder,
+  selectAvailability,
+} from "../helpers/setup-wizard";
+
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test("@accessibility @us1 setup remains labelled and usable without map", async ({ page, browserName }) => {
+test("@accessibility @us1 setup remains labelled and usable without map", async ({
+  page,
+  browserName,
+}) => {
   await openBuilder(page);
   // The builder leads with the globe; the labelled search controls remain the
   // non-map route and are asserted independently in the guest setup journey.

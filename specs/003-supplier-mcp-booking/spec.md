@@ -10,7 +10,7 @@
 
 **Input**: User description: Build a first-party, read-only supplier MCP integration using Duffel for flights and accommodation and Viator for activities. Defer Booking.com and Trainline to later features, with no current rail replacement; replace GetYourGuide with Viator. Support separate Duffel read/write keys and Viator's single read/write key without giving the agent transaction authority. Preserve Tavily Search API web research, preference-based discovery, the existing trip workspace, whole-trip review and explicit authorization, including safe partial and uncertain outcomes.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Find and compare relevant offers (Priority: P1)
 
@@ -120,7 +120,7 @@ As a traveller using a keyboard, screen reader, or small screen, I can compare o
 - Duffel Flights access without Stays access, or one unavailable Duffel product operation; isolate readiness so one product's missing access does not disable the other.
 - Viator's shared key authorizes upstream writes but discovery must not; the key alone does not establish booking entitlement. A requested Duffel read requiring elevated permissions remains unsupported until its safety and permitted scope are established.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -173,7 +173,7 @@ As a traveller using a keyboard, screen reader, or small screen, I can compare o
 - **FR-030**: Search, comparison, booking review, authorization, outcome, and recovery MUST support keyboard operation, visible focus, logical reading/focus order, accessible labels, screen-reader status/error announcements, and sufficient contrast. At widths from 320 pixels upward, essential information and actions MUST remain usable without clipped content or page-level horizontal scrolling.
 - **FR-031**: Development and acceptance MUST use deterministic doubles for every in-scope provider/product and capability, including supported accommodation property-type variation and explicit unsupported rail outcomes. Coverage MUST include valid results, dominant/equivalent/competitive recommendations, unknown facts, failed prerequisites, rate limits, deadlines, changed/expired terms, subset tampering, duplicates/concurrency, partial success, timeout-after-commit, unsupported status/idempotency, contradictory callbacks, and restart recovery. Regressions MUST prove useful planning and eligible non-rail booking without deferred provider access, independent Duffel flight/stay readiness, and zero discovery writes despite Viator's shared key. Reports MUST separate implemented and tested behavior from live-provider prerequisites and commercial approvals; synthetic acceptance MUST NOT count as proof of live access.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **Authoritative Trip and Version**: Existing accepted plan, requirements, party, dates, budget, constraints, components, lifecycle, history, and proposal application policy. Research never constitutes a second authoritative trip.
 - **Provider Capability and Readiness Declaration**: Provider/product/operation-specific support, coverage, prerequisites, limitations, evidence of verified access, mode, and freshness expectations; read and transaction readiness are distinct. Duffel Flights and Stays are independently assessed, and Viator's shared key never establishes booking entitlement by itself.
@@ -184,7 +184,7 @@ As a traveller using a keyboard, screen reader, or small screen, I can compare o
 - **Booking Attempt and Component Outcome**: One user-facing whole-trip operation with durable per-component write identity, evidence, status, confirmed references, safe reasons, and not-attempted work.
 - **Recovery Review and Audit Evidence**: Reconciled status, preserved commitments, unresolved requirements, remaining payable amount, fresh continuation authorization where needed, and a traceable relationship to the original attempt.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

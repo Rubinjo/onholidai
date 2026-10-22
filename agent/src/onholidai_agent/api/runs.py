@@ -51,7 +51,8 @@ def authorize(http: Request, request: CreateAgentRunRequest) -> None:
             expected_audience="agent",
             expected_context=context,
             required_scopes=(
-                ["trip:read"] if request.purpose == "supplier_research"
+                ["trip:read"]
+                if request.purpose == "supplier_research"
                 else ["trip:read", "proposal:create"]
             ),
         )
@@ -63,11 +64,11 @@ def authorize(http: Request, request: CreateAgentRunRequest) -> None:
         category = (
             "future"
             if reason == "Service token is not yet valid"
-            else "expired"
-            if reason == "Service token has expired"
-            else "scope"
-            if "scope" in reason.casefold()
-            else "invalid"
+            else (
+                "expired"
+                if reason == "Service token has expired"
+                else "scope" if "scope" in reason.casefold() else "invalid"
+            )
         )
         logging.getLogger(__name__).warning("Service authorization rejected (%s)", category)
         raise HTTPException(401, detail="invalid_service_token") from None
@@ -244,11 +245,16 @@ class RunService:
                     {
                         "type": "failed",
                         "status": "failed",
-                        "safeErrorCode": "estimate_deadline"
-                        if isinstance(error, TimeoutError)
-                        else "source_unavailable"
-                        if isinstance(error, ValueError) and error.args == ("source_unavailable",)
-                        else "estimate_unavailable",
+                        "safeErrorCode": (
+                            "estimate_deadline"
+                            if isinstance(error, TimeoutError)
+                            else (
+                                "source_unavailable"
+                                if isinstance(error, ValueError)
+                                and error.args == ("source_unavailable",)
+                                else "estimate_unavailable"
+                            )
+                        ),
                     },
                 )
                 await self.store.result(
@@ -322,9 +328,11 @@ class RunService:
                     request = await self.store.dispatched_request(request, run_id)
                 updated = request.model_copy(
                     update={
-                        "message": answer.answer
-                        if request.purpose in ("initial_estimate", "supplier_research")
-                        else request.message + "\nClarification: " + answer.answer
+                        "message": (
+                            answer.answer
+                            if request.purpose in ("initial_estimate", "supplier_research")
+                            else request.message + "\nClarification: " + answer.answer
+                        )
                     }
                 )
                 task = asyncio.create_task(self.work(updated, run_id))

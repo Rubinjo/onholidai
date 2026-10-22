@@ -94,8 +94,12 @@ def test_alternative_supplier_quotes_are_not_added_together_as_booked_components
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
-                            "price": {"currency": "EUR", "finalCustomerMinor": price,
-                                      "taxesMinor": 0, "feesMinor": 0},
+                            "price": {
+                                "currency": "EUR",
+                                "finalCustomerMinor": price,
+                                "taxesMinor": 0,
+                                "feesMinor": 0,
+                            },
                         }
                     }
                     for index, (kind, price) in enumerate(
@@ -136,8 +140,12 @@ def test_departure_comparison_proposes_the_supported_cheaper_origin_without_chan
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
-                            "price": {"currency": "EUR", "finalCustomerMinor": price,
-                                      "taxesMinor": 0, "feesMinor": 0},
+                            "price": {
+                                "currency": "EUR",
+                                "finalCustomerMinor": price,
+                                "taxesMinor": 0,
+                                "feesMinor": 0,
+                            },
                         }
                     }
                     for index, kind in enumerate(["flight", "accommodation"], 1)
@@ -185,8 +193,12 @@ def test_ai_estimate_proposes_origin_aware_order_for_review_without_changing_sav
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
-                            "price": {"currency": "EUR", "finalCustomerMinor": 10000,
-                                      "taxesMinor": 0, "feesMinor": 0},
+                            "price": {
+                                "currency": "EUR",
+                                "finalCustomerMinor": 10000,
+                                "taxesMinor": 0,
+                                "feesMinor": 0,
+                            },
                         }
                     }
                     for index, kind in enumerate(["flight", "accommodation"], 1)
@@ -195,25 +207,40 @@ def test_ai_estimate_proposes_origin_aware_order_for_review_without_changing_sav
 
     source = RouteSources()
     snapshot = cast(dict[str, object], source.trip["snapshot"])
-    west = {"placeId": "home-west", "name": "West", "confirmedByUser": True,
-            "location": {"latitude": 0, "longitude": 0}}
-    east = {"placeId": "home-east", "name": "East", "confirmedByUser": True,
-            "location": {"latitude": 20, "longitude": 20}}
+    west = {
+        "placeId": "home-west",
+        "name": "West",
+        "confirmedByUser": True,
+        "location": {"latitude": 0, "longitude": 0},
+    }
+    east = {
+        "placeId": "home-east",
+        "name": "East",
+        "confirmedByUser": True,
+        "location": {"latitude": 20, "longitude": 20},
+    }
     stops = [
-        {"id": f"10000000-0000-4000-8000-{index:012}", "name": name, "kind": "city",
-         "location": {"latitude": 0, "longitude": longitude}, "routePosition": index,
-         "arrivalDate": None, "departureDate": None, "plannedNights": 0}
-        for index, (name, longitude) in enumerate(
-            [("A", 0), ("C", 20), ("B", 10), ("D", 30)], 5
-        )
+        {
+            "id": f"10000000-0000-4000-8000-{index:012}",
+            "name": name,
+            "kind": "city",
+            "location": {"latitude": 0, "longitude": longitude},
+            "routePosition": index,
+            "arrivalDate": None,
+            "departureDate": None,
+            "plannedNights": 0,
+        }
+        for index, (name, longitude) in enumerate([("A", 0), ("C", 20), ("B", 10), ("D", 30)], 5)
     ]
     original_order = [stop["id"] for stop in stops]
-    snapshot.update({
-        "departureOrigin": west,
-        "departureOrigins": [west, east],
-        "destinationOrder": "ai",
-        "destinations": stops,
-    })
+    snapshot.update(
+        {
+            "departureOrigin": west,
+            "departureOrigins": [west, east],
+            "destinationOrder": "ai",
+            "destinations": stops,
+        }
+    )
     before = deepcopy(source.trip)
 
     result = asyncio.run(estimate(request(), source)).root
@@ -249,8 +276,12 @@ def test_unavailable_baseline_does_not_hide_a_supported_departure_alternative():
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
-                            "price": {"currency": "EUR", "finalCustomerMinor": 10000,
-                                      "taxesMinor": 0, "feesMinor": 0},
+                            "price": {
+                                "currency": "EUR",
+                                "finalCustomerMinor": 10000,
+                                "taxesMinor": 0,
+                                "feesMinor": 0,
+                            },
                         }
                     }
                     for index, kind in enumerate(["flight", "accommodation"], 1)

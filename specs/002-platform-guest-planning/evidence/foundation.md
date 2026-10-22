@@ -16,19 +16,19 @@ Recorded 2026-10-14. Work-in-progress evidence for the blocking foundation, not 
 
 ## Checks actually run
 
-| Check | Command | Result |
-| --- | --- | --- |
-| Web lint | `pnpm --dir web lint` | PASS, 0 errors/warnings |
-| Web typecheck | `pnpm --dir web typecheck` | PASS |
-| Web unit/integration (no DB env) | `pnpm --dir web test` | 184 passed, 57 skipped |
-| Migration compatibility (isolated DB) | `vitest run tests/integration/migration-compatibility.test.ts` with `--hookTimeout=120000` | PASS 22/22 |
-| Legacy trip commits | `vitest run tests/integration/trip-commit.test.ts` | PASS 12/12 |
-| Legacy planning + estimate | `vitest run tests/integration/trip-planning.test.ts tests/integration/estimate.test.ts` | PASS |
-| Planning session unit | `tests/unit/planning-session.test.ts` | PASS 4/4 |
-| Planning actor unit | `tests/unit/planning-actor.test.ts` | PASS 8/8 |
-| Planning access unit | `tests/unit/planning-access.test.ts` | PASS 3/3 |
-| API boundary unit | `tests/unit/api.test.ts` | PASS 6/6 |
-| UI primitives | `tests/unit/ui-primitives.test.tsx` | PASS 4/4 |
+| Check                                 | Command                                                                                    | Result                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------- |
+| Web lint                              | `pnpm --dir web lint`                                                                      | PASS, 0 errors/warnings |
+| Web typecheck                         | `pnpm --dir web typecheck`                                                                 | PASS                    |
+| Web unit/integration (no DB env)      | `pnpm --dir web test`                                                                      | 184 passed, 57 skipped  |
+| Migration compatibility (isolated DB) | `vitest run tests/integration/migration-compatibility.test.ts` with `--hookTimeout=120000` | PASS 22/22              |
+| Legacy trip commits                   | `vitest run tests/integration/trip-commit.test.ts`                                         | PASS 12/12              |
+| Legacy planning + estimate            | `vitest run tests/integration/trip-planning.test.ts tests/integration/estimate.test.ts`    | PASS                    |
+| Planning session unit                 | `tests/unit/planning-session.test.ts`                                                      | PASS 4/4                |
+| Planning actor unit                   | `tests/unit/planning-actor.test.ts`                                                        | PASS 8/8                |
+| Planning access unit                  | `tests/unit/planning-access.test.ts`                                                       | PASS 3/3                |
+| API boundary unit                     | `tests/unit/api.test.ts`                                                                   | PASS 6/6                |
+| UI primitives                         | `tests/unit/ui-primitives.test.tsx`                                                        | PASS 4/4                |
 
 ## Migrations verified (T008–T013)
 

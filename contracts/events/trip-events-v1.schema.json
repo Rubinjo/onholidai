@@ -73,12 +73,7 @@
               "minimum": 1
             },
             "initiatingActor": {
-              "enum": [
-                "user",
-                "agent_proposal",
-                "system_revalidation",
-                "booking_workflow"
-              ]
+              "enum": ["user", "agent_proposal", "system_revalidation", "booking_workflow"]
             },
             "requestId": {
               "type": "string",

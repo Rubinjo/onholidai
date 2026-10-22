@@ -149,9 +149,7 @@ async def compose_itinerary(request: CreateAgentRunRequest, sources: TripReader)
                 mode = (
                     "flight"
                     if component["type"] == "flight"
-                    else "rail"
-                    if component["type"] == "rail"
-                    else "transfer"
+                    else "rail" if component["type"] == "rail" else "transfer"
                 )
                 origin_name = str(details.get("originStation", "Departure location unavailable"))
                 destination_name = str(

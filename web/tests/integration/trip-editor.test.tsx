@@ -6,12 +6,23 @@ import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
 const api = vi.hoisted(() => ({ preview: vi.fn() }));
-vi.mock("../../components/trip-setup/http", () => ({ planningJson: api.preview, planningError: () => "Safe failure" }));
-afterEach(() => { cleanup(); api.preview.mockReset(); });
+vi.mock("../../components/trip-setup/http", () => ({
+  planningJson: api.preview,
+  planningError: () => "Safe failure",
+}));
+afterEach(() => {
+  cleanup();
+  api.preview.mockReset();
+});
 
 function envelope() {
-  return { tripId: "10000000-0000-4000-8000-000000000090", version: 2, lifecycleState: "draft",
-    updatedAt: "2030-01-01T00:00:00Z", snapshot: projectCustomerSnapshot(createSyntheticTripSnapshot()) };
+  return {
+    tripId: "10000000-0000-4000-8000-000000000090",
+    version: 2,
+    lifecycleState: "draft",
+    updatedAt: "2030-01-01T00:00:00Z",
+    snapshot: projectCustomerSnapshot(createSyntheticTripSnapshot()),
+  };
 }
 
 describe("trip editor impact review", () => {
@@ -44,8 +55,11 @@ describe("trip editor impact review", () => {
     const trip = envelope();
     const { rerender } = render(<TripEditor trip={trip} onCommit={() => {}} />);
     fireEvent.change(screen.getByLabelText("Pace", { exact: false }), { target: { value: "7" } });
-    const latest = { ...trip, version: 3, snapshot: { ...trip.snapshot,
-      preferences: { ...trip.snapshot.preferences, pace: 100 } } };
+    const latest = {
+      ...trip,
+      version: 3,
+      snapshot: { ...trip.snapshot, preferences: { ...trip.snapshot.preferences, pace: 100 } },
+    };
     rerender(<TripEditor trip={latest} onCommit={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
     expect((screen.getByLabelText("Pace", { exact: false }) as HTMLInputElement).value).toBe("10");
@@ -57,8 +71,11 @@ describe("trip editor impact review", () => {
   it("updates a clean form on a newer saved version without showing discard", () => {
     const trip = envelope();
     const { rerender } = render(<TripEditor trip={trip} onCommit={() => {}} />);
-    const latest = { ...trip, version: 3, snapshot: { ...trip.snapshot,
-      preferences: { ...trip.snapshot.preferences, pace: 100 } } };
+    const latest = {
+      ...trip,
+      version: 3,
+      snapshot: { ...trip.snapshot, preferences: { ...trip.snapshot.preferences, pace: 100 } },
+    };
     rerender(<TripEditor trip={latest} onCommit={() => {}} />);
     expect((screen.getByLabelText("Pace", { exact: false }) as HTMLInputElement).value).toBe("10");
     expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
@@ -74,8 +91,11 @@ describe("trip editor impact review", () => {
 
   it("immediately saves only changed settings without an impact preview", async () => {
     const trip = envelope();
-    const saved = { ...trip, version: 3, snapshot: { ...trip.snapshot,
-      preferences: { ...trip.snapshot.preferences, pace: 67 } } };
+    const saved = {
+      ...trip,
+      version: 3,
+      snapshot: { ...trip.snapshot, preferences: { ...trip.snapshot.preferences, pace: 67 } },
+    };
     api.preview.mockResolvedValue(saved);
     const onCommit = vi.fn();
     render(<TripEditor trip={trip} onCommit={onCommit} />);
@@ -83,7 +103,10 @@ describe("trip editor impact review", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(onCommit).toHaveBeenCalledWith(saved));
     expect(api.preview).toHaveBeenCalledTimes(1);
-    const [path, input] = api.preview.mock.calls[0] as [string, { operations: { target: string; value: unknown }[] }];
+    const [path, input] = api.preview.mock.calls[0] as [
+      string,
+      { operations: { target: string; value: unknown }[] },
+    ];
     expect(path).toBe("/api/v1/trips/10000000-0000-4000-8000-000000000090/commands/edit");
     expect(input.operations).toHaveLength(1);
     expect(input.operations[0].target).toBe("/preferences");

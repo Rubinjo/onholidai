@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+
 import { containsSensitiveText } from "../lib/privacy";
 
 export const CORRELATION_ID_HEADER = "x-correlation-id";
@@ -59,9 +60,7 @@ const attributeValidators = {
   "url.route": isRoute,
 } satisfies Readonly<Record<string, AttributeValidator>>;
 
-export const TELEMETRY_ATTRIBUTE_KEYS = Object.freeze(
-  Object.keys(attributeValidators),
-);
+export const TELEMETRY_ATTRIBUTE_KEYS = Object.freeze(Object.keys(attributeValidators));
 
 export function isValidCorrelationId(value: string | null): value is string {
   return value !== null && correlationIdPattern.test(value) && !containsSensitiveText(value);

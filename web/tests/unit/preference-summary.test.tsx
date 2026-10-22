@@ -1,8 +1,10 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
+
 import { DayPlan } from "../../components/trip-workspace/day-plan";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
+
 afterEach(cleanup);
 it("uses the same 1–10 pace scale in daily-plan summaries without rewriting the stored assessment", () => {
   const snapshot = projectCustomerSnapshot(createSyntheticTripSnapshot());

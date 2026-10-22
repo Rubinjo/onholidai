@@ -28,9 +28,7 @@ def _distance(first: dict[str, object], second: dict[str, object]) -> float:
     b = cast(dict[str, float], second["location"])
     lat1, lat2 = radians(a["latitude"]), radians(b["latitude"])
     dlat, dlon = lat2 - lat1, radians(b["longitude"] - a["longitude"])
-    return 2 * asin(
-        min(1, sqrt(sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2))
-    )
+    return 2 * asin(min(1, sqrt(sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2)))
 
 
 def arrange_destinations(
@@ -59,10 +57,7 @@ def arrange_destinations(
             for origin_index in origin_indices:
                 totals.append(
                     distances[origin_index][route[0]]
-                    + sum(
-                        distances[left][right]
-                        for left, right in pairwise(route)
-                    )
+                    + sum(distances[left][right] for left, right in pairwise(route))
                     + distances[route[-1]][origin_index]
                 )
             return sum(totals) / len(totals)
@@ -72,8 +67,7 @@ def arrange_destinations(
 
     def circuit_length(route: tuple[int, ...]) -> float:
         return sum(
-            distances[route[index]][route[(index + 1) % len(route)]]
-            for index in range(len(route))
+            distances[route[index]][route[(index + 1) % len(route)]] for index in range(len(route))
         )
 
     # A destination-only circuit is rotationally symmetric, so fix its first stop.

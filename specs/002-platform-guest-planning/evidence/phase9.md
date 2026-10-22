@@ -53,17 +53,17 @@ Environment: Windows, Node 24.22.0, the frozen pnpm 12.11.2 lockfile, Python 3.1
 isolated PostGIS 18-3.6 databases and real deterministic agent/Temporal test services.
 No live supplier booking/payment integration was enabled.
 
-| Check | Result |
-| --- | --- |
-| Full web Vitest suite with all four `TEST_DATABASE_*_URL` roles | 317 passed, 68 files, no skips |
-| Agent pytest | 83 passed |
-| Agent ruff / strict pyright | passed; zero type errors/warnings |
-| Web ESLint / TypeScript | passed |
-| Agent export, generated Zod, snapshot/itinerary drift and source/promoted OpenAPI validation | passed |
-| Next production build | passed |
-| Focused redesigned Chromium journeys | 22 passed, no skips |
-| Latest production HTTPS journeys, five browser profiles | 114 passed, one WebKit timeout, no skips/retries |
-| Actual worker entrypoint subprocess against isolated DB + Temporal | passed (included in web suite) |
+| Check                                                                                        | Result                                           |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Full web Vitest suite with all four `TEST_DATABASE_*_URL` roles                              | 317 passed, 68 files, no skips                   |
+| Agent pytest                                                                                 | 83 passed                                        |
+| Agent ruff / strict pyright                                                                  | passed; zero type errors/warnings                |
+| Web ESLint / TypeScript                                                                      | passed                                           |
+| Agent export, generated Zod, snapshot/itinerary drift and source/promoted OpenAPI validation | passed                                           |
+| Next production build                                                                        | passed                                           |
+| Focused redesigned Chromium journeys                                                         | 22 passed, no skips                              |
+| Latest production HTTPS journeys, five browser profiles                                      | 114 passed, one WebKit timeout, no skips/retries |
+| Actual worker entrypoint subprocess against isolated DB + Temporal                           | passed (included in web suite)                   |
 
 Commands use the package scripts' binaries directly when the local pnpm shim is
 unavailable: `node node_modules/vitest/vitest.mjs run`,
@@ -147,14 +147,14 @@ off; production cookie flags, origin checks and service-token verification stay 
   coverage exercises origin-aware route choice, missing-coordinate fallback, manual
   refinement/reorder policy, origin persistence, and legacy normalization.
 
-| Check | Result |
-| --- | --- |
-| Full agent pytest suite | 88 passed |
-| Agent Ruff | Passed |
-| Pyright on changed agent modules and the new refinement test | Passed |
+| Check                                                                                              | Result                                        |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Full agent pytest suite                                                                            | 88 passed                                     |
+| Agent Ruff                                                                                         | Passed                                        |
+| Pyright on changed agent modules and the new refinement test                                       | Passed                                        |
 | Web focused Vitest: planning controls/options and guest-planning/booking-authorization integration | 23 passed, 7 database-dependent cases skipped |
-| Web TypeScript and targeted ESLint | Passed |
-| Source/promoted contract validation and snapshot contract drift | Passed |
+| Web TypeScript and targeted ESLint                                                                 | Passed                                        |
+| Source/promoted contract validation and snapshot contract drift                                    | Passed                                        |
 
 The web database-dependent cases were skipped because isolated
 `TEST_DATABASE_*_URL` configuration was unavailable; they are not counted as passes.

@@ -1,12 +1,6 @@
 import "server-only";
 
-import {
-  CamelCasePlugin,
-  type ColumnType,
-  type Generated,
-  Kysely,
-  PostgresDialect,
-} from "kysely";
+import { CamelCasePlugin, type ColumnType, type Generated, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 
 import type { TripCoreDatabase } from "@/server/db/types";

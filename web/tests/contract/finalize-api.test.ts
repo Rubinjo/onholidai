@@ -10,9 +10,18 @@ import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
 describe("finalization contracts", () => {
   it("requires exact version and explicit disclosure acceptance, excludes booking capabilities", () => {
-    const command = { requestId: "20000000-0000-4000-8000-000000000001", expectedVersion: 2, acknowledgeUnverified: true, reviewFingerprint: "a".repeat(64) };
+    const command = {
+      requestId: "20000000-0000-4000-8000-000000000001",
+      expectedVersion: 2,
+      acknowledgeUnverified: true,
+      reviewFingerprint: "a".repeat(64),
+    };
     expect(finalizeCommandSchema.parse(command)).toEqual(command);
-    for (const invalid of [{ ...command, expectedVersion: 0 }, { ...command, book: true }, { requestId: command.requestId }]) {
+    for (const invalid of [
+      { ...command, expectedVersion: 0 },
+      { ...command, book: true },
+      { requestId: command.requestId },
+    ]) {
       expect(finalizeCommandSchema.safeParse(invalid).success).toBe(false);
     }
   });

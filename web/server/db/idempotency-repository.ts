@@ -1,6 +1,6 @@
-import type { Transaction } from "kysely";
-
 import { ProblemError } from "@/server/errors";
+
+import type { Transaction } from "kysely";
 import type { Database } from "@/server/db/database";
 
 export interface ClaimIdempotencyInput {
@@ -11,8 +11,7 @@ export interface ClaimIdempotencyInput {
 }
 
 export type IdempotencyClaim =
-  | { kind: "claimed" }
-  | { kind: "replay"; result: Record<string, unknown> };
+  { kind: "claimed" } | { kind: "replay"; result: Record<string, unknown> };
 
 export interface IdempotencyRepositoryPort {
   claim(input: ClaimIdempotencyInput): Promise<IdempotencyClaim>;
@@ -42,9 +41,10 @@ export class IdempotencyRequestInProgressError extends ProblemError {
       title: state === "unknown" ? "Request outcome is unknown" : "Request is already in progress",
       status: 409,
       code: state === "unknown" ? "idempotency_outcome_unknown" : "idempotency_in_progress",
-      detail: state === "unknown"
-        ? "Check the existing operation status before retrying."
-        : "Retry after the original request finishes.",
+      detail:
+        state === "unknown"
+          ? "Check the existing operation status before retrying."
+          : "Retry after the original request finishes.",
     });
     this.name = "IdempotencyRequestInProgressError";
   }

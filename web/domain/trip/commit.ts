@@ -1,19 +1,23 @@
 import { createHash } from "node:crypto";
 
-import type { Kysely, Transaction } from "kysely";
 import { z } from "zod";
 
 import { draftOperationSchema, tripSnapshotSchema, tripVersionSchema } from "@/domain/trip/schema";
 import { canonicalJson } from "@/domain/canonical-json";
 import { ProblemError } from "@/server/errors";
-import type { Database } from "@/server/db/database";
 import { inTransaction } from "@/server/db/transaction";
 import {
   IdempotencyRepository,
   type IdempotencyRepositoryPort,
 } from "@/server/db/idempotency-repository";
 import { TripRepository, type TripRepositoryPort } from "@/server/db/trip-repository";
-import { assertBookingWritesEditable, invalidateBookingStateForTripVersion } from "@/domain/booking/invalidate";
+import {
+  assertBookingWritesEditable,
+  invalidateBookingStateForTripVersion,
+} from "@/domain/booking/invalidate";
+
+import type { Database } from "@/server/db/database";
+import type { Kysely, Transaction } from "kysely";
 
 const commitInputSchema = z
   .object({
@@ -23,8 +27,13 @@ const commitInputSchema = z
     // receipt fingerprint and legacy account ids are unchanged.
     ownerUserId: z.string().trim().min(1),
     expectedVersion: z.number().int().nonnegative(),
-    lifecycleState: z.enum(["draft", "finalized", "partially_booked", "booked", "cancelled"]).optional(),
-    creation: z.object({ title: z.string().trim().min(1).max(120) }).strict().optional(),
+    lifecycleState: z
+      .enum(["draft", "finalized", "partially_booked", "booked", "cancelled"])
+      .optional(),
+    creation: z
+      .object({ title: z.string().trim().min(1).max(120) })
+      .strict()
+      .optional(),
     requestId: z.uuid(),
     idempotencyKey: z.string().trim().min(1).max(256),
     requestFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
@@ -41,11 +50,23 @@ const commitInputSchema = z
   .strict()
   .superRefine((input, context) => {
     if ((input.expectedVersion === 0) !== (input.creation !== undefined)) {
-      context.addIssue({ code: "custom", path: ["creation"], message: "Version zero requires initial trip creation" });
+      context.addIssue({
+        code: "custom",
+        path: ["creation"],
+        message: "Version zero requires initial trip creation",
+      });
     }
-    if (input.creation && (input.initiatingActor !== "user" || input.proposalId !== null
-      || input.inverseOperation !== null)) {
-      context.addIssue({ code: "custom", path: ["creation"], message: "Initial creation must be a user command with a non-reversible reason" });
+    if (
+      input.creation &&
+      (input.initiatingActor !== "user" ||
+        input.proposalId !== null ||
+        input.inverseOperation !== null)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["creation"],
+        message: "Initial creation must be a user command with a non-reversible reason",
+      });
     }
   });
 
@@ -111,27 +132,46 @@ export async function commitTripMutation(
   const input = commitInputSchema.parse(rawInput);
   const now = (options.now ?? (() => new Date()))();
   const repositoryFactory = options.repositoryFactory ?? defaultRepositoryFactory;
-  const scope = input.creation ? `user:${input.ownerUserId}:trip:create` : `trip:${input.tripId}:mutation`;
+  const scope = input.creation
+    ? `user:${input.ownerUserId}:trip:create`
+    : `trip:${input.tripId}:mutation`;
   // Bind the receipt to validated domain facts and the authenticated actor.
   // Server-generated delivery/audit/trace IDs may differ on an exact retry.
-  const requestFingerprint = createHash("sha256").update(canonicalJson({
-    ...(input.creation ? { creation: input.creation } : { tripId: input.tripId }),
-    ownerUserId: input.ownerUserId, expectedVersion: input.expectedVersion,
-    lifecycleState: input.lifecycleState,
-    requestId: input.requestId, requestFingerprint: input.requestFingerprint,
-    snapshot: input.creation ? { ...input.snapshot, price: { ...input.snapshot.price, checkedAt: null } } : input.snapshot,
-    initiatingActor: input.initiatingActor, proposalId: input.proposalId,
-    changeSummary: input.changeSummary, inverseOperation: input.inverseOperation,
-    nonReversibleReason: input.nonReversibleReason,
-  })).digest("hex");
+  const requestFingerprint = createHash("sha256")
+    .update(
+      canonicalJson({
+        ...(input.creation ? { creation: input.creation } : { tripId: input.tripId }),
+        ownerUserId: input.ownerUserId,
+        expectedVersion: input.expectedVersion,
+        lifecycleState: input.lifecycleState,
+        requestId: input.requestId,
+        requestFingerprint: input.requestFingerprint,
+        snapshot: input.creation
+          ? { ...input.snapshot, price: { ...input.snapshot.price, checkedAt: null } }
+          : input.snapshot,
+        initiatingActor: input.initiatingActor,
+        proposalId: input.proposalId,
+        changeSummary: input.changeSummary,
+        inverseOperation: input.inverseOperation,
+        nonReversibleReason: input.nonReversibleReason,
+      }),
+    )
+    .digest("hex");
 
   const nextVersion = input.expectedVersion + 1;
   const version = tripVersionSchema.parse({
-    tripId: input.tripId, version: nextVersion, previousVersion: input.expectedVersion || null,
-    schemaVersion: 1, snapshot: input.snapshot, initiatingActor: input.initiatingActor,
-    initiatingRequestId: input.requestId, proposalId: input.proposalId,
-    changeSummary: input.changeSummary, inverseOperation: input.inverseOperation,
-    nonReversibleReason: input.nonReversibleReason, createdAt: now.toISOString(),
+    tripId: input.tripId,
+    version: nextVersion,
+    previousVersion: input.expectedVersion || null,
+    schemaVersion: 1,
+    snapshot: input.snapshot,
+    initiatingActor: input.initiatingActor,
+    initiatingRequestId: input.requestId,
+    proposalId: input.proposalId,
+    changeSummary: input.changeSummary,
+    inverseOperation: input.inverseOperation,
+    nonReversibleReason: input.nonReversibleReason,
+    createdAt: now.toISOString(),
   });
 
   return inTransaction(database, async (transaction) => {
@@ -162,33 +202,59 @@ export async function commitTripMutation(
       throw new TripVersionConflictError(input.expectedVersion, trip.currentVersion);
     }
     if (!input.creation) {
-      const ownBookingTransaction = input.initiatingActor === "booking_workflow" ? input.traceId : null;
-      await assertBookingWritesEditable(transaction, input.tripId, input.initiatingActor, ownBookingTransaction);
+      const ownBookingTransaction =
+        input.initiatingActor === "booking_workflow" ? input.traceId : null;
+      await assertBookingWritesEditable(
+        transaction,
+        input.tripId,
+        input.initiatingActor,
+        ownBookingTransaction,
+      );
     }
 
     if (input.creation) {
-      await repositories.trips.insertTrip({ id: input.tripId, ownerUserId: input.ownerUserId,
-        title: input.creation.title, lifecycleState: "draft", currentVersion: 1,
-        currency: input.snapshot.price.currency, createdAt: now, updatedAt: now, lastActivityAt: now });
+      await repositories.trips.insertTrip({
+        id: input.tripId,
+        ownerUserId: input.ownerUserId,
+        title: input.creation.title,
+        lifecycleState: "draft",
+        currentVersion: 1,
+        currency: input.snapshot.price.currency,
+        createdAt: now,
+        updatedAt: now,
+        lastActivityAt: now,
+      });
     }
     await repositories.trips.insertVersion(version);
-    const advanced = input.creation ? true : await repositories.trips.advanceCurrentVersion(
-      input.tripId,
-      input.expectedVersion,
-      nextVersion,
-      input.snapshot.price.currency,
-      now,
-    );
+    const advanced = input.creation
+      ? true
+      : await repositories.trips.advanceCurrentVersion(
+          input.tripId,
+          input.expectedVersion,
+          nextVersion,
+          input.snapshot.price.currency,
+          now,
+        );
     if (!advanced) {
-      throw new TripVersionConflictError(input.expectedVersion, trip?.currentVersion ?? input.expectedVersion);
+      throw new TripVersionConflictError(
+        input.expectedVersion,
+        trip?.currentVersion ?? input.expectedVersion,
+      );
     }
     if (input.lifecycleState) {
-      await transaction.updateTable("trips").set({ lifecycleState: input.lifecycleState })
-        .where("id", "=", input.tripId).where("currentVersion", "=", nextVersion).executeTakeFirstOrThrow();
+      await transaction
+        .updateTable("trips")
+        .set({ lifecycleState: input.lifecycleState })
+        .where("id", "=", input.tripId)
+        .where("currentVersion", "=", nextVersion)
+        .executeTakeFirstOrThrow();
     }
     if (!input.creation) {
-      await invalidateBookingStateForTripVersion(transaction, input.tripId,
-        input.initiatingActor === "booking_workflow" ? input.traceId : null);
+      await invalidateBookingStateForTripVersion(
+        transaction,
+        input.tripId,
+        input.initiatingActor === "booking_workflow" ? input.traceId : null,
+      );
     }
 
     await repositories.trips.appendOutbox({
@@ -214,15 +280,23 @@ export async function commitTripMutation(
     await repositories.trips.appendAudit({
       id: input.auditEventId,
       actorType: input.initiatingActor === "user" ? "user" : "service",
-      actorId: input.initiatingActor === "user" ? auditActor?.id ?? input.ownerUserId : input.ownerUserId,
+      actorId:
+        input.initiatingActor === "user"
+          ? (auditActor?.id ?? input.ownerUserId)
+          : input.ownerUserId,
       action: "trip.version.commit",
       targetType: "trip",
       targetId: input.tripId,
       requestId: input.requestId,
       traceId: input.traceId,
       outcome: "succeeded",
-      metadata: { version: nextVersion, changedFieldCount: input.changeSummary.length,
-        ...(auditActor ? { planningOwnerId: input.ownerUserId, planningActorKind: auditActor.kind } : {}) },
+      metadata: {
+        version: nextVersion,
+        changedFieldCount: input.changeSummary.length,
+        ...(auditActor
+          ? { planningOwnerId: input.ownerUserId, planningActorKind: auditActor.kind }
+          : {}),
+      },
     });
 
     const result = commitResultSchema.parse({

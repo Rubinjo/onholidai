@@ -7,9 +7,7 @@ const styles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 
 describe("application accessibility styles", () => {
   it("keeps keyboard focus visibly distinct", () => {
-    expect(styles).toMatch(
-      /:focus-visible\s*\{[\s\S]*?outline:\s*3px solid var\(--focus-ring\)/,
-    );
+    expect(styles).toMatch(/:focus-visible\s*\{[\s\S]*?outline:\s*3px solid var\(--focus-ring\)/);
     expect(styles).not.toMatch(/outline:\s*(?:0|none)\s*[;}]/);
   });
 

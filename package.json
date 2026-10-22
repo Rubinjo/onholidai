@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "pnpm --filter @onholidai/web dev",
     "dev:agent": "uv run --project agent uvicorn onholidai_agent.api.main:app --reload",
+    "format": "pnpm --dir web format && uv run --project agent black --config agent/pyproject.toml agent scripts",
+    "format:check": "pnpm --dir web format:check && uv run --project agent black --check --config agent/pyproject.toml agent scripts",
     "lint": "pnpm --filter @onholidai/web lint && uv run --project agent ruff check agent",
     "typecheck": "pnpm --filter @onholidai/web typecheck && uv run --project agent pyright agent/src agent/tests",
     "test": "pnpm --filter @onholidai/web test && uv run --project agent pytest agent/tests",

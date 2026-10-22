@@ -13,7 +13,8 @@ describe("final workspace layout", () => {
     const pane = /\.trip-workspace__pane\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
     expect(pane).toMatch(/overflow-y:\s*auto/);
     const details = /\.trip-workspace__pane--details\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
-    const conversation = /\.trip-workspace__pane--conversation\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
+    const conversation =
+      /\.trip-workspace__pane--conversation\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
     expect(details).toContain("grid-area: details");
     expect(conversation).toContain("grid-area: conversation");
     // The middle panel never scrolls itself; the route list is the only fallback scroll region.
@@ -27,7 +28,8 @@ describe("final workspace layout", () => {
   it("keeps the map from being squeezed below its own content", () => {
     const fill = /\.map-section--fill\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
     expect(fill).toContain("min-height: min-content");
-    const canvas = /\.map-section--fill\s+\.map-section__canvas\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
+    const canvas =
+      /\.map-section--fill\s+\.map-section__canvas\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
     expect(canvas).toMatch(/min-height:\s*8rem/);
     expect(canvas).toMatch(/height:\s*auto/);
   });
@@ -38,13 +40,15 @@ describe("final workspace layout", () => {
       /grid-template-areas:\s*"details route conversation"\s*"details price conversation"/,
     );
     const grid = workspace.slice(workspace.indexOf('className="trip-workspace"'));
-    expect(grid.indexOf("<PriceBar")).toBeGreaterThan(grid.indexOf("trip-workspace__pane--conversation"));
+    expect(grid.indexOf("<PriceBar")).toBeGreaterThan(
+      grid.indexOf("trip-workspace__pane--conversation"),
+    );
     expect(grid.indexOf("<PriceBar")).toBeGreaterThan(grid.indexOf("trip-workspace__pane--route"));
   });
 
   it("serves the MapLibre worker from a stable URL and loads its stylesheet", () => {
     expect(estimateMap).toContain('import "maplibre-gl/dist/maplibre-gl.css"');
-    expect(estimateMap).toContain('setWorkerUrl(workerUrl)');
+    expect(estimateMap).toContain("setWorkerUrl(workerUrl)");
     expect(estimateMap).toContain('const workerUrl = "/maplibre/maplibre-gl-worker.mjs"');
   });
 });

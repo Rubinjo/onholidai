@@ -45,17 +45,17 @@ Guest booking explains account association with actions/confirmations and free r
 
 Use source-owned Radix variants of needed Button/Input/Textarea/Label/Card/Badge/Progress/Skeleton/Alert/Dialog/Sheet; reuse existing calendar/native selects/field/status where sufficient. components.json uses current @/* aliases, rsc true, TSX, app/globals.css, empty Tailwind config for v4. Add source-required utilities and matching PostCSS plugin/config only; no unattended theme reset.
 
-| Semantic token | Source |
-| --- | --- |
-| background / foreground | --canvas / --text |
-| card/popover and foreground | --surface / --text |
-| primary and foreground | existing --accent / contrast-tested light text |
-| secondary/muted | new subdued surface alias, --text or --text-muted |
-| destructive and foreground | --danger / contrast-tested light text |
-| border/input | --border |
-| ring | --focus-ring |
-| accent hover utility | distinct subdued hover token; never overwrite legacy --accent |
-| radius | shared new radius values only |
+| Semantic token              | Source                                                        |
+| --------------------------- | ------------------------------------------------------------- |
+| background / foreground     | --canvas / --text                                             |
+| card/popover and foreground | --surface / --text                                            |
+| primary and foreground      | existing --accent / contrast-tested light text                |
+| secondary/muted             | new subdued surface alias, --text or --text-muted             |
+| destructive and foreground  | --danger / contrast-tested light text                         |
+| border/input                | --border                                                      |
+| ring                        | --focus-ring                                                  |
+| accent hover utility        | distinct subdued hover token; never overwrite legacy --accent |
+| radius                      | shared new radius values only                                 |
 
 Use Tailwind @theme inline mappings and semantic variables while retaining legacy raw variables/typography/color scheme. Scope old planning-page element styles so they cannot override shadcn variants. Preserve forced colors/focus indicators.
 
@@ -66,4 +66,5 @@ CSS entrance/selection/step transitions never delay input/navigation. No auto-ro
 Focus new heading on step change, first invalid field on error, suitable neighboring action after row removal and trigger after dialog close. Announce outcomes without re-reading whole summary. Semantic lists/labels/description/error/landmarks/skip link and full keyboard/screen-reader equivalent globe operations are required.
 
 Verify 320/390/768/1440 CSS pixels and 200% zoom, browser mobile projects, contrast/forced colors/reduced motion. No page-wide overflow, clipped actions or summary/sticky-price overlays; targets at least 44×44 CSS pixels. No information only through color/map/movement.
+
 > Implementation handoff (2026-10-15): wizard, globe/list fallback, auth boundary and marketing source are implemented. Browser/manual/cohort checks remain open; no screenshot, accessibility or timing pass is claimed.

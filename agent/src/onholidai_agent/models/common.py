@@ -262,9 +262,11 @@ def status_result_rules() -> list[dict[str, JsonValue]]:
             "if": {"properties": {"status": {"const": status}}},
             "then": {
                 "properties": {
-                    "result": {"type": "null"}
-                    if kind is None
-                    else {"type": "object", "properties": {"kind": {"const": kind}}}
+                    "result": (
+                        {"type": "null"}
+                        if kind is None
+                        else {"type": "object", "properties": {"kind": {"const": kind}}}
+                    )
                 }
             },
         }

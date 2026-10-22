@@ -58,7 +58,8 @@ class EstimateSources:
 
 
 async def supplier_research(
-    request: CreateAgentRunRequest, store: RunStore,
+    request: CreateAgentRunRequest,
+    store: RunStore,
 ) -> AgentResult:
     from .supplier_mcp import supplier_server
 
@@ -69,14 +70,16 @@ async def supplier_research(
         response = await client.call_tool(
             "supplier_search",
             query.model_dump(
-                mode="json", by_alias=True, exclude_none=True, exclude_unset=True,
+                mode="json",
+                by_alias=True,
+                exclude_none=True,
+                exclude_unset=True,
             ),
         )
     data = cast(dict[str, object], response.structured_content)
     offers = cast(list[dict[str, object]], data["offers"])
     references = [
-        {"offerRef": offer["offerRef"], "revision": offer["revision"]}
-        for offer in offers
+        {"offerRef": offer["offerRef"], "revision": offer["revision"]} for offer in offers
     ]
     raw_outcomes = data.get("outcomes", [])
     outcomes: list[dict[str, object]] = []
@@ -84,13 +87,16 @@ async def supplier_research(
         for item in cast(list[object], raw_outcomes)[:16]:
             if isinstance(item, dict):
                 outcome = cast(dict[str, object], item)
-                outcomes.append({
-                    key: str(outcome[key])[:240]
-                    for key in ("provider", "componentType", "status", "reason")
-                    if key in outcome
-                })
+                outcomes.append(
+                    {
+                        key: str(outcome[key])[:240]
+                        for key in ("provider", "componentType", "status", "reason")
+                        if key in outcome
+                    }
+                )
     message = json.dumps(
         {"offers": references, "outcomes": outcomes},
-        separators=(",", ":"), ensure_ascii=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
     )
     return AgentResult.model_validate({"kind": "answer", "message": message})

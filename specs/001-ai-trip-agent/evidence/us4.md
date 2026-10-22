@@ -53,29 +53,29 @@ Windows local environment with PostgreSQL 18/PostGIS from `infra/compose`, Postg
 `infra/compose/secrets`, and `TEST_DATABASE_*` pointing at role-scoped connections. Commands were run from the repository
 root unless noted.
 
-| Command | Result |
-|---|---|
-| `pnpm --dir web lint` | passed (0 errors, 0 warnings) |
-| `pnpm --dir web typecheck` | passed |
-| `pnpm --dir web snapshot:contract:check` | passed |
-| `pnpm --dir web corpus:check` | passed (corpus 1.3.0, hash `sha256:797b8a4f…fb176`) |
-| `pnpm --dir web test` (with `TEST_DATABASE_*`) | 40 files, 214 tests passed |
-| `pnpm --dir web test` (without `TEST_DATABASE_*`) | 35 files passed, 5 database-backed files skipped |
-| `pnpm test:contracts` | contract/snapshot validation passed; web contract tests 60 passed; agent contracts 31 passed |
-| `agent/.venv/Scripts/python.exe -m pytest agent/tests` | 63 passed |
+| Command                                                | Result                                                                                       |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `pnpm --dir web lint`                                  | passed (0 errors, 0 warnings)                                                                |
+| `pnpm --dir web typecheck`                             | passed                                                                                       |
+| `pnpm --dir web snapshot:contract:check`               | passed                                                                                       |
+| `pnpm --dir web corpus:check`                          | passed (corpus 1.3.0, hash `sha256:797b8a4f…fb176`)                                          |
+| `pnpm --dir web test` (with `TEST_DATABASE_*`)         | 40 files, 214 tests passed                                                                   |
+| `pnpm --dir web test` (without `TEST_DATABASE_*`)      | 35 files passed, 5 database-backed files skipped                                             |
+| `pnpm test:contracts`                                  | contract/snapshot validation passed; web contract tests 60 passed; agent contracts 31 passed |
+| `agent/.venv/Scripts/python.exe -m pytest agent/tests` | 63 passed                                                                                    |
 
 Targeted US4 evidence:
 
-| Suite | Tests | Covers |
-|---|---|---|
-| `tests/contract/booking-api.test.ts` | 5 | canonical hash binding, expiry/scope rejection, strict request shape, customer-safe projection, documented additive routes, outcome normalization |
-| `tests/contract/supply-transactions.test.ts` | — | declared capabilities, normalized provider outcomes |
-| `tests/integration/booking-authorization.test.ts` | 12 | per-material-fact invalidation, non-reversible acknowledgement, expired authorization rejected before any write, idempotent start |
-| `tests/integration/booking-workflows.test.ts` | 7 | one action per key, timeout-after-commit unknown, replay without repeated writes, partial failure, external advance stop, reconciliation both ways, isolated rescheduling |
-| `tests/integration/booking-latency.test.ts` | 1 | durable acknowledgement ≤500 ms and first status read ≤5 s over 8 fresh requests (server-side path) |
-| `tests/integration/booking-privacy.test.ts` | 5 | public terms/status/error/telemetry exclusions |
-| `tests/integration/provider-callbacks.test.ts` | — | HMAC verification, unconfigured-secret rejection |
-| `tests/integration/migration-compatibility.test.ts` | 21 | migrations 001–008, immutability, isolation |
+| Suite                                               | Tests | Covers                                                                                                                                                                    |
+| --------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/contract/booking-api.test.ts`                | 5     | canonical hash binding, expiry/scope rejection, strict request shape, customer-safe projection, documented additive routes, outcome normalization                         |
+| `tests/contract/supply-transactions.test.ts`        | —     | declared capabilities, normalized provider outcomes                                                                                                                       |
+| `tests/integration/booking-authorization.test.ts`   | 12    | per-material-fact invalidation, non-reversible acknowledgement, expired authorization rejected before any write, idempotent start                                         |
+| `tests/integration/booking-workflows.test.ts`       | 7     | one action per key, timeout-after-commit unknown, replay without repeated writes, partial failure, external advance stop, reconciliation both ways, isolated rescheduling |
+| `tests/integration/booking-latency.test.ts`         | 1     | durable acknowledgement ≤500 ms and first status read ≤5 s over 8 fresh requests (server-side path)                                                                       |
+| `tests/integration/booking-privacy.test.ts`         | 5     | public terms/status/error/telemetry exclusions                                                                                                                            |
+| `tests/integration/provider-callbacks.test.ts`      | —     | HMAC verification, unconfigured-secret rejection                                                                                                                          |
+| `tests/integration/migration-compatibility.test.ts` | 21    | migrations 001–008, immutability, isolation                                                                                                                               |
 
 Workflow tests start the real `bookTrip` Temporal workflow in an ephemeral time-skipping test server
 (`@temporalio/testing`) with the production activity set wired to an isolated PostgreSQL database and deterministic
