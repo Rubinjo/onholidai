@@ -398,6 +398,9 @@ summary {
 .trip-workspace__pane--conversation {
   grid-area: conversation;
 }
+.trip-workspace__pane--conversation > * {
+  flex-shrink: 0;
+}
 /* Sizing contract for the middle panel: the map keeps its content size, the route list
    absorbs any deficit by scrolling internally, so nothing is clipped and price/booking
    stays visible without the panel itself ever scrolling. */

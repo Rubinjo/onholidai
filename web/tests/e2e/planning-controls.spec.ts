@@ -263,7 +263,8 @@ test("route cards reorder with pointer drag and a supported mobile touch gesture
   await addDestination(page, "Kyoto", "JP");
   const route = page.getByRole("list", { name: "Selected destinations" });
   const handle = page.getByRole("button", { name: "Reorder Tokyo; use arrow keys" });
-  await handle.scrollIntoViewIfNeeded();
+  await route.scrollIntoViewIfNeeded();
+  await expect(route).toBeInViewport({ ratio: 1 });
   const start = (await handle.boundingBox())!,
     end = (await route.getByRole("listitem").filter({ hasText: "Kyoto" }).boundingBox())!;
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);

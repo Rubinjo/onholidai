@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { completeSetup } from "../helpers/setup-wizard";
+import { completeSetup, savedVersion } from "../helpers/setup-wizard";
 import { acknowledge, type InputTiming } from "../helpers/input-timing";
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -27,7 +27,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const)
     await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible({
       timeout: 35000,
     });
-    await expect(page.getByText(/Committed version 2/)).toBeVisible({ timeout: 35000 });
+    await expect(savedVersion(page, 2)).toBeVisible({ timeout: 35000 });
     await expect(page.getByRole("button", { name: "Accept proposal" })).toHaveCount(0);
     await page.screenshot({
       path: test.info().outputPath("workspace-accepted-estimate.png"),
@@ -62,12 +62,22 @@ for (const reducedMotion of ["no-preference", "reduce"] as const)
     expect((await (await page.request.get(`/api/v1/trips/${tripId}`)).json()).version).toBe(2);
     await page.getByLabel("Ask your travel assistant").fill("Set pace to 25");
     await page.getByRole("button", { name: "Send message" }).click();
-    await expect(page.getByText(/Committed version 3/)).toBeVisible({ timeout: 35000 });
+    await expect(savedVersion(page, 3)).toBeVisible({ timeout: 35000 });
     await page.route("**/maps/countries.geojson", (route) => route.abort());
     await page.reload();
-    await expect(page.getByText(/Committed version 3/)).toBeVisible();
+    await expect(savedVersion(page, 3)).toBeVisible();
+    const conversationBottom = await page
+      .getByRole("region", { name: "Your travel assistant", exact: true })
+      .evaluate((element) => element.getBoundingClientRect().bottom);
+    const supplierTop = await page
+      .getByRole("region", { name: "Compare supplier options", exact: true })
+      .evaluate((element) => element.getBoundingClientRect().top);
+    expect(
+      supplierTop,
+      "Supplier options must not overlap the conversation",
+    ).toBeGreaterThanOrEqual(conversationBottom);
     await page.getByRole("button", { name: "Restore trip to version 2" }).click();
-    await expect(page.getByText(/Committed version 4/)).toBeVisible();
+    await expect(savedVersion(page, 4)).toBeVisible();
     expect((await (await page.request.get(`/api/v1/trips/${tripId}`)).json()).snapshot).toEqual(
       original.snapshot,
     );

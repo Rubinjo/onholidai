@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { completeSetup } from "../helpers/setup-wizard";
+import { completeSetup, savedVersion } from "../helpers/setup-wizard";
 
 test.beforeEach(() =>
   test.skip(
@@ -29,10 +29,10 @@ test("@us1 outage status preserves the saved setup without acceptance", async ({
   await completeSetup(page);
   await expect(page.getByText(/Research interrupted/)).toBeVisible({ timeout: 35000 });
   await expect(page.getByRole("button", { name: "Accept proposal" })).toHaveCount(0);
-  await expect(page.getByText(/Committed version 1/)).toBeVisible();
+  await expect(savedVersion(page, 1)).toBeVisible();
   await expect(page.getByText("Tokyo, JP", { exact: false })).toBeVisible();
   await page.reload();
-  await expect(page.getByText(/Committed version 1/)).toBeVisible();
+  await expect(savedVersion(page, 1)).toBeVisible();
 });
 test("@accessibility @us1 failed WebGL keeps the route list and automatic update usable", async ({
   page,
@@ -41,7 +41,7 @@ test("@accessibility @us1 failed WebGL keeps the route list and automatic update
     HTMLCanvasElement.prototype.getContext = () => null;
   });
   await completeSetup(page);
-  await expect(page.getByText(/Committed version 2/)).toBeVisible({ timeout: 35000 });
+  await expect(savedVersion(page, 2)).toBeVisible({ timeout: 35000 });
   await expect(page.getByText(/Map unavailable/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Restore trip to version 1" })).toBeEnabled();
   await page.getByText("Route, stays and transport details", { exact: true }).click();

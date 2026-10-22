@@ -1,5 +1,11 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+export function savedVersion(page: Page, version: number): Locator {
+  return page
+    .getByRole("region", { name: "Trip details", exact: true })
+    .getByText(`Saved version ${version}.`, { exact: true });
+}
+
 // The builder is a client-rendered wizard: a controlled field discards typing that
 // arrives before React has hydrated, so retry until the application accepts it.
 export async function enterValue(field: Locator, value: string): Promise<void> {

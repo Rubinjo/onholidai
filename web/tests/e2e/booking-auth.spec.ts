@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { completeSetup } from "../helpers/setup-wizard";
+import { completeSetup, savedVersion } from "../helpers/setup-wizard";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 test("free registration asks for identity only and offers an existing-account path", async ({
@@ -22,7 +22,7 @@ test("Book trip continues from a draft through free sign-up and same-trip linkin
 }) => {
   test.setTimeout(120000);
   await completeSetup(page, { title: "Same-trip account continuation" });
-  await expect(page.getByText(/Committed version 2/)).toBeVisible({ timeout: 35000 });
+  await expect(savedVersion(page, 2)).toBeVisible({ timeout: 35000 });
   await expect(page.getByRole("heading", { name: "Finalization review" })).toHaveCount(0);
   const tripId = new URL(page.url()).pathname.split("/")[2],
     before = await (await page.request.get(`/api/v1/trips/${tripId}`)).json();

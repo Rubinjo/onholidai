@@ -7,6 +7,7 @@ import {
   enterValue,
   finishSetup,
   openBuilder,
+  savedVersion,
   searchDestinations,
   selectAvailability,
 } from "../helpers/setup-wizard";
@@ -119,7 +120,7 @@ test("reordered, replaced and removed destinations persist through an automatic 
   await acknowledged;
   await finishSetup(page);
   await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible();
-  await expect(page.getByText(/Committed version 2/)).toBeVisible({ timeout: 35000 });
+  await expect(savedVersion(page, 2)).toBeVisible({ timeout: 35000 });
   await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible({
     timeout: 35000,
   });

@@ -389,17 +389,20 @@ export class RunRepository {
     return inTransaction(this.database, async (transaction) => {
       const row = await this.lock(transaction, context.userId, runId);
       this.bind(row, context);
+      const reservation = {
+        userId: input.actor.userId,
+        tripId: input.actor.tripId,
+        requestId: input.requestId,
+        baseTripVersion: input.actor.baseTripVersion,
+        purpose: input.purpose,
+        message: input.message,
+      };
+      // Reservations may omit the default policy; only the stored policy is authoritative.
       if (
         row.conversationId !== input.conversationId ||
-        row.requestFingerprint !==
-          fingerprint({
-            userId: input.actor.userId,
-            tripId: input.actor.tripId,
-            requestId: input.requestId,
-            baseTripVersion: input.actor.baseTripVersion,
-            purpose: input.purpose,
-            message: input.message,
-          })
+        (row.requestFingerprint !== fingerprint(reservation) &&
+          row.requestFingerprint !==
+            fingerprint({ ...reservation, applicationPolicy: row.applicationPolicy }))
       )
         runConflict();
       const hash = fingerprint(input);

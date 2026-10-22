@@ -25,9 +25,10 @@ vi.mock("server-only", () => ({}));
 if (process.env.CI && !hasIsolatedDatabaseConfiguration())
   throw new Error("US1 requires database test credentials");
 describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research", () => {
-  it.each(["manual", "automatic", "automatic-stale"] as const)(
+  it.each(["manual", "explicit-manual", "automatic", "automatic-stale"] as const)(
     "persists a trusted proposal and safely applies or rejects it once (%s)",
     async (policy) => {
+      const automatic = policy.startsWith("automatic");
       await withIsolatedTestDatabase(async ({ database }) => {
         const userId = "10000000-0000-4000-8000-000000000011";
         await sql`INSERT INTO app."user" (id,name,email) VALUES (${userId},'Synthetic','accept@example.invalid')`.execute(
@@ -47,8 +48,33 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research"
           ...context,
           purpose: "initial_estimate",
           message: "Estimate reviewed settings",
-          ...(policy !== "manual" ? { applicationPolicy: "automatic" } : {}),
+          ...(automatic
+            ? { applicationPolicy: "automatic" }
+            : policy === "explicit-manual"
+              ? { applicationPolicy: "manual" }
+              : {}),
         });
+        const dispatch = {
+          contractVersion: "1",
+          actor: {
+            userId,
+            tripId: trip.tripId,
+            baseTripVersion: 1,
+            scopes: ["trip:read", "context:read", "proposal:create"],
+          },
+          requestId: context.requestId,
+          conversationId: run.conversationId,
+          purpose: "initial_estimate",
+          message: "Estimate reviewed settings",
+          context: {
+            tripSummary: { tripId: trip.tripId, version: 1 },
+            contextBudget: { maximumTokens: 24000 },
+          },
+        };
+        await expect(
+          runs.validateDispatch(context, run.id, { ...dispatch, message: "Altered request" }),
+        ).rejects.toMatchObject({ code: "run_conflict" });
+        await runs.validateDispatch(context, run.id, dispatch);
         const found = await searchPlanningOffers(
           [
             createDuffelReadProvider(syntheticReadClient("flight")),
@@ -155,7 +181,7 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research"
         expect(await runs.result(context, run.id, result)).toEqual(
           await runs.result(context, run.id, result),
         );
-        if (policy !== "manual") {
+        if (automatic) {
           expect((await readTrip(database, userId, trip.tripId)).version).toBe(2);
           const saved = await database
             .selectFrom("changeProposals")

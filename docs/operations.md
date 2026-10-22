@@ -66,6 +66,60 @@ try {
 }
 ```
 
+## CI browser tests and runtime limits
+
+The Playwright CI entry provisions its own disposable PostgreSQL/PostGIS service,
+synthetic least-privileged roles and `onholidai_e2e` database, then applies every
+checksum-verified migration. It does not use application or production credentials.
+CI builds Next.js before testing to avoid cold development-route compilation
+inside the agent's bounded HTTP requests. Playwright starts its production server
+using a disposable, one-day localhost TLS certificate generated in the runner's
+temporary directory. HTTPS keeps production Secure cookies usable in WebKit
+without weakening cookie protections. Only the test browser and readiness client
+accept this self-signed certificate. The same test server exposes a separate
+HTTP listener on loopback at the browser port plus one for signed agent callbacks,
+so the Python agent never needs to disable certificate validation.
+Playwright starts the deterministic Python agent, waits for both services'
+health endpoints, and stops the processes after the run. Local runs use `next dev` and may reuse
+existing servers; CI never does. For local runs, provide a migrated `DATABASE_URL`
+and the same `SERVICE_TOKEN_SECRET` to both processes before `pnpm test:e2e`.
+Python 3.13 and uv are required as well as the Node.js/browser dependencies.
+`PLAYWRIGHT_BASE_URL` and `AGENT_BASE_URL` can point to already running local
+servers; the managed agent uses the port from `AGENT_BASE_URL` (8000 by default).
+
+A global preflight checks the agent's deterministic mode, creates a real guest
+session and draft, and loads the database-backed sign-in page before any browser
+tests run. A healthy `/api/health` alone is only a web-process liveness signal.
+Database failures now stop at preflight instead of cascading into repeated
+"Saved" assertion or navigation timeouts. Fix dependency readiness rather than
+raising test timeouts.
+
+Pointer-drag tests scroll the entire route list into view before measuring
+coordinates; Firefox does not reliably deliver drops outside the viewport.
+Workspace version assertions use the exact `Saved version N.` text in the
+**Trip details** region, not the removed `Committed version N` label.
+
+Dispatch validation binds the agent command to its reserved application policy,
+including automatic estimates and older reservations that omitted the manual
+default. A policy-bearing reservation must not be rejected just because the agent
+wire command omits this server-owned field.
+
+All five desktop/mobile browser projects remain enabled. CI uses one browser
+worker to limit competing browser/WebGL workloads, no automatic retries, a
+five-failure cutoff and a ten-minute Playwright-wide
+deadline. The suite step is capped at fifteen minutes, the enclosing job at
+twenty; other jobs also have explicit limits. Expensive suites run only after
+the web, foundation, agent and contract checks succeed. New commits cancel older
+runs for the same branch/PR. These controls save GitHub Actions **runner minutes**,
+not API tokens. The workflow still handles both push and pull-request events.
+Failure traces and screenshots are retained in `web/test-results/` locally and
+uploaded as `playwright-failures` in CI with three-day retention.
+
+The conversation pane keeps its conversation and supplier sections at their content
+height while the pane scrolls. Shrinking those sections allows supplier controls
+to overlap chat checkpoints and block restore actions; the guest journey checks
+that the sections do not overlap before restoring a saved version.
+
 ## Provider capabilities
 
 Deterministic doubles are the default. Current search composition is Duffel Flights/Stays and Viator activities; Booking.com and Trainline are deferred, and GetYourGuide is replaced. Rail-only and mixed searches return an explicit unsupported/deferred rail outcome, without invoking rail adapters or substituting inventory. Supported mixed-query results are retained. Read-only HTTP transports, revisioned evidence, the four-tool in-memory MCP facade and the workspace comparison panel are implemented and tested with synthetic fixtures. This is discovery, not completion of [feature 003](../specs/003-supplier-mcp-booking/tasks.md) or verified supplier access. Existing saved provider identities and confirmations must not be relabelled.

@@ -30,10 +30,23 @@ def test_question_answers_with_options_without_mutating_the_trip():
 def test_deterministic_model_supplies_options_for_the_real_question_prompt():
     result = asyncio.run(
         DeterministicModel().complete(
+            model="synthetic-model",
             messages=[
                 {"role": "system", "content": "Answer the traveller's question in plain language."}
-            ]
+            ],
+            maximum_output_tokens=1200,
         )
     )
     assert "Two options" in result
     assert "No trip changes" in result
+
+
+def test_deterministic_model_supplies_an_estimate_for_other_prompts():
+    result = asyncio.run(
+        DeterministicModel().complete(
+            model="synthetic-model",
+            messages=[{"role": "system", "content": "Estimate this trip."}],
+            maximum_output_tokens=1200,
+        )
+    )
+    assert result.startswith("Synthetic read-only estimate.")

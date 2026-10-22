@@ -23,6 +23,7 @@ MODELS: dict[str, type[BaseModel]] = {
 
 def test_shared_supplier_wire_cases_match_pydantic_acceptance() -> None:
     from jsonschema import Draft202012Validator
+    from jsonschema.protocols import Validator
 
     document = json.loads(
         (ROOT / "contracts/supply/validation-cases.json").read_text(encoding="utf-8")
@@ -37,7 +38,7 @@ def test_shared_supplier_wire_cases_match_pydantic_acceptance() -> None:
     schema = json.loads(
         (ROOT / "contracts/supply/public-offers-v1.schema.json").read_text(encoding="utf-8")
     )
-    validator = Draft202012Validator(schema)
+    validator = cast(Validator, Draft202012Validator(schema))
     for case in cast(list[dict[str, object]], document["offerCases"]):
         assert validator.is_valid(cast(JsonValue, case["value"])) is case["valid"], case["id"]
 

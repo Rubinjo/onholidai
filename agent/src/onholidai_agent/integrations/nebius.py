@@ -35,12 +35,11 @@ class NebiusClient:
 
 
 class DeterministicModel:
-    async def complete(self, **_kwargs: object) -> str:
-        messages = _kwargs.get("messages")
-        if isinstance(messages, list) and any(
-            isinstance(message, dict)
-            and "Answer the traveller's question" in str(message.get("content", ""))
-            for message in messages
+    async def complete(
+        self, *, model: str, messages: list[dict[str, str]], maximum_output_tokens: int
+    ) -> str:
+        if any(
+            "Answer the traveller's question" in message.get("content", "") for message in messages
         ):
             return (
                 "Two options to explore: keep your current route and ask about its daily "

@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { savedVersion } from "../helpers/setup-wizard";
+
 // Both journeys commit and undo changes on their seeded trip, so each needs its own
 // freshly seeded fixture; the seed script prints the two trip ids to export.
 const requiresExclusiveTrip = "Requires an exclusive, freshly seeded US2 trip";
@@ -45,7 +47,7 @@ test("@us2 @accessibility automatic changes, concurrent edits and chat restorati
   );
   await expect(page.getByRole("link", { name: "Book trip" })).toBeVisible();
   await requestProposal(page, "Add two nights in Kyoto and keep mornings free");
-  await expect(page.getByText(`Committed version ${base + 1}`, { exact: false })).toBeVisible({
+  await expect(savedVersion(page, base + 1)).toBeVisible({
     timeout: 35000,
   });
   const competitor = await browser.newContext({ storageState: process.env.US1_STORAGE_STATE });
@@ -70,7 +72,7 @@ test("@us2 @accessibility automatic changes, concurrent edits and chat restorati
     // page as a user would; focus also triggers an immediate trip refetch, and the
     // window tolerates a loaded stack completing that round trip.
     await page.bringToFront();
-    await expect(page.getByText(`Committed version ${base + 2}`, { exact: false })).toBeVisible({
+    await expect(savedVersion(page, base + 2)).toBeVisible({
       timeout: 20000,
     });
     await expect(page.getByRole("button", { name: "Accept proposal" })).toHaveCount(0);
@@ -78,7 +80,7 @@ test("@us2 @accessibility automatic changes, concurrent edits and chat restorati
     await competitor.close();
   }
   await requestProposal(page, "Add two nights in Kyoto and keep mornings free");
-  await expect(page.getByText(`Committed version ${base + 3}`, { exact: false })).toBeVisible({
+  await expect(savedVersion(page, base + 3)).toBeVisible({
     timeout: 35000,
   });
   await expect(async () => {
@@ -96,7 +98,7 @@ test("@us2 @accessibility automatic changes, concurrent edits and chat restorati
       .getByRole("button", { name: `Restore trip to version ${base + 2}` })
       .click({ timeout: 3000 });
   }).toPass({ timeout: 25000 });
-  await expect(page.getByText(`Committed version ${base + 4}`, { exact: false })).toBeVisible();
+  await expect(savedVersion(page, base + 4)).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Version history" })).toHaveCount(0);
   await expect(
@@ -126,7 +128,7 @@ test("@us2 @accessibility focused clarification resumes with original intent and
   await expect(answer).toBeVisible({ timeout: 35000 });
   await answer.fill("Kyoto");
   await page.getByRole("button", { name: "Send clarification" }).click();
-  await expect(page.getByText(`Committed version ${base + 1}`, { exact: false })).toBeVisible({
+  await expect(savedVersion(page, base + 1)).toBeVisible({
     timeout: 35000,
   });
   await page.getByRole("button", { name: `Restore trip to version ${base}` }).click();
