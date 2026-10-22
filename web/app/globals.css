@@ -356,16 +356,55 @@ summary {
 .itinerary-example p { font-size: 1rem; line-height: 1.6; max-width: 54ch; }
 .itinerary-example small { display: block; color: var(--text-muted); }
 .marketing-process { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 3rem; padding-block: 4rem; }
-.marketing-process h2, .marketing-benefits h2, .marketing-start h2 { font-size: clamp(1.8rem, 3vw, 2.7rem); line-height: 1.15; max-width: 22ch; }
+.marketing-process h2, .marketing-start h2 { font-size: clamp(1.8rem, 3vw, 2.7rem); line-height: 1.15; max-width: 22ch; }
 .marketing-process ol { padding-left: 1.5rem; margin: 0; display: grid; gap: 1rem; }
 .marketing-process h3 { margin: 0; font-size: 1.3rem; }
-.marketing-process p, .marketing-benefits p { max-width: 62ch; color: var(--text-muted); line-height: 1.65; }
-.marketing-benefits { padding: clamp(1.25rem, 4vw, 3rem); background: var(--surface-muted); border-radius: 1rem; }
-.marketing-benefits > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; }
-.marketing-examples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; margin-block: 4rem; }
-.marketing-start { padding-block: 1rem 4rem; }
-.marketing-start p { max-width: 65ch; color: var(--text-muted); }
-.marketing-footer { padding-block: 1.5rem; color: var(--text-muted); }
+.marketing-process p { max-width: 62ch; color: var(--text-muted); line-height: 1.65; }
+.journey-range { padding-block: clamp(2rem, 5vw, 4.5rem); }
+.journey-range__intro { display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 3rem; margin-bottom: 2.5rem; }
+.journey-range h2, .marketing-project h2 { margin: 0; color: var(--accent-strong); font-size: clamp(2rem, 3.5vw, 3.2rem); line-height: 1.12; letter-spacing: -.025em; }
+.journey-range__intro > p { max-width: 48ch; margin: 0; color: var(--text-muted); font-size: 1.1rem; line-height: 1.75; }
+.journey-range__panel { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(15rem, 1fr); background: var(--surface-muted); border-radius: 1.5rem; padding: clamp(1.25rem, 3vw, 2.5rem); gap: clamp(1.5rem, 3vw, 3rem); }
+.route-panorama { min-width: 0; margin: 0; align-self: center; }
+.route-panorama__summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; font-size: .9rem; color: var(--text-muted); }
+.route-panorama__summary > span:first-child { color: var(--accent-strong); font-weight: 700; }
+.route-panorama__art { display: block; width: 100%; height: auto; margin-top: .75rem; }
+.route-panorama__cities { display: grid; grid-template-columns: repeat(3, 1fr); padding: 0; margin: -.25rem 0 1rem; list-style: none; text-align: center; color: var(--accent-strong); font-size: clamp(1rem, 1.8vw, 1.4rem); }
+.route-panorama__countries { display: grid; grid-template-columns: 2fr 1fr; gap: 1.25rem; text-align: center; color: var(--text-muted); font-size: .9rem; }
+.route-panorama__countries > span { border-top: 1px solid #b3cbbd; padding-top: .6rem; }
+.route-panorama figcaption { margin-top: 1.5rem; color: var(--text-muted); font-size: .85rem; }
+.journey-transport { padding-left: clamp(1.5rem, 3vw, 2.5rem); border-left: 1px solid #b3cbbd; align-self: center; }
+.journey-transport h3 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 .75rem; color: var(--accent-strong); }
+.journey-transport > p { margin: 0; color: var(--text-muted); font-size: .95rem; line-height: 1.6; }
+.journey-transport ul { display: grid; gap: .5rem; padding: 0; margin: 1.25rem 0; list-style: none; }
+.journey-transport li { display: flex; align-items: center; gap: .8rem; padding: .85rem; border: 1px dashed #708078; border-radius: .65rem; color: var(--text-muted); }
+.journey-transport li > svg { width: 1.65rem; height: 1.65rem; flex-shrink: 0; }
+.journey-transport li > div { display: grid; gap: .1rem; }
+.journey-transport strong { font-weight: 400; }
+.journey-transport__status { font-size: .8rem; }
+.journey-transport li.journey-transport__available { border-style: solid; border-color: var(--accent); background: var(--accent); color: #fff; }
+.journey-transport__available strong { font-weight: 700; }
+.journey-transport__check { margin-left: auto; }
+.journey-transport .journey-transport__note { font-size: .8rem; }
+.marketing-project { display: grid; grid-template-columns: 1.15fr 1fr; gap: 2.5rem 4rem; align-items: center; padding-block: clamp(2rem, 5vw, 4.5rem); }
+.marketing-project__story p { max-width: 52ch; color: var(--text-muted); line-height: 1.75; margin: 1.5rem 0 0; }
+.marketing-project a, .marketing-footer > a { color: var(--accent-strong); text-underline-offset: .2em; }
+.marketing-project__logos { display: flex; align-items: center; justify-content: center; gap: clamp(1rem, 2vw, 2rem); padding-block: 2rem; }
+.marketing-project__logos img { width: 40%; max-width: 11rem; height: auto; }
+.marketing-project__logos > span { font-size: 1.5rem; color: var(--text-muted); }
+.marketing-sandbox { grid-column: 1 / -1; display: flex; align-items: start; gap: clamp(1rem, 3vw, 2.5rem); border-block: 1px solid #b3cbbd; padding-block: 1.75rem; }
+.marketing-sandbox__badge { flex-shrink: 0; padding: .35rem .75rem; border: 1px solid var(--accent); border-radius: .4rem; color: var(--accent-strong); font-size: .85rem; }
+.marketing-sandbox h3 { margin: 0 0 .4rem; font-size: 1.25rem; color: var(--accent-strong); }
+.marketing-sandbox p { margin: 0; max-width: 76ch; color: var(--text-muted); line-height: 1.65; }
+.marketing-start { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2rem; padding-block: 1rem clamp(3rem, 6vw, 5rem); }
+.marketing-start h2 { margin: 0 0 1rem; color: var(--accent-strong); max-width: 24ch; }
+.marketing-start p { margin: 0; max-width: 50ch; color: var(--text-muted); }
+.marketing-start__action { display: grid; gap: .85rem; justify-items: center; }
+.marketing-start__action > span { font-size: .85rem; color: var(--text-muted); }
+.marketing-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem 2rem; border-top: 1px solid #b3cbbd; padding-block: 1.75rem; color: var(--text-muted); font-size: .9rem; }
+.marketing-footer .brand-link img { width: 10rem; }
+.marketing-footer p { margin: 0; }
+.marketing-footer > a { display: inline-flex; align-items: center; min-height: 44px; }
 .auth-page { min-height: 100dvh; max-width: 46rem; padding: clamp(1rem, 4vw, 3rem); margin-inline: auto; }
 .auth-page > a, .setup-page > a, .booking-boundary > a { display: inline-flex; align-items: center; min-height: 44px; }
 .auth-form, .booking-boundary { margin-top: 2rem; padding: clamp(1rem, 4vw, 2.5rem); border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
@@ -374,11 +413,16 @@ summary {
 .auth-form fieldset { display: grid; gap: 1.25rem; border: 0; padding: 0; min-width: 0; }
 .auth-form > a { display: block; width: fit-content; padding-block: .75rem; min-height: 44px; }
 @media (max-width: 48rem) {
-  .marketing-hero, .marketing-process, .marketing-examples, .marketing-benefits > div { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+  .marketing-hero, .marketing-process, .journey-range__intro, .journey-range__panel, .marketing-project { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
   .marketing-hero h1 { max-width: 16ch; }
   .marketing-route-stage { padding: 1.5rem .5rem; }
-  .marketing-process, .marketing-examples { padding-block: 1rem; margin-block: 2rem; }
+  .marketing-process { padding-block: 1rem; margin-block: 2rem; }
   .marketing-nav { align-items: start; }
+  .journey-range__intro { margin-bottom: 1.75rem; }
+  .journey-transport { border-left: 0; border-top: 1px solid #b3cbbd; padding: 1.5rem 0 0; }
+  .marketing-project__logos { justify-content: start; padding-block: 1rem; }
+  .marketing-sandbox { flex-direction: column; }
+  .marketing-start__action { justify-items: start; }
 }
 .setup-progress { margin-block: 2rem; }
 .setup-progress ol { display: flex; flex-wrap: wrap; list-style: none; padding: 0; gap: .8rem 1.5rem; }
