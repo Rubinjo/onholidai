@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 
 import { describe, expect, it, vi } from "vitest";
+import { sql } from "kysely";
 
 import { TransactionProviderRegistry } from "../../server/supply/transactions";
 import { withEphemeralPaymentToken } from "../../server/supply/payment";
@@ -11,10 +12,18 @@ import {
   hashBookingTerms,
 } from "../../domain/booking/authorization";
 import { startBooking } from "../../domain/booking/start";
+import { authorizeBooking } from "../../domain/booking/authorize";
 import { startBookingRevalidation } from "../../domain/booking/revalidate";
+import { readBookingReview } from "../../domain/booking/revalidate";
+import { applyBookingOutcome } from "../../domain/booking/apply-outcomes";
 import { commitTripMutation } from "../../domain/trip/commit";
-import { seedAuthorizedBooking } from "../helpers/booking";
+import { seedAuthorizedBooking, seedReviewedWholeTrip } from "../helpers/booking";
+import { reviewNow } from "../fixtures/whole-trip-review";
+import { createBookingActivities } from "../../server/workflows/book-activities";
+import { createRevalidationActivities } from "../../server/workflows/revalidate-activities";
 import { hasIsolatedDatabaseConfiguration, withIsolatedTestDatabase } from "../helpers/database";
+import { readTrustedBookingPrerequisites } from "../../server/supply/payment";
+import { bookingTermsV2Schema } from "../../domain/booking/authorization";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../../server/workflows/client", () => ({ startWorkflow: vi.fn(async () => undefined) }));
@@ -33,6 +42,29 @@ describe("booking execution boundary", () => {
       expect(active.some((byte) => byte !== 0)).toBe(true),
     );
     expect(token.every((byte) => byte === 0)).toBe(true);
+  });
+  it("erases invalid ephemeral tokens and bounds an unresponsive trusted source", async () => {
+    const token = new Uint8Array(3).fill(7);
+    await expect(withEphemeralPaymentToken(token, async () => undefined)).rejects.toThrow(
+      "Invalid ephemeral",
+    );
+    expect([...token]).toEqual([0, 0, 0]);
+    const abort = new AbortController();
+    const pending = readTrustedBookingPrerequisites(
+      { read: () => new Promise(() => undefined) },
+      {
+        ownerUserId: "recorded",
+        tripId: crypto.randomUUID(),
+        tripVersion: 2,
+        componentId: crypto.randomUUID(),
+        provider: "nuitee",
+        inventoryId: "recorded",
+        travellerIds: [],
+      },
+      abort.signal,
+    );
+    abort.abort();
+    await expect(pending).rejects.toMatchObject({ code: "booking_prerequisites_unavailable" });
   });
 });
 
@@ -170,6 +202,610 @@ describe("exact-term authorization invalidation", () => {
 });
 
 describeWithDatabase("durable booking authorization scope", () => {
+  it("rechecks expiry after trusted reads before recording consent or a start", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedReviewedWholeTrip(database);
+      const clock = vi.spyOn(Date, "now").mockReturnValue(reviewNow.getTime());
+      const delayed = {
+        read: async (input: Parameters<typeof seeded.prerequisites.read>[0]) => {
+          const readiness = await seeded.prerequisites.read(input);
+          clock.mockReturnValue(reviewNow.getTime() + 300_001);
+          return readiness;
+        },
+      };
+      try {
+        await expect(
+          authorizeBooking(
+            database,
+            seeded.userId,
+            seeded.tripId,
+            seeded.request,
+            reviewNow,
+            delayed,
+          ),
+        ).rejects.toMatchObject({ code: "booking_terms_stale" });
+        expect(
+          await database.selectFrom("bookingAuthorizations").select("id").execute(),
+        ).toHaveLength(0);
+        clock.mockReturnValue(reviewNow.getTime());
+        const consent = await authorizeBooking(
+          database,
+          seeded.userId,
+          seeded.tripId,
+          seeded.request,
+          reviewNow,
+          seeded.prerequisites,
+        );
+        await expect(
+          startBooking(
+            database,
+            seeded.userId,
+            seeded.tripId,
+            {
+              requestId: crypto.randomUUID(),
+              authorizationId: consent.id,
+            },
+            { now: reviewNow, prerequisites: delayed },
+          ),
+        ).rejects.toMatchObject({ code: "booking_authorization_stale" });
+        expect(
+          await database.selectFrom("bookingTransactions").select("id").execute(),
+        ).toHaveLength(0);
+      } finally {
+        clock.mockRestore();
+      }
+    });
+  }, 30_000);
+
+  it("persists unknown/failed instead of stranding a review when final property facts are inconsistent", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedReviewedWholeTrip(database, undefined, "accepted"),
+        providers = new TransactionProviderRegistry();
+      for (const provider of ["duffel", "nuitee", "viator"] as const)
+        providers.register({
+          provider,
+          capabilities: {
+            book: true,
+            status: false,
+            cancel: false,
+            reschedule: false,
+            idempotency: true,
+            revalidation: "read_only_final_terms",
+          },
+          execute: vi.fn(),
+          revalidate: async ({ componentId }) => {
+            const terms = structuredClone(
+              seeded.terms.components.find((entry) => entry.componentId === componentId)!,
+            );
+            if (provider === "nuitee") terms.service.propertyId = null;
+            return { outcome: "unchanged", terms };
+          },
+        });
+      const result = await createRevalidationActivities(database, providers, {
+        now: () => reviewNow,
+        prerequisites: seeded.prerequisites,
+      }).revalidateBooking({ ...seeded, ownerUserId: seeded.userId });
+      expect(result.status).toBe("failed");
+      expect(result.terms).toBeNull();
+      expect(result.coverage?.eligible).toBe(false);
+      expect(
+        result.outcomes.find(
+          (entry) => entry.componentId === seeded.terms.components[2].componentId,
+        )?.outcome,
+      ).toBe("unknown");
+      expect(
+        (
+          await database
+            .selectFrom("bookingRevalidations")
+            .select("status")
+            .where("workflowId", "=", seeded.workflowId)
+            .executeTakeFirstOrThrow()
+        ).status,
+      ).toBe("failed");
+    });
+  }, 30_000);
+
+  it("binds the full recomputed coverage report, not a copied fingerprint", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedReviewedWholeTrip(database);
+      const candidate = structuredClone(seeded.terms);
+      candidate.coverage.entries[0].sourceRefs.push("forged requirement mapping");
+      const terms = bookingTermsV2Schema.parse(candidate);
+      await database
+        .insertInto("bookingRevalidations")
+        .values({
+          workflowId: crypto.randomUUID(),
+          tripId: seeded.tripId,
+          ownerUserId: seeded.userId,
+          requestId: crypto.randomUUID(),
+          requestFingerprint: "f".repeat(64),
+          tripVersion: 2,
+          status: "completed",
+          outcomes: sql<unknown[]>`'[]'::jsonb`,
+          terms,
+          termsHash: hashBookingTerms(terms),
+          coverage: terms.coverage,
+          expiresAt: new Date(terms.components[0].expiresAt),
+          createdAt: new Date(reviewNow.getTime() + 1),
+          updatedAt: new Date(reviewNow.getTime() + 1),
+        })
+        .execute();
+      await expect(
+        authorizeBooking(
+          database,
+          seeded.userId,
+          seeded.tripId,
+          { ...seeded.request, termsHash: hashBookingTerms(terms) },
+          reviewNow,
+          seeded.prerequisites,
+        ),
+      ).rejects.toMatchObject({ code: "booking_coverage_changed" });
+      expect(
+        await database.selectFrom("bookingAuthorizations").select("id").execute(),
+      ).toHaveLength(0);
+    });
+  }, 30_000);
+
+  it("invalidates unused consent after fresh changed terms and leaves old immutable evidence intact", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedReviewedWholeTrip(database);
+      const original = await authorizeBooking(
+        database,
+        seeded.userId,
+        seeded.tripId,
+        seeded.request,
+        reviewNow,
+        seeded.prerequisites,
+      );
+      const workflowId = crypto.randomUUID();
+      await database
+        .insertInto("bookingRevalidations")
+        .values({
+          workflowId,
+          tripId: seeded.tripId,
+          ownerUserId: seeded.userId,
+          requestId: crypto.randomUUID(),
+          requestFingerprint: "f".repeat(64),
+          tripVersion: 2,
+          status: "accepted",
+          outcomes: sql<unknown[]>`'[]'::jsonb`,
+          terms: null,
+          termsHash: null,
+          expiresAt: null,
+          createdAt: new Date(reviewNow.getTime() + 1),
+          updatedAt: new Date(reviewNow.getTime() + 1),
+        })
+        .execute();
+      const providers = new TransactionProviderRegistry(),
+        execute = vi.fn();
+      for (const provider of ["duffel", "nuitee", "viator"] as const)
+        providers.register({
+          provider,
+          capabilities: {
+            book: true,
+            status: false,
+            cancel: false,
+            reschedule: false,
+            idempotency: true,
+            revalidation: "read_only_final_terms",
+          },
+          execute,
+          revalidate: async ({ componentId }) => {
+            const terms = structuredClone(
+              seeded.terms.components.find((entry) => entry.componentId === componentId)!,
+            );
+            terms.finalCustomerMinor += 100;
+            terms.evidence.finalCustomerMinor += 100;
+            return { outcome: "changed", terms };
+          },
+        });
+      const activities = createRevalidationActivities(database, providers, {
+        now: () => new Date(reviewNow.getTime() + 2),
+        prerequisites: seeded.prerequisites,
+      });
+      const input = {
+        workflowId,
+        tripId: seeded.tripId,
+        ownerUserId: seeded.userId,
+        tripVersion: 2,
+      };
+      const [first, replay] = await Promise.all([
+        activities.revalidateBooking(input),
+        activities.revalidateBooking(input),
+      ]);
+      expect(first).toEqual(replay);
+      expect(first.status).toBe("completed");
+      expect(first.termsHash).not.toBe(original.termsHash);
+      const old = await database
+        .selectFrom("bookingAuthorizations")
+        .selectAll()
+        .where("id", "=", original.id)
+        .executeTakeFirstOrThrow();
+      expect(old.status).toBe("invalidated");
+      expect(old.termsHash).toBe(original.termsHash);
+      expect(old.terms).toEqual(seeded.terms);
+      await expect(
+        startBooking(
+          database,
+          seeded.userId,
+          seeded.tripId,
+          {
+            requestId: crypto.randomUUID(),
+            authorizationId: original.id,
+          },
+          { now: reviewNow, prerequisites: seeded.prerequisites },
+        ),
+      ).rejects.toMatchObject({ code: "booking_authorization_stale" });
+      expect(execute).not.toHaveBeenCalled();
+      expect(await database.selectFrom("bookingTransactions").select("id").execute()).toHaveLength(
+        0,
+      );
+    });
+  }, 30_000);
+
+  it("does not let a late older worker hide a newer accepted review", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedReviewedWholeTrip(database, undefined, "accepted"),
+        newer = crypto.randomUUID();
+      await database
+        .insertInto("bookingRevalidations")
+        .values({
+          workflowId: newer,
+          tripId: seeded.tripId,
+          ownerUserId: seeded.userId,
+          requestId: crypto.randomUUID(),
+          requestFingerprint: "f".repeat(64),
+          tripVersion: 2,
+          status: "accepted",
+          outcomes: sql<unknown[]>`'[]'::jsonb`,
+          terms: null,
+          termsHash: null,
+          expiresAt: null,
+          createdAt: new Date(reviewNow.getTime() + 1),
+          updatedAt: new Date(reviewNow.getTime() + 1),
+        })
+        .execute();
+      await createRevalidationActivities(database, new TransactionProviderRegistry(), {
+        now: () => new Date(reviewNow.getTime() + 2),
+      }).revalidateBooking({
+        workflowId: seeded.workflowId,
+        tripId: seeded.tripId,
+        ownerUserId: seeded.userId,
+        tripVersion: 2,
+      });
+      const restored = await readBookingReview(database, seeded.userId, seeded.tripId, reviewNow);
+      expect(restored.review?.workflowId).toBe(newer);
+      expect(restored.review?.status).toBe("accepted");
+      expect(restored.authorization).toBeNull();
+    });
+  }, 30_000);
+
+  it("prevents planning edits and snapshot restore from rewriting a historical provider commitment", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedAuthorizedBooking(database),
+        componentId = seeded.transaction!.components[0].componentId;
+      const confirmed = await applyBookingOutcome(database, seeded.transaction!.id, {
+        componentId,
+        status: "confirmed",
+        providerReference: "recorded-confirmation",
+        safeReason: null,
+      });
+      const current = await database
+        .selectFrom("tripVersions")
+        .select("snapshot")
+        .where("tripId", "=", seeded.tripId)
+        .where("version", "=", confirmed.version)
+        .executeTakeFirstOrThrow();
+      for (const restore of [false, true]) {
+        const snapshot = structuredClone(current.snapshot);
+        const component = snapshot.components.find((entry) => entry.id === componentId)!;
+        if (restore) component.bookingStatus = "unbooked";
+        else component.supplierOfferId = "forged replacement";
+        const requestId = crypto.randomUUID();
+        await expect(
+          commitTripMutation(database, {
+            tripId: seeded.tripId,
+            ownerUserId: seeded.userId,
+            expectedVersion: confirmed.version,
+            requestId,
+            idempotencyKey: requestId,
+            requestFingerprint: createHash("sha256").update(requestId).digest("hex"),
+            snapshot,
+            initiatingActor: "user",
+            proposalId: null,
+            changeSummary: ["planning edit"],
+            inverseOperation: { operation: "replace", target: "/", value: current.snapshot },
+            nonReversibleReason: null,
+            outboxEventId: crypto.randomUUID(),
+            auditEventId: crypto.randomUUID(),
+          }),
+        ).rejects.toMatchObject({ code: "booking_commitment_immutable" });
+      }
+    });
+  }, 30_000);
+
+  it("persists complete read-only v2 review and price changes without any provider execution", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedReviewedWholeTrip(database, undefined, "accepted");
+      const providers = new TransactionProviderRegistry(),
+        execute = vi.fn();
+      for (const provider of ["duffel", "nuitee", "viator"] as const) {
+        providers.register({
+          provider,
+          capabilities: {
+            book: true,
+            status: true,
+            cancel: false,
+            reschedule: false,
+            idempotency: false,
+            revalidation: "read_only_final_terms",
+          },
+          execute,
+          revalidate: async ({ componentId }) => {
+            const terms = structuredClone(
+              seeded.terms.components.find((entry) => entry.componentId === componentId)!,
+            );
+            if (terms.componentId === seeded.terms.components[0].componentId) {
+              terms.finalCustomerMinor += 500;
+              terms.evidence.finalCustomerMinor += 500;
+            }
+            return { outcome: "changed", terms };
+          },
+        });
+      }
+      const result = await createRevalidationActivities(database, providers, {
+        now: () => reviewNow,
+        prerequisites: seeded.prerequisites,
+      }).revalidateBooking({
+        workflowId: seeded.workflowId,
+        tripId: seeded.tripId,
+        ownerUserId: seeded.userId,
+        tripVersion: 2,
+      });
+      expect(result.status).toBe("completed");
+      expect(result.terms?.totalPrice.minorUnits).toBe(40500);
+      expect(result.coverage?.eligible).toBe(true);
+      expect(execute).not.toHaveBeenCalled();
+      expect(
+        await database
+          .selectFrom("bookingAuthorizations")
+          .select("id")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([]);
+      expect(
+        await database
+          .selectFrom("bookingTransactions")
+          .select("id")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([]);
+    });
+  }, 30_000);
+
+  it("does not use a Nuitee rates-only/unverified prebook path, and exceptions remain unknown", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedReviewedWholeTrip(database, undefined, "accepted");
+      const providers = new TransactionProviderRegistry(),
+        prebookOrRates = vi.fn(),
+        execute = vi.fn();
+      providers.register({
+        provider: "nuitee",
+        capabilities: {
+          book: true,
+          status: false,
+          cancel: false,
+          reschedule: false,
+          idempotency: false,
+          revalidation: "unknown",
+        },
+        execute,
+        revalidate: prebookOrRates,
+      });
+      providers.register({
+        provider: "duffel",
+        capabilities: {
+          book: true,
+          status: true,
+          cancel: false,
+          reschedule: false,
+          idempotency: true,
+          revalidation: "read_only_final_terms",
+        },
+        execute,
+        revalidate: async () => {
+          throw new Error("Synthetic protected provider failure");
+        },
+      });
+      const result = await createRevalidationActivities(database, providers, {
+        now: () => reviewNow,
+        prerequisites: seeded.prerequisites,
+      }).revalidateBooking({
+        workflowId: seeded.workflowId,
+        tripId: seeded.tripId,
+        ownerUserId: seeded.userId,
+        tripVersion: 2,
+      });
+      expect(result.status).toBe("failed");
+      expect(result.terms).toBeNull();
+      expect(result.outcomes.every((entry) => entry.outcome === "unknown")).toBe(true);
+      expect(prebookOrRates).not.toHaveBeenCalled();
+      expect(execute).not.toHaveBeenCalled();
+      expect(JSON.stringify(result)).not.toContain("Synthetic protected provider failure");
+    });
+  }, 30_000);
+
+  it("creates and replays exactly one full-trip authorization/start, with consequential v2 dispatch disabled", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedReviewedWholeTrip(database);
+      const authorize = (request = seeded.request) =>
+        authorizeBooking(
+          database,
+          seeded.userId,
+          seeded.tripId,
+          request,
+          reviewNow,
+          seeded.prerequisites,
+        );
+      const [first, replay] = await Promise.all([authorize(), authorize()]);
+      expect(replay).toEqual(first);
+      await expect(
+        authorize({ ...seeded.request, termsHash: "b".repeat(64) }),
+      ).rejects.toMatchObject({ code: "idempotency_fingerprint_conflict" });
+      const input = { requestId: crypto.randomUUID(), authorizationId: first.id };
+      const options = { now: reviewNow, prerequisites: seeded.prerequisites };
+      const started = await startBooking(database, seeded.userId, seeded.tripId, input, options);
+      expect(await startBooking(database, seeded.userId, seeded.tripId, input, options)).toEqual(
+        started,
+      );
+      expect(started.components).toHaveLength(4);
+      expect(started.executionStatus).toBe("invalidated");
+      const execute = vi.fn();
+      const providers = new TransactionProviderRegistry();
+      providers.register({
+        provider: "duffel",
+        capabilities: {
+          book: true,
+          status: true,
+          cancel: false,
+          reschedule: false,
+          idempotency: true,
+        },
+        execute,
+      });
+      const activities = createBookingActivities(database, providers);
+      await expect(
+        activities.executeProviderWrite(
+          started.id,
+          started.components[0].componentId,
+          "blocked",
+          "a".repeat(64),
+        ),
+      ).rejects.toThrow(/not activated/);
+      expect(execute).not.toHaveBeenCalled();
+      expect(
+        await database
+          .selectFrom("bookingAuthorizations")
+          .select("id")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toHaveLength(1);
+      expect(
+        await database
+          .selectFrom("bookingTransactions")
+          .select("id")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toHaveLength(1);
+      expect(
+        await database
+          .selectFrom("bookingComponentAttempts")
+          .select("id")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([]);
+    });
+  }, 30_000);
+
+  it("independently rejects persisted complete-looking terms when a required return leg is absent", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedReviewedWholeTrip(database, (snapshot) => {
+        const missing = snapshot.components.find(
+          (entry) => entry.planningDetails?.flightDirection === "return",
+        )!;
+        snapshot.components = snapshot.components.filter((entry) => entry.id !== missing.id);
+        snapshot.itineraryDays.forEach((day) =>
+          day.items.forEach((item) => {
+            if (item.componentId === missing.id) item.componentId = null;
+          }),
+        );
+        snapshot.price.supplierTotal.minorUnits -= missing.price.supplierAmount.minorUnits;
+        snapshot.price.finalCustomerTotal.minorUnits -=
+          missing.price.finalCustomerAmount.minorUnits;
+      });
+      await expect(
+        authorizeBooking(
+          database,
+          seeded.userId,
+          seeded.tripId,
+          seeded.request,
+          reviewNow,
+          seeded.prerequisites,
+        ),
+      ).rejects.toMatchObject({ code: "booking_coverage_changed" });
+      expect(
+        await database
+          .selectFrom("bookingAuthorizations")
+          .select("id")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([]);
+      expect(
+        await database
+          .selectFrom("bookingTransactions")
+          .select("id")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([]);
+    });
+  }, 30_000);
+
+  it("blocks absent or changed trusted readiness and rechecks actual expiry at start", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedReviewedWholeTrip(database);
+      await expect(
+        authorizeBooking(database, seeded.userId, seeded.tripId, seeded.request, reviewNow),
+      ).rejects.toMatchObject({ code: "booking_prerequisites_missing" });
+      const authorization = await authorizeBooking(
+        database,
+        seeded.userId,
+        seeded.tripId,
+        seeded.request,
+        reviewNow,
+        seeded.prerequisites,
+      );
+      const input = { requestId: crypto.randomUUID(), authorizationId: authorization.id };
+      await expect(
+        startBooking(database, seeded.userId, seeded.tripId, input, {
+          now: reviewNow,
+          prerequisites: { read: async () => ({ travellers: null, payment: null }) },
+        }),
+      ).rejects.toMatchObject({ code: "booking_prerequisites_changed" });
+      await expect(
+        startBooking(database, seeded.userId, seeded.tripId, input, {
+          now: new Date(reviewNow.getTime() + 300_000),
+          prerequisites: seeded.prerequisites,
+        }),
+      ).rejects.toMatchObject({ code: "booking_authorization_stale" });
+      expect(
+        await database
+          .selectFrom("bookingTransactions")
+          .select("id")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([]);
+    });
+  }, 30_000);
+
+  it("preserves historical v1 evidence but rejects a new whole-trip start under it", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedAuthorizedBooking(database, { startTransaction: false });
+      await expect(
+        startBooking(database, seeded.userId, seeded.tripId, {
+          requestId: crypto.randomUUID(),
+          authorizationId: seeded.authorizationId,
+        }),
+      ).rejects.toMatchObject({ code: "booking_legacy_review_required" });
+      expect(
+        await database
+          .selectFrom("bookingAuthorizations")
+          .select("termsHash")
+          .where("id", "=", seeded.authorizationId)
+          .executeTakeFirstOrThrow(),
+      ).toEqual({ termsHash: hashBookingTerms(seeded.terms) });
+    });
+  }, 30_000);
+
   it("requires fresh authorization after accepting a changed departure alternative", async () => {
     await withIsolatedTestDatabase(async ({ database }) => {
       const seeded = await seedAuthorizedBooking(database, { startTransaction: false });

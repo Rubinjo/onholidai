@@ -10,6 +10,7 @@ import { lockPlanningAccess, lockPlanningTrip } from "@/server/db/planning-acces
 import { fingerprint, runConflict } from "@/server/agent-client/run-repository";
 import { readOwnedTripVersion } from "@/domain/trip/read";
 import { ProblemError } from "@/server/errors";
+import { selectedOfferSchema, selectedOffersSchema } from "@/domain/trip/proposal";
 
 import {
   productReadiness,
@@ -51,9 +52,7 @@ export const researchQuerySchema = z
   })
   .strict()
   .refine((input) => input.endDate >= input.startDate);
-export const offerReferenceSchema = z
-  .object({ offerRef: z.uuid(), revision: z.number().int().positive() })
-  .strict();
+export const offerReferenceSchema = selectedOfferSchema;
 export interface ResearchActor {
   userId: string;
   tripId: string;
@@ -172,7 +171,7 @@ export async function searchResearch(
     : { offers: [], outcomes: [] };
   if (filteredAccommodation)
     result.outcomes.push({
-      provider: "duffel",
+      provider: "nuitee",
       componentType: "accommodation",
       status: "unsupported",
       mode: "unknown",
@@ -271,14 +270,107 @@ async function evidenceRecord(database: Kysely<Database>, actor: ResearchActor, 
     .where("agentRuns.ownerUserId", "=", actor.userId)
     .where("agentRuns.tripId", "=", actor.tripId)
     .executeTakeFirst();
-  if (
-    !record ||
-    record.planningAccessRevokedAt ||
-    record.baseTripVersion !== actor.baseTripVersion ||
-    (actor.requestId && record.requestId !== actor.requestId)
-  )
+  if (!record || record.planningAccessRevokedAt || record.baseTripVersion !== actor.baseTripVersion)
     planningNotFound();
+  if (actor.requestId && record.requestId !== actor.requestId) {
+    const target = await database
+      .selectFrom("agentRuns")
+      .select(["purpose", "dispatchRequest"])
+      .where("ownerUserId", "=", actor.userId)
+      .where("tripId", "=", actor.tripId)
+      .where("requestId", "=", actor.requestId)
+      .executeTakeFirst();
+    const grants = target?.dispatchRequest?.selectedOffers;
+    if (
+      target?.purpose !== "refinement" ||
+      !grants ||
+      !selectedOffersSchema
+        .parse(grants)
+        .some(
+          (grant) => grant.offerRef === reference.offerRef && grant.revision === reference.revision,
+        )
+    )
+      planningNotFound();
+  }
   return record;
+}
+
+export async function selectedResearchRecords(
+  database: Kysely<Database>,
+  actor: ResearchActor,
+  raw: unknown,
+  now = new Date(),
+) {
+  const references = selectedOffersSchema.parse(raw);
+  const trip = await currentTrip(database, actor);
+  const records = [];
+  for (const reference of references) {
+    const record = await evidenceRecord(database, { ...actor, requestId: undefined }, reference);
+    const source = await database
+      .selectFrom("agentRuns")
+      .select(["purpose", "status"])
+      .where("id", "=", record.runId)
+      .executeTakeFirstOrThrow();
+    const latest = await database
+      .selectFrom("planningOfferRecords")
+      .select("revision")
+      .where("offerRef", "=", reference.offerRef)
+      .orderBy("revision", "desc")
+      .executeTakeFirstOrThrow();
+    const offer = normalizePlanningOffer(record.offer, now);
+    const query = record.query;
+    const destinations = trip.snapshot.destinations.filter(
+      (place) => Array.isArray(query.destinationIds) && query.destinationIds.includes(place.id),
+    );
+    const starts = destinations
+      .map((place) => place.arrivalDate)
+      .filter((date) => date !== null)
+      .sort();
+    const ends = destinations
+      .map((place) => place.departureDate)
+      .filter((date) => date !== null)
+      .sort();
+    if (
+      source.purpose !== "supplier_research" ||
+      source.status !== "completed" ||
+      latest.revision !== reference.revision ||
+      offer.evidence?.status === "expired" ||
+      offer.evidence?.availability === "unavailable" ||
+      !["duffel:flight", "nuitee:accommodation", "viator:activity"].includes(
+        `${offer.component.provider}:${offer.component.type}`,
+      ) ||
+      query.currency !== trip.snapshot.price.currency ||
+      fingerprint(query.travellerParty) !== fingerprint(trip.snapshot.travellerParty) ||
+      fingerprint(query.departureOrigin) !== fingerprint(trip.snapshot.departureOrigin) ||
+      query.startDate !== starts[0] ||
+      query.endDate !== ends.at(-1) ||
+      !Array.isArray(query.destinationIds) ||
+      !query.destinationIds.every((id) =>
+        trip.snapshot.destinations.some((place) => place.id === id),
+      )
+    )
+      runConflict();
+    records.push({ ...record, normalizedOffer: offer });
+  }
+  return records;
+}
+
+export async function selectedRunOffers(
+  database: Kysely<Database>,
+  actor: ResearchActor & { requestId: string },
+  runId: string,
+) {
+  const run = await database
+    .selectFrom("agentRuns")
+    .select(["dispatchRequest", "purpose", "status", "leaseExpiresAt", "planningAccessRevokedAt"])
+    .where("id", "=", runId)
+    .where("ownerUserId", "=", actor.userId)
+    .where("tripId", "=", actor.tripId)
+    .where("requestId", "=", actor.requestId)
+    .executeTakeFirst();
+  if (!run || run.planningAccessRevokedAt || run.purpose !== "refinement") runConflict();
+  if (!run.dispatchRequest?.selectedOffers) return [];
+  return selectedResearchRecords(database, actor, run.dispatchRequest.selectedOffers);
 }
 export async function readResearchOffer(
   database: Kysely<Database>,
@@ -353,7 +445,8 @@ export async function refreshResearchOffer(
   const provider = providers.find(
     (source) =>
       source.capabilities.provider === previous.component.provider &&
-      source.capabilities.search.includes(previous.component.type),
+      source.capabilities.search.includes(previous.component.type) &&
+      !(previous.component.provider === "duffel" && previous.component.type === "accommodation"),
   );
   const declared = productReadiness(options.readiness, previous.component.type, operation);
   const method = operation === "detail" ? provider?.detail : provider?.revalidate;
@@ -619,11 +712,18 @@ export async function researchCapabilities(
           "Rail is deferred; saved rail confirmations retain their original attribution.",
         ],
       };
-    const declared = componentType === "activity" ? readiness.viator : readiness.duffel;
+    const declared =
+      componentType === "activity"
+        ? readiness.viator
+        : componentType === "accommodation"
+          ? readiness.nuitee
+          : readiness.duffel;
     const product =
       componentType === "activity"
         ? readiness.viator.products.activity
-        : readiness.duffel.products[componentType];
+        : componentType === "accommodation"
+          ? readiness.nuitee.products.accommodation
+          : readiness.duffel.products.flight;
     const source = providers.find(
       (provider) =>
         provider.capabilities.provider === declared.provider &&

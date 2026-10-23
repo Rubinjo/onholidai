@@ -2,9 +2,33 @@
 
 Extend the current booking routes/domain/Temporal workflow. No new checkout, orchestrator, transaction MCP surface or component-selection booking API.
 
-Current execution scope is Duffel flights/accommodation and Viator activities. Resolve by immutable provider plus component type, never type-only accommodation-to-Booking.com routing. Duffel uses its separate worker-only write key; Viator uses its shared upstream key in the trusted worker, with actual booking entitlement and trusted prerequisites required independently. No fresh writes target deferred Booking.com/Trainline or replaced GetYourGuide. Preserve legacy attribution, commitments and existing approved status reconciliation without requiring their onboarding for current trips.
+## Implemented review-only boundary (US3)
 
-A complete supported flight/stay/activity trip must not depend on rail data or deferred-provider access. A genuinely required unresolved rail leg still blocks the entire attempt; deferral is not a completeness waiver. Current Duffel stay quotes must establish selected room/rate/occupancy, mandatory costs and payment timing; unknown costs or unsupported payment schedules cannot be omitted from exact review. Read-key permission and no-hold semantics are required for discovery/revalidation; no privileged fallback.
+US3 implements complete v2 coverage/review, exact owner-scoped authorization,
+replay-safe non-executing start records and durable browser restoration. The shared
+customer schemas are generated in `contracts/trip-domain/booking-review-v2.schema.json`.
+The original v1 parser/hash and historical reconciliation/separate change flows remain.
+Latest review means request creation order, not an older worker's completion time.
+Completed/failed review records and authorization request identity are immutable.
+Fresh changed or failed reviews invalidate unused whole-trip consent under the trip lock.
+
+Production composition has no approved side-effect-free final-term reader or trusted
+traveller/payment source. Missing sources remain blockers. Optional server-only
+classification evidence can establish a free/self-arranged item; proposal metadata
+cannot. Reads, including readiness resolution, have bounded deadlines; expiry is
+rechecked after those reads and before recording authorization or start.
+
+V2 provider execution is explicitly refused by basis, claim and dispatch activities.
+The start record is inactive with no dispatched component attempts; its durable outbox
+identity remains pending rather than being falsely marked delivered. Recovery lineage,
+`continuationOf` requests, consequential provider composition and the per-write guards
+described below are US4 scope and are not activated by US3.
+
+Current execution scope is Duffel flights, Nuitee accommodation and Viator activities. Resolve by immutable provider plus component type, never type-only accommodation defaults or relabelled Duffel stay IDs. Duffel uses its separate worker-only write key; Nuitee/Viator each use their shared upstream key in the trusted worker, with actual booking/payment entitlement and trusted prerequisites required independently. No fresh writes target Duffel Stays, Nuitee Flights/Experiences, deferred Booking.com/Trainline or replaced GetYourGuide. Preserve legacy attribution, commitments and existing approved status reconciliation without requiring inactive onboarding.
+
+A complete supported flight/stay/activity trip must not depend on rail data or inactive-provider access. A genuinely required unresolved rail leg still blocks the entire attempt; deferral is not a completeness waiver. Nuitee selected multi-room offers must establish occupancy, mandatory included/excluded costs, final terms and payment timing; unknown costs or unsupported payment schedules cannot be omitted from exact review. Prebook is not a safe read merely because `usePaymentSdk=false`: until approved no-hold/no-reservation/no-payment semantics establish an eligible variant, revalidation is unsupported and stay authorization is blocked. Fresh rates alone cannot be promoted to final checkout evidence. Never initialize payment, reserve inventory or accept changed terms to obtain a review under stale or absent authorization.
+
+Approved worker-only prebook/book/status handling uses exact authorized offer/party/material terms, opaque trusted guest/payment references and durable possible-commit guards. A reusable `prebookId` is not a duplicate-prevention guarantee. Status must correlate the actual attempt; missing correlation after timeout retains uncertainty/manual support, not a blind retry. Payment success alone never means accommodation confirmation.
 
 ## Read/review
 

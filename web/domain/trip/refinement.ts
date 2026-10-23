@@ -1,12 +1,18 @@
 import { inTransaction } from "@/server/db/transaction";
 import { fingerprint, runConflict } from "@/server/agent-client/run-repository";
 import { ProposalRepository } from "@/server/db/proposal-repository";
+import { selectedRunOffers } from "@/server/supply/planning-research";
+import { isCompletePlanningOffer } from "@/server/supply/offers";
+import { projectCustomerSnapshot } from "@/domain/pricing/projections";
+import { ProblemError } from "@/server/errors";
 
 import { researchDraftImpact } from "./edit";
 import { readOwnedTripVersion } from "./read";
 import { changeProposalSchema } from "./proposal";
 import { tripSnapshotSchema } from "./schema";
 import { previewFinalization } from "./finalization-proposal";
+import { assertSelectedOfferRequirements, priceEstimate } from "./apply-estimate";
+import { previewDraftEdit } from "./impact";
 
 import type { SupplyReadProvider } from "@/server/supply/read";
 import type { ServiceTokenContext } from "@/server/agent-client/credentials";
@@ -54,8 +60,40 @@ export async function recordRefinement(
     context.tripId,
     context.baseTripVersion,
   );
-  const review =
-    proposal.purpose === "finalization"
+  const selected =
+    proposal.purpose === "refinement" ? await selectedRunOffers(database, context, runId) : [];
+  if (
+    selected.length &&
+    (proposal.operations.some((operation) => operation.target !== "/components") ||
+      selected.some(
+        ({ normalizedOffer: offer }) =>
+          !isCompletePlanningOffer(offer) || offer.eligibility.status === "ineligible",
+      ))
+  )
+    throw new ProblemError({
+      title: "Selected source facts cannot be materialized",
+      status: 409,
+      code: "offer_unavailable",
+    });
+  const baseSnapshot = tripSnapshotSchema.parse(base.snapshot);
+  const selectedSnapshot = selected.length
+    ? priceEstimate(
+        baseSnapshot,
+        proposal.operations,
+        selected.map((record) => record.normalizedOffer),
+        new Date(),
+        true,
+      )
+    : undefined;
+  if (selectedSnapshot)
+    assertSelectedOfferRequirements(
+      baseSnapshot,
+      selectedSnapshot,
+      selected.map((record) => record.normalizedOffer),
+    );
+  const review = selectedSnapshot
+    ? previewDraftEdit(baseSnapshot, context.baseTripVersion, proposal.operations, selectedSnapshot)
+    : proposal.purpose === "finalization"
       ? previewFinalization(tripSnapshotSchema.parse(base.snapshot), proposal.operations)
       : await researchDraftImpact(
           tripSnapshotSchema.parse(base.snapshot),
@@ -63,6 +101,26 @@ export async function recordRefinement(
           proposal.operations,
           providers,
         );
+  if (selected.length) {
+    const ids = new Set(selected.map((record) => record.componentId));
+    const proposedIds = new Set(review.snapshot.components.map((component) => component.id));
+    if (
+      [...ids].some((id) => !proposedIds.has(id)) ||
+      review.snapshot.components.some(
+        (component) =>
+          !ids.has(component.id) &&
+          !baseSnapshot.components.some((entry) => entry.id === component.id),
+      )
+    )
+      runConflict();
+    review.previewSnapshot = projectCustomerSnapshot(review.snapshot);
+    review.priceImpact.afterMinor = review.snapshot.price.finalCustomerTotal.minorUnits;
+    review.priceImpact.deltaMinor = review.priceImpact.afterMinor - review.priceImpact.beforeMinor;
+    review.warnings = [
+      "Selected current research was materialized from stored source facts, not model prices. No inventory is reserved.",
+      "Eligibility, terms and availability remain subject to verification before exact booking review.",
+    ];
+  }
   const value = changeProposalSchema.parse({
     ...proposal,
     tripId: context.tripId,

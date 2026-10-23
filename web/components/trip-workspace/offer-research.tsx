@@ -6,6 +6,7 @@ import { planningError, planningJson } from "@/components/trip-setup/http";
 import { publicPlanningOfferSchema, type PublicPlanningOffer } from "@/server/supply/offers";
 
 import type { TripEnvelope } from "./use-trip";
+import type { SelectedOffer } from "@/domain/trip/proposal";
 
 const outcomeSchema = z.object({
   provider: z.string().nullable().optional(),
@@ -32,15 +33,27 @@ function customerAmount(minorUnits: number | null, currency: string) {
   return format.format(minorUnits / 10 ** digits);
 }
 
-export function OfferResearch({ trip }: { trip: TripEnvelope }) {
-  return <ResearchPanel key={`${trip.tripId}:${trip.version}`} trip={trip} />;
+export function OfferResearch({
+  trip,
+  onSelect,
+}: {
+  trip: TripEnvelope;
+  onSelect?: (offer: SelectedOffer) => void;
+}) {
+  return <ResearchPanel key={`${trip.tripId}:${trip.version}`} trip={trip} onSelect={onSelect} />;
 }
-function ResearchPanel({ trip }: { trip: TripEnvelope }) {
+function ResearchPanel({
+  trip,
+  onSelect,
+}: {
+  trip: TripEnvelope;
+  onSelect?: (offer: SelectedOffer) => void;
+}) {
   const [offers, setOffers] = useState<PublicPlanningOffer[]>([]);
   const [outcomes, setOutcomes] = useState<z.infer<typeof outcomeSchema>[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState(
-    "Research is separate from your saved trip. Nothing here reserves inventory.",
+    `Research applies to saved trip version ${trip.version}. Nothing here reserves inventory.`,
   );
   const [busy, setBusy] = useState(false);
   const [active, setActive] = useState<PublicPlanningOffer | null>(null);
@@ -48,26 +61,29 @@ function ResearchPanel({ trip }: { trip: TripEnvelope }) {
   const base = `/api/v1/trips/${trip.tripId}`;
   const version = `version=${trip.version}`;
 
-  async function load(signal: AbortSignal) {
-    const result = resultsSchema.parse(
-      await planningJson(`${base}/planning-offers?${version}`, undefined, undefined, signal),
-    );
-    if (!signal.aborted && result.tripVersion === trip.version) {
-      setOffers(result.offers);
-      setOutcomes(result.outcomes);
+  function acceptResults(raw: unknown, signal: AbortSignal) {
+    if (signal.aborted) return;
+    const result = resultsSchema.parse(raw);
+    if (result.tripVersion !== trip.version) {
+      setStatus(
+        `Supplier research is stale for saved trip version ${trip.version}. Request current options.`,
+      );
+      throw new Error("Supplier research version mismatch");
     }
+    setOffers(result.offers);
+    setOutcomes(result.outcomes);
+  }
+  async function load(signal: AbortSignal) {
+    acceptResults(
+      await planningJson(`${base}/planning-offers?${version}`, undefined, undefined, signal),
+      signal,
+    );
   }
   useEffect(() => {
     const initial = new AbortController();
     controller.current = initial;
     void planningJson(`${base}/planning-offers?${version}`, undefined, undefined, initial.signal)
-      .then((raw) => {
-        const result = resultsSchema.parse(raw);
-        if (!initial.signal.aborted && result.tripVersion === trip.version) {
-          setOffers(result.offers);
-          setOutcomes(result.outcomes);
-        }
-      })
+      .then((raw) => acceptResults(raw, initial.signal))
       .catch((failure: unknown) => {
         if (!initial.signal.aborted) setError(planningError(failure));
       });
@@ -201,7 +217,9 @@ function ResearchPanel({ trip }: { trip: TripEnvelope }) {
       data-trip-version={trip.version}
     >
       <h2 id="supplier-options-heading">Compare supplier options</h2>
-      <p>Flights and stays from Duffel; activities from Viator. Train inventory is deferred.</p>
+      <p>
+        Flights from Duffel; stays from Nuitee; activities from Viator. Train inventory is deferred.
+      </p>
       <button type="button" disabled={busy} onClick={() => void search()}>
         {busy ? "Checking supplier options" : "Find supplier options"}
       </button>
@@ -284,6 +302,32 @@ function ResearchPanel({ trip }: { trip: TripEnvelope }) {
             >
               Recheck {offer.component.type} availability
             </button>
+            {onSelect &&
+              ["duffel:flight", "nuitee:accommodation", "viator:activity"].includes(
+                `${offer.component.provider}:${offer.component.type}`,
+              ) && (
+                <button
+                  type="button"
+                  disabled={
+                    busy ||
+                    trip.lifecycleState !== "draft" ||
+                    !offer.offerRef ||
+                    !offer.revision ||
+                    offer.evidence?.status === "expired" ||
+                    offer.evidence?.availability === "unavailable" ||
+                    ["expired", "unavailable"].includes(offer.component.offerStatus)
+                  }
+                  onClick={() => {
+                    if (!offer.offerRef || !offer.revision) return;
+                    onSelect({ offerRef: offer.offerRef, revision: offer.revision });
+                    setStatus(
+                      "Selection sent to chat for a validated draft proposal. Unknown facts may require clarification; no inventory was reserved.",
+                    );
+                  }}
+                >
+                  Use {offer.component.type} in draft
+                </button>
+              )}
           </li>
         ))}
       </ul>

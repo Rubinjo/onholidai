@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { createItineraryCases } from "./itinerary-corpus.mjs";
 import { assertGeneratedArtifact } from "./generated-artifact.mjs";
 
-const CORPUS_VERSION = "1.4.0";
+const CORPUS_VERSION = "1.5.0";
 const POLICY_VERSION = "1";
 const SEED = "onholidai-evaluation-v1-seed-20261011";
 const estimateCategories = [
@@ -262,12 +262,137 @@ const ambiguities = Array.from({ length: 20 }, (_, index) => {
 });
 
 const { itineraryDays, hardConflicts } = createItineraryCases(estimateInput, dateForDay);
+const decisions = [];
+for (const type of ["flight", "accommodation", "activity"]) {
+  for (const scenario of [
+    "dominant",
+    "equivalent",
+    "competitive",
+    "ineligible",
+    "unknown",
+    "constraint",
+  ]) {
+    const input = estimateInput(1);
+    input.snapshot.constraints = [];
+    input.snapshot.preferences.spend = 95;
+    const offer = (supplierOfferId, amount) => ({
+      selectionGroup: type,
+      eligibility: { status: "eligible", minimumAge: null, maximumAge: null },
+      occupancy: { maximumAdults: 4, maximumChildren: 2 },
+      accessibility: "verified",
+      evidence: { status: "quoted", availability: "available" },
+      component: {
+        id:
+          supplierOfferId === "a"
+            ? "b0000000-b000-4000-8000-b00000000001"
+            : "b0000000-b000-4000-8000-b00000000002",
+        provider: type === "flight" ? "duffel" : type === "accommodation" ? "nuitee" : "viator",
+        supplierOfferId,
+        type,
+        serviceStart: "2030-05-10T12:00:00Z",
+        serviceEnd: "2030-05-15T12:00:00Z",
+        details: { description: "Synthetic equivalent source facts" },
+        cancellationTerms: "Synthetic refundable terms",
+        bookingStatus: "unbooked",
+        price: { currency: "EUR", finalCustomerMinor: amount, taxesMinor: 0, feesMinor: 0 },
+      },
+    });
+    const offers = [offer("b", 20000), offer("a", scenario === "equivalent" ? 20000 : 10000)];
+    if (scenario === "competitive")
+      offers[1].component.cancellationTerms = "Synthetic non-refundable terms";
+    if (scenario === "ineligible") offers[1].eligibility.status = "ineligible";
+    if (scenario === "unknown" || scenario === "constraint") {
+      input.snapshot.constraints = [
+        {
+          id: "b0000000-b000-4000-8000-b00000000003",
+          category: "accessibility",
+          priority: "required",
+          statement: "Step-free access is required",
+          status: "active",
+        },
+      ];
+      for (const item of offers)
+        item.accessibility = scenario === "unknown" ? "unverified" : "verified";
+      if (scenario === "constraint") offers[1].accessibility = "unsupported";
+    }
+    decisions.push({
+      id: `${type}-${scenario}`,
+      input,
+      offers,
+      query: { startDate: "2030-05-10", endDate: "2030-05-15" },
+      expected: {
+        kind: ["competitive", "unknown"].includes(scenario) ? "clarification" : "selection",
+        supplierOfferId: ["constraint", "ineligible"].includes(scenario) ? "b" : "a",
+      },
+    });
+  }
+}
+for (const scenario of [
+  "budget",
+  "budget-unknown",
+  "wrong-currency",
+  "wrong-dates",
+  "occupancy",
+  "commitment",
+  "rail-optional",
+  "rail-required",
+]) {
+  const value = structuredClone(decisions[0]);
+  value.id = scenario;
+  value.expected = { kind: "selection", supplierOfferId: "a" };
+  if (scenario.startsWith("budget")) {
+    value.input.snapshot.constraints = [
+      {
+        category: "budget",
+        priority: "required",
+        status: "active",
+        statement: scenario === "budget" ? "Maximum EUR 150.00 total" : "Keep within my budget",
+      },
+    ];
+    if (scenario === "budget-unknown") value.expected.kind = "clarification";
+  }
+  if (scenario === "wrong-currency") value.offers[1].component.price.currency = "USD";
+  if (scenario === "wrong-dates") value.offers[1].component.serviceStart = "2029-01-01T12:00:00Z";
+  if (scenario === "occupancy") {
+    value.offers.forEach((item) => {
+      item.component.type = "accommodation";
+    });
+    value.offers[1].occupancy.maximumAdults = 1;
+  }
+  if (scenario === "commitment") {
+    value.input.snapshot.components = [
+      {
+        id: "b0000000-b000-4000-8000-b00000000004",
+        type: "activity",
+        bookingStatus: "confirmed",
+        serviceStart: "2030-05-10T12:00:00Z",
+        serviceEnd: "2030-05-10T13:00:00Z",
+      },
+    ];
+    value.offers[0].component.serviceStart = "2030-05-11T12:00:00Z";
+  }
+  if (["wrong-currency", "wrong-dates", "occupancy", "commitment"].includes(scenario))
+    value.expected.supplierOfferId = "b";
+  if (scenario === "rail-required") {
+    value.input.snapshot.constraints = [
+      {
+        category: "transport",
+        priority: "required",
+        status: "active",
+        statement: "Use rail between destinations",
+      },
+    ];
+    value.expected.kind = "clarification";
+  }
+  decisions.push(value);
+}
 const payload = {
   estimates,
   unambiguousRequests,
   ambiguities,
   itineraryDays,
   hardConflicts,
+  decisions,
 };
 const corpusHash = `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
 const corpus = {
@@ -287,11 +412,12 @@ const corpus = {
       itineraryDays: 100,
       itineraryItems: 500,
       hardConflicts: 20,
+      decisions: decisions.length,
     },
     changeControl: {
       reviewedReasonRequired: true,
       reviewedReason:
-        "US3 revision 1.4.0: repair the four date-window hard-conflict inputs so each is a storable snapshot whose availability window starts after the planned day, letting the feasibility policy (code date_duration) rather than the snapshot schema reject it. Preserve estimate/refinement cases, seed and denominators; a complete evaluation remains required before acceptance.",
+        "US2 revision 1.5.0: add 26 executable supplier decision cases for dominance, equivalence, competition, required unknowns, constraints, explicit budgets, currency, dates, party, commitments and unsupported rail. Preserve all existing estimate/refinement/itinerary inputs, seed and denominators.",
       policy: "Every revision must record a reviewed reason and run a fresh complete evaluation.",
     },
   },

@@ -12,6 +12,8 @@ import { ProposalCard } from "./proposal-card";
 import { Clarification } from "./clarification";
 import { TripCheckpoint, useChatVersions } from "./trip-checkpoints";
 
+import type { SelectedOffer } from "@/domain/trip/proposal";
+
 const runSchema = z
   .object({
     id: z.uuid(),
@@ -56,11 +58,18 @@ export function Conversation({
   initialRunId,
   initialResearchRequestId,
   onCommit,
+  selection,
 }: {
   trip: TripEnvelope;
   initialRunId: string | null;
   initialResearchRequestId?: string;
   onCommit: (raw: unknown) => void;
+  selection?: {
+    requestId: string;
+    tripId: string;
+    tripVersion: number;
+    offer: SelectedOffer;
+  } | null;
 }) {
   const client = useQueryClient(),
     [runId, setRunId] = useState(initialRunId),
@@ -75,6 +84,7 @@ export function Conversation({
     baseTripVersion: number;
     purpose: "initial_estimate" | "refinement" | "finalization";
     message: string;
+    selectedOffers?: SelectedOffer[];
   } | null>(null);
   const history = useInfiniteQuery({
     queryKey: ["conversation", trip.tripId],
@@ -97,7 +107,10 @@ export function Conversation({
   });
   const refreshHistory = history.refetch;
   const submit = useCallback(
-    async (purpose?: "initial_estimate" | "finalization") => {
+    async (
+      purpose?: "initial_estimate" | "refinement" | "finalization",
+      selected?: NonNullable<typeof selection>,
+    ) => {
       setError("");
       setOutcome("");
       setBusy(true);
@@ -105,16 +118,25 @@ export function Conversation({
         // A new reservation uses current accepted facts; uncertain submissions
         // replay their original request and version until their outcome is known.
         const latest = tripEnvelopeSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}`));
+        if (
+          selected &&
+          (selected.tripId !== latest.tripId || selected.tripVersion !== latest.version)
+        )
+          throw new Error("Selected research is stale. Request current options.");
         pendingResearch.current ??= {
           requestId:
-            !runId && initialResearchRequestId ? initialResearchRequestId : crypto.randomUUID(),
+            selected?.requestId ??
+            (!runId && initialResearchRequestId ? initialResearchRequestId : crypto.randomUUID()),
           baseTripVersion: latest.version,
           purpose:
             purpose ?? (latest.snapshot.components.length ? "refinement" : "initial_estimate"),
           message:
             purpose === "finalization"
               ? "Prepare detailed itinerary"
-              : message || "Estimate my reviewed settings and update my draft trip.",
+              : selected
+                ? "Use this selected supplier research within my current trip requirements."
+                : message || "Estimate my reviewed settings and update my draft trip.",
+          ...(selected ? { selectedOffers: [selected.offer] } : {}),
         };
         const sent = pendingResearch.current;
         const value = runSchema.parse(
@@ -137,6 +159,17 @@ export function Conversation({
     },
     [trip.tripId, runId, initialResearchRequestId, message, refreshHistory],
   );
+  const handledSelection = useRef<string | null>(null);
+  useEffect(() => {
+    if (selection && handledSelection.current !== selection.requestId) {
+      handledSelection.current = selection.requestId;
+      if (pendingResearch.current) {
+        setError("A planning request is still pending. Retry it before selecting another option.");
+        return;
+      }
+      void submit("refinement", selection);
+    }
+  }, [selection, submit]);
   const initialStarted = useRef(false);
   useEffect(() => {
     if (!initialStarted.current && !initialRunId && initialResearchRequestId) {

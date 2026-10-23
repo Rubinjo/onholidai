@@ -21,6 +21,22 @@ MODELS: dict[str, type[BaseModel]] = {
 }
 
 
+@pytest.mark.parametrize("revision", [1, 2])
+def test_selected_references_cannot_repeat_an_offer_with_the_same_or_another_revision(
+    revision: int,
+):
+    from tests.integration.test_estimate import request
+
+    raw = request().model_dump(mode="json", by_alias=True)
+    raw["purpose"] = "refinement"
+    raw["selectedOffers"] = [
+        {"offerRef": "10000000-0000-4000-8000-000000000010", "revision": value}
+        for value in (1, revision)
+    ]
+    with pytest.raises(ValidationError):
+        CreateAgentRunRequest.model_validate(raw)
+
+
 def test_shared_supplier_wire_cases_match_pydantic_acceptance() -> None:
     from jsonschema import Draft202012Validator
     from jsonschema.protocols import Validator

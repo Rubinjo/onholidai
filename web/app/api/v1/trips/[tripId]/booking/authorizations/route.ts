@@ -13,6 +13,8 @@ export async function POST(request: Request, route: Route): Promise<Response> {
         user.id,
         (await route.params).tripId,
         await requestJson(request),
+        new Date(),
+        application.bookingPrerequisites,
       );
     },
     { status: 201 },

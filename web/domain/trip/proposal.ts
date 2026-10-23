@@ -9,6 +9,15 @@ import {
 } from "./schema";
 
 const text = (maximum: number) => z.string().trim().min(1).max(maximum);
+export const selectedOfferSchema = z
+  .object({ offerRef: z.uuid(), revision: z.number().int().positive() })
+  .strict();
+export const selectedOffersSchema = z
+  .array(selectedOfferSchema)
+  .min(1)
+  .max(32)
+  .refine((offers) => new Set(offers.map((offer) => offer.offerRef)).size === offers.length);
+export type SelectedOffer = z.infer<typeof selectedOfferSchema>;
 const publicComponent = (index: 0 | 1 | 2 | 3 | 4) =>
   travelComponentSchema.options[index].extend({ price: publicTripPriceSchema });
 export const customerSnapshotSchema = z
@@ -112,6 +121,11 @@ function containsProtectedValue(value: unknown, depth = 0): boolean {
   if (value && typeof value === "object")
     return Object.entries(value).some(
       ([key, entry]) =>
+        (key === "bookingDispositionEvidence" &&
+          (!entry ||
+            typeof entry !== "object" ||
+            !("verificationStatus" in entry) ||
+            entry.verificationStatus !== "unverified")) ||
         (protectedKeys.has(key) && !(key === "bookingStatus" && entry === "unbooked")) ||
         containsProtectedValue(entry, depth + 1),
     );
@@ -140,7 +154,10 @@ export const proposalOperationSchema = z
         /^\/(departureOrigin|departureOrigins|destinationOrder|availabilityWindows|duration|travellerParty|preferences|constraints|destinations|itineraryDays|components)(\/[^/]+)*$/,
       )
       .refine(
-        (target) => !target.split("/").some((part) => protectedKeys.has(part)),
+        (target) =>
+          !target
+            .split("/")
+            .some((part) => protectedKeys.has(part) || part === "bookingDispositionEvidence"),
         "Protected operation target",
       ),
     value: jsonValueSchema,

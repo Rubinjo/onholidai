@@ -25,10 +25,12 @@ export function useTrip(initial: TripEnvelope) {
     retry: (count, error) =>
       !(error instanceof PlanningRequestError && [401, 403, 404].includes(error.status)) &&
       count < 2,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const latest = tripEnvelopeSchema.parse(
-        await planningJson(`/api/v1/trips/${initial.tripId}`),
+        await planningJson(`/api/v1/trips/${initial.tripId}`, undefined, undefined, signal),
       );
+      signal.throwIfAborted();
+      if (latest.tripId !== initial.tripId) throw new Error("Trip response mismatch");
       const cached = client.getQueryData<TripEnvelope>(tripKey(initial.tripId));
       return cached && cached.version > latest.version ? cached : latest;
     },

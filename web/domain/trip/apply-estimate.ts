@@ -26,15 +26,194 @@ import type { ChangeProposal as AgentProposal } from "../../../contracts/agent-a
 import type { Kysely } from "kysely";
 import type { Database } from "@/server/db/database";
 
+export function assertSelectedOfferRequirements(
+  base: TripSnapshot,
+  candidate: TripSnapshot,
+  offers: readonly PlanningOffer[],
+) {
+  function unavailable(): never {
+    throw new ProblemError({
+      title: "Selected source facts do not satisfy the current trip requirements",
+      status: 409,
+      code: "offer_unavailable",
+    });
+  }
+  const dates = base.destinations
+    .flatMap((destination) =>
+      destination.arrivalDate && destination.departureDate
+        ? [destination.arrivalDate, destination.departureDate]
+        : [],
+    )
+    .sort();
+  const start = dates[0],
+    end = dates.at(-1);
+  if (!start || !end || base.components.some((component) => component.bookingStatus !== "unbooked"))
+    unavailable();
+  const groups = new Set<string>();
+  for (const offer of offers) {
+    if (!isCompletePlanningOffer(offer)) unavailable();
+    const { component, eligibility, occupancy } = offer;
+    const group = offer.selectionGroup ?? component.id;
+    if (groups.has(group)) unavailable();
+    groups.add(group);
+    if (
+      eligibility.status === "ineligible" ||
+      component.serviceStart.slice(0, 10) < start ||
+      component.serviceEnd.slice(0, 10) > end ||
+      component.price.finalCustomerAmount.currency !== base.price.currency ||
+      offer.evidence?.availability === "unavailable" ||
+      offer.evidence?.status === "expired"
+    )
+      unavailable();
+    if (base.travellerParty.children.length && eligibility.status !== "eligible") unavailable();
+    if (
+      base.travellerParty.children.some(
+        (child) =>
+          (eligibility.minimumAge !== null && child.ageAtTripStart < eligibility.minimumAge) ||
+          (eligibility.maximumAge !== null && child.ageAtTripStart > eligibility.maximumAge),
+      )
+    )
+      unavailable();
+    if (
+      component.type === "accommodation" &&
+      (occupancy.maximumAdults === null ||
+        occupancy.maximumChildren === null ||
+        occupancy.maximumAdults < base.travellerParty.adults ||
+        occupancy.maximumChildren < base.travellerParty.children.length)
+    )
+      unavailable();
+    for (const constraint of base.constraints) {
+      if (
+        constraint.priority !== "required" ||
+        constraint.status === "removed" ||
+        constraint.category === "budget"
+      )
+        continue;
+      // Unsupported rail stays an outstanding requirement, not a substituted flight.
+      if (constraint.category === "transport" && /\b(?:rail|train)\b/i.test(constraint.statement))
+        continue;
+      const scopedTypes = (
+        [
+          ["flight", /\bflights?\b/i],
+          ["activity", /\b(?:activities|activity)\b/i],
+          ["accommodation", /\b(?:stays?|hotels?|accommodation)\b/i],
+          ["transfer", /\btransfers?\b/i],
+          ["rail", /\b(?:rail|trains?)\b/i],
+        ] as const
+      ).filter(([, pattern]) => pattern.test(constraint.statement));
+      const relevant =
+        constraint.category === "accessibility" ||
+        (constraint.category === "lodging" && component.type === "accommodation") ||
+        (["dietary", "schedule"].includes(constraint.category) &&
+          (scopedTypes.length
+            ? scopedTypes.some(([kind]) => kind === component.type)
+            : constraint.category === "schedule" || component.type === "activity")) ||
+        (constraint.category === "transport" && ["flight", "transfer"].includes(component.type)) ||
+        ["other", "occasion"].includes(constraint.category);
+      if (!relevant) continue;
+      const proof = component.planningDetails?.constraintEvidence.find(
+        (entry) => entry.constraintId === constraint.id,
+      )?.status;
+      if (
+        constraint.category === "accessibility"
+          ? offer.accessibility !== "verified" || proof === "failed"
+          : proof !== "verified"
+      )
+        unavailable();
+    }
+  }
+  const selectedIds = new Set(offers.map((offer) => offer.component.id));
+  if (
+    candidate.components.some(
+      (component) =>
+        !selectedIds.has(component.id) &&
+        !base.components.some((existing) => existing.id === component.id),
+    ) ||
+    [...selectedIds].some((id) => !candidate.components.some((component) => component.id === id))
+  )
+    unavailable();
+  for (const existing of base.components) {
+    if (candidate.components.some((component) => component.id === existing.id)) continue;
+    if (
+      existing.type === "activity" ||
+      !offers.some(
+        ({ component }) =>
+          component.type === existing.type &&
+          component.serviceStart === existing.serviceStart &&
+          component.serviceEnd === existing.serviceEnd,
+      )
+    )
+      unavailable();
+  }
+  if (
+    offers.some(({ component }) => {
+      const matches = base.components.filter(
+        (existing) =>
+          existing.type === component.type &&
+          existing.serviceStart === component.serviceStart &&
+          existing.serviceEnd === component.serviceEnd,
+      );
+      return (
+        matches.length > 1 &&
+        matches.some((existing) => !candidate.components.some((entry) => entry.id === existing.id))
+      );
+    })
+  )
+    unavailable();
+  for (const constraint of base.constraints) {
+    if (
+      constraint.category !== "budget" ||
+      constraint.priority !== "required" ||
+      constraint.status === "removed"
+    )
+      continue;
+    const match = /\b([A-Z]{3})\s+(\d+)(?:\.(\d{1,3}))?\b/.exec(constraint.statement);
+    if (
+      !match ||
+      match[1] !== base.price.currency ||
+      !/\b(?:max(?:imum)?|at most|up to|not exceed|no more than|under|within|budget)\b/i.test(
+        constraint.statement,
+      ) ||
+      (constraint.statement.match(/\b[A-Z]{3}\s+\d/g) ?? []).length !== 1
+    )
+      unavailable();
+    const precision = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: base.price.currency,
+    }).resolvedOptions().maximumFractionDigits;
+    const fraction = match[3] ?? "";
+    if (precision === undefined || fraction.length > precision) unavailable();
+    const limit =
+      BigInt(match[2]) * 10n ** BigInt(precision) + BigInt(fraction.padEnd(precision, "0") || "0");
+    if (
+      limit > BigInt(Number.MAX_SAFE_INTEGER) ||
+      BigInt(candidate.price.finalCustomerTotal.minorUnits) > limit
+    )
+      unavailable();
+  }
+}
+
 export function priceEstimate(
   base: TripSnapshot,
   operations: readonly unknown[],
   offers: readonly PlanningOffer[],
   now: Date,
+  preserveExisting = false,
 ): TripSnapshot {
   const candidate = applyDraftOperations(base, operations, false);
   candidate.components = candidate.components.map((component) => {
     const offer = offers.find((entry) => entry.component.id === component.id);
+    const existing = preserveExisting
+      ? base.components.find((entry) => entry.id === component.id)
+      : undefined;
+    if (
+      !offer &&
+      existing &&
+      existing.bookingStatus === "unbooked" &&
+      existing.offerStatus === "available" &&
+      (!existing.expiresAt || Date.parse(existing.expiresAt) > now.getTime())
+    )
+      return structuredClone(existing);
     if (
       !offer ||
       !isCompletePlanningOffer(offer) ||

@@ -79,6 +79,57 @@ def planning_request(message: str, purpose: str = "refinement") -> CreateAgentRu
     )
 
 
+def test_required_rail_asks_once_then_keeps_the_requirement_unresolved_across_supported_planning():
+    snapshot: dict[str, object] = {
+        "destinations": [
+            {
+                "id": str(uuid4()),
+                "name": "Lisbon",
+                "timezone": "Europe/Lisbon",
+                "arrivalDate": "2030-05-01",
+                "departureDate": "2030-05-02",
+                "plannedNights": 1,
+            }
+        ],
+        "preferences": {"pace": 25, "discovery": 50, "setting": 50, "independence": 50},
+        "constraints": [
+            {
+                "category": "transport",
+                "priority": "required",
+                "status": "active",
+                "statement": "Use rail between destinations",
+            }
+        ],
+        "components": [],
+    }
+    before = deepcopy(snapshot)
+
+    class Reader:
+        async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]:
+            return {"version": 2, "snapshot": snapshot}
+
+    initial = planning_request("Prepare itinerary", "finalization")
+    question = asyncio.run(compose_itinerary(initial, Reader())).root
+    assert question.kind == "clarification"
+    assert "rail" in question.clarification.question.lower()
+    resumed = initial.model_copy(
+        update={"message": "Keep rail unresolved while planning supported parts"}
+    )
+    result = asyncio.run(compose_itinerary(resumed, Reader())).root
+    assert result.kind == "proposal"
+    assert any(
+        "Required rail remains unresolved" in warning for warning in result.proposal.warnings
+    )
+    raw = initial.model_dump(mode="json", by_alias=True)
+    raw["context"]["conversationSummary"] = {
+        "sourceTripVersion": 2,
+        "decisions": ["Keep rail unresolved while planning supported parts"],
+    }
+    later = asyncio.run(compose_itinerary(CreateAgentRunRequest.model_validate(raw), Reader())).root
+    assert later.kind == "proposal"
+    assert snapshot == before
+
+
 def test_missing_timezone_requires_clarification_without_inventing_one():
     class Reader:
         async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]:

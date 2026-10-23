@@ -1,4 +1,68 @@
 export type OfferStatus = "available" | "changed" | "unavailable";
+
+export function nuiteeRatesResponse() {
+  const childrenAges: number[] = [];
+  return {
+    data: [
+      {
+        hotelId: "synthetic_hotel",
+        roomTypes: [
+          {
+            offerId: "synthetic_offer",
+            offerRetailRate: [{ amount: "100.10", currency: "GBP" }],
+            suggestedSellingPrice: [{ amount: "110.20", currency: "GBP" }],
+            rateType: "standard",
+            paymentSchedule: "now",
+            paymentTypes: ["NUITEE_PAY"],
+            rates: [
+              {
+                rateId: "synthetic_rate",
+                mappedRoomId: "synthetic_room",
+                occupancyNumber: 1,
+                adultCount: 2,
+                childCount: 0,
+                name: "Synthetic double",
+                boardType: "BB",
+                boardName: "Breakfast",
+                childrenAges,
+                retailRate: {
+                  total: [{ amount: "100.10", currency: "GBP" }],
+                  taxesAndFees: [
+                    {
+                      included: true,
+                      amount: "10.00",
+                      currency: "GBP",
+                      description: "Included tax",
+                    },
+                    {
+                      included: false,
+                      amount: "5.00",
+                      currency: "GBP",
+                      description: "Property charge",
+                    },
+                  ],
+                },
+                cancellationPolicies: {
+                  refundableTag: "RFN",
+                  cancelPolicyInfos: [
+                    {
+                      cancelTime: "2030-04-30 12:00:00",
+                      amount: "100.10",
+                      currency: "GBP",
+                      type: "amount",
+                      timezone: "GMT",
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 export type CommitStatus = "confirmed" | "rejected";
 export type ProviderScenario = "success" | "timeout_after_commit" | "duplicate" | "contradictory";
 

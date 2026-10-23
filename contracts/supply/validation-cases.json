@@ -138,6 +138,53 @@
       }
     },
     {
+      "id": "public-nuitee-multi-room-discovery",
+      "valid": true,
+      "value": {
+        "sourceMode": "live",
+        "queryFingerprint": null,
+        "partyFingerprint": null,
+        "selectionGroup": "accommodation:whole_query",
+        "supplierReferences": {
+          "accommodationId": "synthetic-hotel",
+          "rateIds": ["synthetic-rate-1", "synthetic-rate-2"],
+          "roomIds": ["synthetic-room-1", "synthetic-room-2"],
+          "sessionId": "synthetic-sourced-session"
+        },
+        "component": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "itineraryItemIds": [],
+          "provider": "nuitee",
+          "supplierOfferId": "synthetic-nuitee-offer",
+          "type": "accommodation",
+          "offerStatus": "available",
+          "serviceStart": null,
+          "serviceEnd": null,
+          "travellerIds": ["10000000-0000-4000-8000-000000000002"],
+          "bookingRequirements": ["Final checkout terms are unverified"],
+          "cancellationTerms": null,
+          "checkedAt": "2030-01-01T00:00:00Z",
+          "expiresAt": null,
+          "bookingStatus": "unbooked",
+          "details": null,
+          "price": {
+            "currency": "GBP",
+            "finalCustomerMinor": 23040,
+            "taxesMinor": null,
+            "feesMinor": null,
+            "status": "estimated",
+            "checkedAt": "2030-01-01T00:00:00Z",
+            "expiresAt": null
+          }
+        },
+        "eligibility": { "status": "unverified", "minimumAge": null, "maximumAge": null },
+        "occupancy": { "maximumAdults": null, "maximumChildren": null },
+        "accessibility": "unverified",
+        "attribution": { "provider": "nuitee", "sourceUrl": null },
+        "unverifiedFacts": ["dates", "taxes", "fees", "terms", "details"]
+      }
+    },
+    {
       "id": "private-payload",
       "valid": false,
       "value": { "supplierAmount": 991199, "platformMargin": 883388 }

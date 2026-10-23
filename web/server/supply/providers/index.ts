@@ -4,10 +4,10 @@ import {
   type DuffelFlightsHttpOptions,
 } from "./duffel-read";
 import {
-  createDuffelStaysReadProvider,
-  createDuffelStaysHttpClient,
-  type DuffelStaysHttpOptions,
-} from "./duffel-stays-read";
+  createNuiteeReadProvider,
+  createNuiteeHttpClient,
+  type NuiteeHttpOptions,
+} from "./nuitee-read";
 import {
   createViatorReadProvider,
   createViatorHttpClient,
@@ -16,12 +16,12 @@ import {
 import { syntheticReadClient } from "./synthetic";
 
 import type { SupplyReadProvider } from "../read";
-import type { ServerConfig, SupplierReadiness } from "@/server/config";
+import type { ServerConfig } from "@/server/config";
 
 export interface PlanningProviderMappings {
   fetch?: typeof fetch;
   flightDestination?: DuffelFlightsHttpOptions["resolveDestination"];
-  staySearch?: DuffelStaysHttpOptions["resolveSearch"];
+  staySearch?: NuiteeHttpOptions["resolveSearch"];
   activityDestination?: ViatorHttpOptions["resolveDestination"];
   activityPaxMix?: ViatorHttpOptions["resolvePaxMix"];
 }
@@ -29,7 +29,6 @@ export interface PlanningProviderMappings {
 export function createConfiguredPlanningProviders(
   config: ServerConfig,
   environment: Readonly<Record<string, string | undefined>>,
-  readiness: SupplierReadiness,
   mappings: PlanningProviderMappings = {},
 ): readonly SupplyReadProvider[] {
   if (config.PROVIDER_MODE === "deterministic") return createPlanningProviders("deterministic");
@@ -51,18 +50,20 @@ export function createConfiguredPlanningProviders(
         }),
       ),
     );
+  }
+  const nuiteeRef = config.SUPPLIER_PROVIDERS.nuitee?.readSecretRef;
+  const nuiteeKey = nuiteeRef ? environment[nuiteeRef]?.trim() : undefined;
+  if (nuiteeKey)
     providers.push(
-      createDuffelStaysReadProvider(
-        createDuffelStaysHttpClient({
-          readToken: duffelToken,
+      createNuiteeReadProvider(
+        createNuiteeHttpClient({
+          apiKey: nuiteeKey,
+          environment: config.NUITEE_ENVIRONMENT,
           fetch: mappings.fetch,
-          accessApproved:
-            readiness.duffel.products.accommodation.operations.search.access === "verified",
           resolveSearch: mappings.staySearch ?? (() => null),
         }),
       ),
     );
-  }
   const viatorRef = config.SUPPLIER_PROVIDERS.viator?.readSecretRef;
   const viatorKey = viatorRef ? environment[viatorRef]?.trim() : undefined;
   if (viatorKey)
@@ -95,7 +96,7 @@ export function createPlanningProviders(
   if (mode === "live") return live; // Commercial HTTP/SDK clients must be explicitly injected; no fake live success.
   return [
     createDuffelReadProvider(syntheticReadClient("flight")),
-    createDuffelStaysReadProvider(syntheticReadClient("accommodation")),
+    createNuiteeReadProvider(syntheticReadClient("accommodation")),
     createViatorReadProvider(syntheticReadClient("activity")),
   ].map((provider): SupplyReadProvider => ({
     ...provider,

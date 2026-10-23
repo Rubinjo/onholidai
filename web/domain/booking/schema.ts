@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { bookingTermsSchema, type BookingOperation } from "./authorization";
+import { publicSupplierText } from "@/lib/privacy";
+
+import { bookingTermsSchema, isWholeTripTerms, type BookingOperation } from "./authorization";
+import { publicBookingTransactionSchema, type PublicBookingTransaction } from "./public";
 
 export const executionBasisSchema = z
   .object({
@@ -70,6 +73,44 @@ export const bookingTransactionSchema = z
 export type BookingTransaction = z.infer<typeof bookingTransactionSchema>;
 export type BookingComponentState = z.infer<typeof bookingComponentStateSchema>;
 export type BookingComponentStatus = BookingComponentState["status"];
+
+export function projectPublicBookingTransaction(
+  transaction: BookingTransaction,
+  dispatchedComponentIds?: ReadonlySet<string>,
+): PublicBookingTransaction {
+  const terms = transaction.executionBasis.terms;
+  return publicBookingTransactionSchema.parse({
+    id: transaction.id,
+    tripId: transaction.tripId,
+    authorizationId: transaction.authorizationId,
+    operation: transaction.operation,
+    status: transaction.status,
+    components: transaction.components.map((component) => ({
+      componentId: component.componentId,
+      status:
+        dispatchedComponentIds &&
+        !dispatchedComponentIds.has(component.componentId) &&
+        transaction.executionStatus !== "active" &&
+        ["proposed", "authorized"].includes(component.status)
+          ? "not_attempted"
+          : component.status,
+      providerReference:
+        component.providerReference === null
+          ? null
+          : publicSupplierText(component.providerReference),
+      safeReason: component.safeReason === null ? null : publicSupplierText(component.safeReason),
+    })),
+    startedAt: transaction.startedAt,
+    completedAt: transaction.completedAt,
+    requestId: transaction.requestId,
+    executionStatus: transaction.executionStatus,
+    tripVersion: transaction.executionBasis.startingTripVersion,
+    termsHash: transaction.executionBasis.termsHash,
+    termsVersion: isWholeTripTerms(terms) ? 2 : 1,
+    continuationOf: isWholeTripTerms(terms) ? terms.continuationOf : null,
+    rootAttemptId: isWholeTripTerms(terms) ? terms.rootAttemptId : null,
+  });
+}
 
 // Stored booking rows keep the owner beside the transaction; the transaction
 // contract carries it inside the immutable execution basis instead.

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
@@ -6,6 +6,9 @@ import { bookingActor, lockBookingTrip } from "@/server/auth/booking-access";
 import {
   bookingTermsSchema,
   hashBookingTerms,
+  canonicalBookingJson,
+  currentWholeTripCoverage,
+  isWholeTripTerms,
   type BookingAuthorization,
   type BookingOperation,
 } from "@/domain/booking/authorization";
@@ -14,10 +17,13 @@ import { BookingRepository } from "@/server/db/booking-repository";
 import { readOwnedTripVersion } from "@/domain/trip/read";
 import { tripSnapshotSchema } from "@/domain/trip/schema";
 import { inTransaction } from "@/server/db/transaction";
+import { IdempotencyRepository } from "@/server/db/idempotency-repository";
+import { assertTrustedBookingPrerequisites } from "@/server/supply/payment";
 
 import type { Kysely } from "kysely";
 import type { Database } from "@/server/db/database";
 import type { BookingActor } from "@/server/auth/planning-actor";
+import type { TrustedBookingPrerequisiteReader } from "@/server/supply/payment";
 
 export const bookingAuthorizationRequestSchema = z
   .object({
@@ -28,7 +34,24 @@ export const bookingAuthorizationRequestSchema = z
     componentId: z.uuid().nullable(),
     acknowledgedNonReversibleActions: z.array(z.uuid()).max(32),
   })
-  .strict();
+  .strict()
+  .superRefine((request, context) => {
+    if ((request.operation === "book_trip") !== (request.componentId === null))
+      context.addIssue({
+        code: "custom",
+        path: ["componentId"],
+        message: "Whole-trip consent cannot select a component",
+      });
+    if (
+      new Set(request.acknowledgedNonReversibleActions).size !==
+      request.acknowledgedNonReversibleActions.length
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["acknowledgedNonReversibleActions"],
+        message: "Acknowledgements must be unique",
+      });
+  });
 
 export interface BookingAuthorizationRequest {
   requestId: string;
@@ -50,6 +73,19 @@ export interface BookingAuthorizationReceipt {
   authorizedAt: string;
   expiresAt: string;
 }
+export const bookingAuthorizationReceiptSchema = z
+  .object({
+    id: z.uuid(),
+    tripId: z.uuid(),
+    tripVersion: z.number().int().positive(),
+    operation: z.enum(["book_trip", "reschedule_component", "cancel_component"]),
+    componentId: z.uuid().nullable(),
+    termsHash: z.string().regex(/^[a-f0-9]{64}$/),
+    status: z.literal("authorized"),
+    authorizedAt: z.iso.datetime({ offset: true }),
+    expiresAt: z.iso.datetime({ offset: true }),
+  })
+  .strict();
 
 export async function authorizeBooking(
   database: Kysely<Database>,
@@ -57,6 +93,7 @@ export async function authorizeBooking(
   tripId: string,
   raw: unknown,
   now = new Date(),
+  prerequisites?: TrustedBookingPrerequisiteReader,
 ): Promise<BookingAuthorizationReceipt> {
   const input = bookingAuthorizationRequestSchema.parse(raw);
   const actor = await bookingActor(database, proof, tripId),
@@ -65,6 +102,24 @@ export async function authorizeBooking(
     const trip = await lockBookingTrip(transaction, actor, tripId);
     if (!trip)
       throw new ProblemError({ title: "Trip not found", status: 404, code: "trip_not_found" });
+    const scope = `booking.authorization:${userId}:${tripId}`;
+    const fingerprint = createHash("sha256")
+      .update(
+        canonicalBookingJson({
+          ownerUserId: userId,
+          tripId,
+          ...input,
+        }),
+      )
+      .digest("hex");
+    const idempotency = new IdempotencyRepository(transaction);
+    const claim = await idempotency.claim({
+      scope,
+      key: input.requestId,
+      requestFingerprint: fingerprint,
+      expiresAt: new Date(now.getTime() + 86_400_000),
+    });
+    if (claim.kind === "replay") return bookingAuthorizationReceiptSchema.parse(claim.result);
     if (
       trip.currentVersion !== input.tripVersion ||
       !["finalized", "partially_booked", "booked"].includes(trip.lifecycleState)
@@ -97,13 +152,17 @@ export async function authorizeBooking(
       .where("tripId", "=", tripId)
       .where("ownerUserId", "=", userId)
       .where("tripVersion", "=", input.tripVersion)
-      .where("termsHash", "=", input.termsHash)
-      .where("status", "=", "completed")
-      .where("expiresAt", ">", now)
-      .orderBy("updatedAt", "desc")
+      .orderBy("createdAt", "desc")
+      .orderBy("workflowId", "desc")
       .forUpdate()
       .executeTakeFirst();
-    if (!revalidation?.terms)
+    if (
+      !revalidation?.terms ||
+      revalidation.status !== "completed" ||
+      revalidation.termsHash !== input.termsHash ||
+      !revalidation.expiresAt ||
+      revalidation.expiresAt.getTime() <= now.getTime()
+    )
       throw new ProblemError({
         title: "Live terms expired or changed",
         status: 409,
@@ -116,6 +175,35 @@ export async function authorizeBooking(
         status: 409,
         code: "booking_terms_stale",
       });
+    if (input.operation === "book_trip") {
+      if (!isWholeTripTerms(terms))
+        throw new ProblemError({
+          title: "A fresh whole-trip review is required",
+          status: 409,
+          code: "booking_legacy_review_required",
+        });
+      const coverage = currentWholeTripCoverage(terms, snapshot, input.tripVersion, now);
+      if (
+        !coverage.eligible ||
+        canonicalBookingJson(coverage) !== canonicalBookingJson(terms.coverage) ||
+        terms.tripVersion !== input.tripVersion
+      )
+        throw new ProblemError({
+          title: "Complete booking requirements changed",
+          status: 409,
+          code: "booking_coverage_changed",
+          detail:
+            "Resolve all missing or unverified requirements and refresh the whole-trip review.",
+        });
+      if (terms.continuationOf !== null || terms.rootAttemptId !== null)
+        throw new ProblemError({
+          title: "Booking continuation is not activated",
+          status: 409,
+          code: "booking_continuation_unavailable",
+        });
+      await new BookingRepository(transaction).assertConfirmedBasis(tripId, terms);
+      await assertTrustedBookingPrerequisites(prerequisites, userId, tripId, terms);
+    }
     if (input.operation === "book_trip" && input.componentId !== null)
       throw new ProblemError({
         title: "Invalid booking operation",
@@ -139,14 +227,28 @@ export async function authorizeBooking(
       });
     }
     const required = terms.nonReversibleActions;
-    if (required.some((id) => !input.acknowledgedNonReversibleActions.includes(id))) {
+    if (
+      canonicalBookingJson([...required].sort()) !==
+      canonicalBookingJson([...input.acknowledgedNonReversibleActions].sort())
+    ) {
       throw new ProblemError({
         title: "Acknowledge each non-reversible action",
         status: 409,
         code: "booking_acknowledgement_required",
       });
     }
-    const authorizedAt = now.toISOString();
+    const checkedAt = new Date(Math.max(now.getTime(), Date.now()));
+    if (
+      revalidation.expiresAt!.getTime() <= checkedAt.getTime() ||
+      (isWholeTripTerms(terms) &&
+        !currentWholeTripCoverage(terms, snapshot, input.tripVersion, checkedAt).eligible)
+    )
+      throw new ProblemError({
+        title: "Live terms expired during authorization",
+        status: 409,
+        code: "booking_terms_stale",
+      });
+    const authorizedAt = checkedAt.toISOString();
     const authorization: BookingAuthorization = {
       id: randomUUID(),
       tripId,
@@ -164,7 +266,10 @@ export async function authorizeBooking(
         Math.min(revalidation.expiresAt!.getTime(), now.getTime() + 5 * 60_000),
       ).toISOString(),
     };
-    await new BookingRepository(transaction).insertAuthorization(authorization);
+    await new BookingRepository(transaction).insertAuthorization(authorization, {
+      requestId: input.requestId,
+      requestFingerprint: fingerprint,
+    });
     await transaction
       .insertInto("auditEvents")
       .values({
@@ -186,7 +291,7 @@ export async function authorizeBooking(
         occurredAt: now,
       })
       .execute();
-    return {
+    const receipt: BookingAuthorizationReceipt = {
       id: authorization.id,
       tripId: authorization.tripId,
       tripVersion: authorization.tripVersion,
@@ -197,5 +302,7 @@ export async function authorizeBooking(
       authorizedAt: authorization.authorizedAt,
       expiresAt: authorization.expiresAt,
     };
+    await idempotency.complete(scope, input.requestId, fingerprint, { ...receipt });
+    return receipt;
   });
 }

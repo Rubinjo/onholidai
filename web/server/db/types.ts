@@ -1,4 +1,4 @@
-import type { ColumnType, Generated, JSONColumnType } from "kysely";
+import type { ColumnType, Generated, GeneratedAlways, JSONColumnType } from "kysely";
 import type { DraftOperation, TripSnapshot } from "@/domain/trip/schema";
 import type { ChangeProposal } from "@/domain/trip/proposal";
 import type { SetupDraftPayload, SetupStep } from "@/components/trip-setup/draft-schema";
@@ -170,6 +170,8 @@ export interface TripCoreDatabase {
 }
 
 export interface BookingRevalidationTable {
+  coverage: Generated<Record<string, unknown> | null>;
+  termsVersion: GeneratedAlways<number | null>;
   workflowId: string;
   tripId: string;
   ownerUserId: string;
@@ -185,6 +187,11 @@ export interface BookingRevalidationTable {
   updatedAt: GeneratedTimestamp;
 }
 export interface BookingAuthorizationTable {
+  requestId: Generated<string | null>;
+  requestFingerprint: Generated<string | null>;
+  termsVersion: GeneratedAlways<number>;
+  continuationOf: GeneratedAlways<string | null>;
+  rootAttemptId: GeneratedAlways<string | null>;
   id: string;
   tripId: string;
   ownerUserId: string;
@@ -201,6 +208,9 @@ export interface BookingAuthorizationTable {
   createdAt: GeneratedTimestamp;
 }
 export interface BookingTransactionTable {
+  termsVersion: GeneratedAlways<number>;
+  continuationOf: GeneratedAlways<string | null>;
+  rootAttemptId: GeneratedAlways<string | null>;
   id: string;
   tripId: string;
   ownerUserId: string;

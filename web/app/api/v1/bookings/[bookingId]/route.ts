@@ -1,5 +1,8 @@
 import { bookingApiResponse, browserUser } from "@/server/api";
-import { projectBookingTransactionRow } from "@/domain/booking/schema";
+import {
+  projectBookingTransactionRow,
+  projectPublicBookingTransaction,
+} from "@/domain/booking/schema";
 import { ProblemError } from "@/server/errors";
 
 export async function GET(
@@ -22,14 +25,18 @@ export async function GET(
         code: "booking_not_found",
       });
     const booking = projectBookingTransactionRow(record);
+    const attempts = await application.database
+      .selectFrom("bookingComponentAttempts")
+      .select("componentId")
+      .where("transactionId", "=", booking.id)
+      .where("status", "!=", "claimed")
+      .execute();
     return {
-      ...booking,
+      ...projectPublicBookingTransaction(
+        booking,
+        new Set(attempts.map((entry) => entry.componentId)),
+      ),
       currentTripVersion: record.lastObservedTripVersion,
-      executionBasis: {
-        tripVersion: booking.executionBasis.startingTripVersion,
-        termsHash: booking.executionBasis.termsHash,
-        expiresAt: booking.executionBasis.expiresAt,
-      },
     };
   });
 }

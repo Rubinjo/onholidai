@@ -1,7 +1,10 @@
 import asyncio
+import json
+import re
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractContextManager
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import NotRequired, Protocol, TypedDict, cast
 from uuid import uuid4
 
@@ -26,8 +29,137 @@ class Sources(TripReader, ResearchReader, Protocol):
     pass
 
 
-def select_quotes(offers: list[dict[str, object]], spend: int) -> list[dict[str, object]]:
+class MaterialChoice(ValueError):
+    def __init__(self, question: str, reason: str = "feasibility"):
+        super().__init__(question)
+        self.reason = reason
+
+
+def facts(value: object) -> dict[str, object]:
+    return cast(dict[str, object], value) if isinstance(value, dict) else {}
+
+
+def rail_deferred(request: CreateAgentRunRequest) -> bool:
+    candidates = [
+        request.message,
+        *[
+            entry.redacted_content
+            for entry in reversed(request.context.recent_messages)
+            if entry.role == "user"
+        ],
+    ]
+    if request.context.conversation_summary:
+        candidates += list(reversed(request.context.conversation_summary.decisions))
+    for text in candidates:
+        if re.search(r"\b(?:rail|train)\b", text, re.I):
+            return bool(
+                re.search(r"\bkeep rail unresolved\b", text, re.I)
+                and not re.search(r"\b(?:not|never|don't|do not)\b", text, re.I)
+            )
+    return False
+
+
+def required_rail_question(snapshot: dict[str, object], *, deferred: bool = False) -> str | None:
+    if deferred:
+        return None
+    constraints = cast(list[dict[str, object]], snapshot.get("constraints", []))
+    required = any(
+        entry.get("priority") == "required"
+        and entry.get("status") != "removed"
+        and entry.get("category") in (None, "transport")
+        and re.search(r"\b(?:rail|train)\b", str(entry.get("statement", "")), re.I)
+        for entry in constraints
+    )
+    confirmed = any(
+        entry.get("type") == "rail" and entry.get("bookingStatus") == "confirmed"
+        for entry in cast(list[dict[str, object]], snapshot.get("components", []))
+    )
+    if required and not confirmed:
+        return (
+            "Rail inventory is unsupported and your required rail leg remains unresolved. "
+            "Should I keep rail unresolved while planning the supported parts, or would "
+            "you like to revise that requirement?"
+        )
+    return None
+
+
+def required_budget(snapshot: dict[str, object]) -> int | None:
+    constraints = [
+        entry
+        for entry in cast(list[dict[str, object]], snapshot.get("constraints", []))
+        if entry.get("status") != "removed"
+    ]
+    currency = facts(snapshot.get("price")).get("currency")
+    budget: int | None = None
+    for constraint in constraints:
+        if constraint.get("category") != "budget" or constraint.get("priority") != "required":
+            continue
+        match = re.search(
+            r"\b([A-Z]{3})\s+(\d+(?:\.\d{1,3})?)\b", str(constraint.get("statement", ""))
+        )
+        precision = {
+            "EUR": 2,
+            "GBP": 2,
+            "USD": 2,
+            "CAD": 2,
+            "AUD": 2,
+            "CHF": 2,
+            "JPY": 0,
+            "KRW": 0,
+            "KWD": 3,
+            "BHD": 3,
+        }
+        if (
+            not match
+            or match[1] != currency
+            or match[1] not in precision
+            or not re.search(
+                r"\b(?:max(?:imum)?|at most|up to|not exceed|no more than|under|within|budget)\b",
+                str(constraint.get("statement", "")),
+                re.I,
+            )
+            or len(re.findall(r"\b[A-Z]{3}\s+\d", str(constraint.get("statement", "")))) != 1
+        ):
+            raise MaterialChoice(
+                "What maximum total and currency should the recorded budget use?", "price"
+            )
+        amount = Decimal(match[2]) * 10 ** precision[match[1]]
+        if (
+            amount != amount.to_integral_value()
+            or amount > 9007199254740991
+            or ("." in match[2] and len(match[2].split(".")[1]) > precision[match[1]])
+        ):
+            raise MaterialChoice(
+                "What exact total budget in the trip currency should I use?", "price"
+            )
+        budget = min(budget, int(amount)) if budget is not None else int(amount)
+    return budget
+
+
+def select_quotes(
+    offers: list[dict[str, object]],
+    spend: int,
+    *,
+    snapshot: dict[str, object] | None = None,
+    query: dict[str, object] | None = None,
+    allow_unresolved_rail: bool = False,
+) -> list[dict[str, object]]:
+    snapshot, query = snapshot or {}, query or {}
+    rail = required_rail_question(snapshot, deferred=allow_unresolved_rail)
+    if rail:
+        raise MaterialChoice(rail)
+    constraints = [
+        entry
+        for entry in cast(list[dict[str, object]], snapshot.get("constraints", []))
+        if entry.get("status") != "removed"
+    ]
+    party = facts(snapshot.get("travellerParty"))
+    children = cast(list[dict[str, object]], party.get("children", []))
+    currency = facts(snapshot.get("price")).get("currency")
+    budget = required_budget(snapshot)
     groups: dict[str, list[dict[str, object]]] = {}
+    unknown: set[str] = set()
+    fits: dict[int, tuple[int, ...]] = {}
     for offer in offers:
         if not complete_planning_component(offer.get("component")):
             continue
@@ -37,7 +169,133 @@ def select_quotes(offers: list[dict[str, object]], spend: int) -> list[dict[str,
             if evidence.get("status") == "expired" or evidence.get("availability") != "available":
                 continue
         component = cast(dict[str, object], offer["component"])
-        group = str(offer.get("selectionGroup", component.get("type")))
+        kind = str(component["type"])
+        group = str(offer.get("selectionGroup", kind))
+        expiry = facts(raw_evidence).get("expiresAt") or component.get("expiresAt")
+        if isinstance(expiry, str) and datetime.fromisoformat(expiry) <= datetime.now(UTC):
+            continue
+        if currency and facts(component["price"]).get("currency") != currency:
+            continue
+        if (
+            budget is not None
+            and cast(int, facts(component["price"])["finalCustomerMinor"]) > budget
+        ):
+            continue
+        if (
+            query.get("startDate") and str(component["serviceStart"])[:10] < str(query["startDate"])
+        ) or (query.get("endDate") and str(component["serviceEnd"])[:10] > str(query["endDate"])):
+            continue
+        eligibility, occupancy = facts(offer.get("eligibility")), facts(offer.get("occupancy"))
+        if eligibility.get("status") == "ineligible":
+            continue
+        minimum_age, maximum_age = eligibility.get("minimumAge"), eligibility.get("maximumAge")
+        if any(
+            isinstance(child.get("ageAtTripStart"), int)
+            and (
+                (isinstance(minimum_age, int) and cast(int, child["ageAtTripStart"]) < minimum_age)
+                or (
+                    isinstance(maximum_age, int)
+                    and cast(int, child["ageAtTripStart"]) > maximum_age
+                )
+            )
+            for child in children
+        ):
+            continue
+        adults = occupancy.get("maximumAdults")
+        maximum_children = occupancy.get("maximumChildren")
+        if kind == "accommodation" and (
+            (isinstance(adults, int) and adults < cast(int, party.get("adults", 0)))
+            or (isinstance(maximum_children, int) and maximum_children < len(children))
+        ):
+            continue
+        if children and eligibility.get("status") != "eligible":
+            unknown.add(group)
+            continue
+        if kind == "accommodation" and party and (adults is None or maximum_children is None):
+            unknown.add(group)
+            continue
+        evidence = cast(
+            list[dict[str, object]],
+            facts(component.get("planningDetails")).get("constraintEvidence", []),
+        )
+        rejected, unresolved = False, False
+        for constraint in constraints:
+            category = constraint.get("category")
+            scoped_types = {
+                component_type
+                for component_type, pattern in (
+                    ("flight", r"\bflights?\b"),
+                    ("activity", r"\b(?:activities|activity)\b"),
+                    ("accommodation", r"\b(?:stays?|hotels?|accommodation)\b"),
+                    ("transfer", r"\btransfers?\b"),
+                    ("rail", r"\b(?:rail|trains?)\b"),
+                )
+                if re.search(pattern, str(constraint.get("statement", "")), re.I)
+            }
+            if (
+                allow_unresolved_rail
+                and category in (None, "transport")
+                and re.search(r"\b(?:rail|train)\b", str(constraint.get("statement", "")), re.I)
+            ):
+                continue
+            relevant = (
+                category == "accessibility"
+                or (category == "lodging" and kind == "accommodation")
+                or (
+                    category in ("dietary", "schedule")
+                    and (
+                        kind in scoped_types
+                        if scoped_types
+                        else category == "schedule" or kind == "activity"
+                    )
+                )
+                or (category == "transport" and kind in ("flight", "transfer"))
+                or category in ("other", "occasion")
+            )
+            if not relevant or constraint.get("priority") != "required":
+                continue
+            proof = next(
+                (
+                    entry.get("status")
+                    for entry in evidence
+                    if entry.get("constraintId") == constraint.get("id")
+                ),
+                None,
+            )
+            if category == "accessibility":
+                if offer.get("accessibility") == "unsupported":
+                    proof = "failed"
+                elif offer.get("accessibility") == "verified" and proof != "failed":
+                    proof = "verified"
+            rejected |= proof == "failed"
+            unresolved |= proof not in ("verified", "failed")
+        if rejected:
+            continue
+        if unresolved:
+            unknown.add(group)
+            continue
+        fits[id(offer)] = tuple(
+            sum(
+                1
+                for constraint in constraints
+                if constraint.get("priority") == priority
+                and any(
+                    entry.get("constraintId") == constraint.get("id")
+                    and entry.get("status") == "verified"
+                    for entry in evidence
+                )
+            )
+            for priority in ("strong", "preference")
+        )
+        if kind != "accommodation" and any(
+            entry.get("bookingStatus") in ("confirmed", "pending", "unknown")
+            and entry.get("type") != "accommodation"
+            and entry.get("id") != component.get("id")
+            and str(entry.get("serviceStart")) < str(component["serviceEnd"])
+            and str(entry.get("serviceEnd")) > str(component["serviceStart"])
+            for entry in cast(list[dict[str, object]], snapshot.get("components", []))
+        ):
+            continue
         groups.setdefault(group, []).append(offer)
 
     def cost(offer: dict[str, object]) -> int:
@@ -46,9 +304,108 @@ def select_quotes(offers: list[dict[str, object]], spend: int) -> list[dict[str,
 
     selected: list[dict[str, object]] = []
     for options in groups.values():
-        ranked = sorted(options, key=cost)
-        selected.append(ranked[min(len(ranked) - 1, (len(ranked) - 1) * spend // 100)])
+        best_fit = max(fits[id(option)] for option in options)
+        options = [option for option in options if fits[id(option)] == best_fit]
+        pace = facts(snapshot.get("preferences")).get("pace", 50)
+        duration_values = [
+            facts(facts(option["component"]).get("planningDetails")).get("durationMinutes")
+            for option in options
+        ]
+        if (
+            isinstance(pace, int)
+            and pace < 34
+            and len(options) > 1
+            and all(isinstance(value, int) for value in duration_values)
+            and len(set(duration_values)) > 1
+        ):
+            shortest = min(cast(list[int], duration_values))
+            relaxed = [
+                option
+                for option, value in zip(options, duration_values, strict=True)
+                if value == shortest
+            ]
+            if spend >= 34 or min(cost(option) for option in relaxed) == min(
+                cost(option) for option in options
+            ):
+                options = relaxed
+
+        def terms(offer: dict[str, object]) -> str:
+            component = facts(offer["component"])
+            return json.dumps(
+                {
+                    **{
+                        key: component.get(key)
+                        for key in (
+                            "type",
+                            "serviceStart",
+                            "serviceEnd",
+                            "details",
+                            "cancellationTerms",
+                        )
+                    },
+                    "planningDetails": {
+                        key: value
+                        for key, value in facts(component.get("planningDetails")).items()
+                        if key not in ("checkedAt", "source", "constraintEvidence")
+                    },
+                    **{
+                        key: offer.get(key)
+                        for key in ("eligibility", "occupancy", "accessibility", "unverifiedFacts")
+                    },
+                    "rooms": {
+                        key: value
+                        for key, value in facts(offer.get("supplierReferences")).items()
+                        if key in ("accommodationId", "roomId", "roomIds")
+                    },
+                },
+                sort_keys=True,
+            )
+
+        if len({terms(option) for option in options}) > 1:
+            raise MaterialChoice(
+                "The current options have different schedules or source terms. "
+                "Which matters more for this choice: the lower total or the alternative terms?",
+                "experience",
+            )
+        # Spend is willingness, not evidence of quality or an invented monetary budget.
+        selected.append(
+            min(
+                options,
+                key=lambda option: (
+                    cost(option),
+                    str(facts(option["component"]).get("provider", "")),
+                    str(facts(option["component"]).get("supplierOfferId", "")),
+                ),
+            )
+        )
+    unresolved_groups = unknown - groups.keys()
+    if unresolved_groups:
+        raise MaterialChoice(
+            "Required eligibility or constraint evidence is unknown for "
+            + ", ".join(sorted(unresolved_groups))
+            + ". Which sourced option can meet the recorded requirement before it is selected?"
+        )
+    if budget is not None and (not selected or sum(cost(offer) for offer in selected) > budget):
+        raise MaterialChoice(
+            "Current sourced totals exceed the recorded trip budget. "
+            "Should we change the route or revise that budget?",
+            "price",
+        )
     return selected
+
+
+def decision_clarification(choice: MaterialChoice) -> AgentResult:
+    return AgentResult.model_validate(
+        {
+            "kind": "clarification",
+            "message": "Current source facts leave a material planning choice unresolved.",
+            "clarification": {
+                "id": str(uuid4()),
+                "question": str(choice),
+                "materialReason": choice.reason,
+            },
+        }
+    )
 
 
 class EstimateState(TypedDict):
@@ -200,7 +557,16 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
     if not offers and len(alternatives) <= 1:
         raise ValueError("source_unavailable")
     preferences = cast(dict[str, int], snapshot["preferences"])
-    offers = select_quotes(offers, preferences.get("spend", 50))
+    try:
+        offers = select_quotes(
+            offers,
+            preferences.get("spend", 50),
+            snapshot=snapshot,
+            query=query,
+            allow_unresolved_rail=rail_deferred(request),
+        )
+    except MaterialChoice as choice:
+        return decision_clarification(choice)
     origin_notes = ""
     if len(alternatives) > 1:
 
@@ -214,6 +580,9 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
                 selected = select_quotes(
                     cast(list[dict[str, object]], found_alternative.get("offers", [])),
                     preferences.get("spend", 50),
+                    snapshot=snapshot,
+                    query=query,
+                    allow_unresolved_rail=rail_deferred(request),
                 )
                 return alternative, selected
             except (ValueError, TimeoutError, KeyError, httpx.HTTPError):
@@ -279,7 +648,18 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
     if not types.intersection({"flight", "rail", "transfer"}) or (
         duration["idealDays"] > 1 and "accommodation" not in types
     ):
-        raise ValueError("source_unavailable")
+        if not offers:
+            raise ValueError("source_unavailable")
+        return AgentResult.model_validate(
+            {
+                "kind": "answer",
+                "message": "Useful supplier research is available for "
+                + ", ".join(sorted(str(kind) for kind in types))
+                + ". Other required transport or stay facts remain unknown, so no incomplete "
+                "component or zero-cost complete trip was proposed. Review source prerequisites "
+                "and current research; no inventory was reserved.",
+            }
+        )
     routed: list[dict[str, object]] = []
     cursor = start
     nights, extra = divmod(duration["idealDays"] - 1, len(destinations))
@@ -300,6 +680,11 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
     warnings = [
         "Source eligibility, occupancy, accessibility and cancellation facts require verification."
     ]
+    if required_rail_question(snapshot):
+        warnings.append(
+            "Required rail remains unresolved and unchanged. Only supported parts were planned; "
+            "no rail time, price or substitute leg was invented."
+        )
     if any(
         not complete_planning_component(offer.get("component"))
         for offer in cast(list[dict[str, object]], found.get("offers", []))
@@ -345,6 +730,12 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         "and preserves all availability windows. Return defaults to your confirmed origin."
     )
     rationale += origin_notes
+    rationale += (
+        " Selection respects sourced eligibility, party, dates, recorded constraints and "
+        "explicit budget. Known preference fit precedes equivalent-price comparison; "
+        "equivalent ties use provider then offer ID. A higher spend preference is not "
+        "evidence of better quality. Unknown source facts remain unverified."
+    )
     if snapshot.get("destinationOrder") == "ai":
         rationale += (
             " Destination order is an AI-proposed geographic circuit; departure/return "
@@ -383,6 +774,13 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
             alternate_offers = select_quotes(
                 cast(list[dict[str, object]], alternative.get("offers", [])),
                 preferences.get("spend", 50),
+                snapshot=snapshot,
+                query={
+                    **query,
+                    "startDate": alternative_start.isoformat(),
+                    "endDate": alternative_end.isoformat(),
+                },
+                allow_unresolved_rail=rail_deferred(request),
             )
 
             def total(items: list[dict[str, object]]) -> int:

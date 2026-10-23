@@ -51,7 +51,7 @@ describe("deferred and replaced supplier compatibility", () => {
       );
       expect(
         new Set(mixed.offers.map((offer) => `${offer.component.provider}:${offer.component.type}`)),
-      ).toEqual(new Set(["duffel:flight", "duffel:accommodation", "viator:activity"]));
+      ).toEqual(new Set(["duffel:flight", "nuitee:accommodation", "viator:activity"]));
       expect(mixed.outcomes.at(-1)).toMatchObject({
         provider: null,
         componentType: "rail",
@@ -72,6 +72,7 @@ describe("deferred and replaced supplier compatibility", () => {
   );
 
   it.each([
+    ["duffel", "accommodation"],
     ["booking", "accommodation"],
     ["booking.com", "accommodation"],
     ["trainline", "rail"],
@@ -83,6 +84,7 @@ describe("deferred and replaced supplier compatibility", () => {
       const saved = normalizePlanningOffer(
         (await source.search(query([type]), new AbortController().signal))[0],
       );
+
       const before = structuredClone(saved);
       const projected = projectPublicPlanningOffer(saved);
       expect(projected.component.provider).toBe(provider);
@@ -95,7 +97,20 @@ describe("deferred and replaced supplier compatibility", () => {
     },
   );
 
-  it.each(["booking", "trainline", "getyourguide"] as const)(
+  it.each([
+    ["duffel", "accommodation"],
+    ["nuitee", "flight"],
+    ["nuitee", "activity"],
+  ] as const)("does not call inactive %s %s inventory as fallback", async (provider, type) => {
+    const source = createReadAdapter(provider, type, syntheticReadClient(type));
+    const search = vi.spyOn(source, "search");
+    const result = await searchPlanningOffers([source], query([type]));
+    expect(result.offers).toEqual([]);
+    expect(result.outcomes[0].status).toBe("unconfigured");
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it.each(["duffel", "booking", "trainline", "getyourguide"] as const)(
     "retains an injected legacy %s status reader and its existing confirmation without issuing a new write",
     async (provider) => {
       const execute = vi.fn(async () => ({ status: "failed" }));

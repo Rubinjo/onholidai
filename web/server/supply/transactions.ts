@@ -21,13 +21,14 @@ export interface ProviderWriteRequest {
 }
 
 export interface ProviderTransactionAdapter {
-  provider: "duffel" | "viator" | "booking" | "getyourguide" | "trainline";
+  provider: "duffel" | "nuitee" | "viator" | "booking" | "getyourguide" | "trainline";
   capabilities: {
     book: boolean;
     status: boolean;
     cancel: boolean;
     reschedule: boolean;
     idempotency: boolean;
+    revalidation?: "read_only_final_terms" | "unsupported" | "unknown";
   };
   execute(request: ProviderWriteRequest): Promise<TransactionOutcome>;
   getStatus?(idempotencyKey: string): Promise<TransactionOutcome>;
@@ -39,6 +40,7 @@ export interface ProviderTransactionAdapter {
     serviceStart: string;
     serviceEnd: string;
     travellerIds: string[];
+    signal?: AbortSignal;
     requestedChange?: {
       serviceStart?: string;
       serviceEnd?: string;

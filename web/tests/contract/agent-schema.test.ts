@@ -13,6 +13,32 @@ import { contractRulesSatisfied } from "../../../contracts/agent-api/validation"
 import type { z } from "zod";
 
 describe("generated agent contract behavior", () => {
+  it("limits selected references to refinement and rejects duplicate identities across revisions", () => {
+    const request = cases.cases.find((scenario) => scenario.name === "first-run")!.value;
+    const selected = { offerRef: "10000000-0000-4000-8000-000000000010", revision: 1 };
+    expect(
+      validators.CreateAgentRunRequestSchema.safeParse({
+        ...request,
+        purpose: "refinement",
+        selectedOffers: [selected],
+      }).success,
+    ).toBe(true);
+    expect(
+      validators.CreateAgentRunRequestSchema.safeParse({
+        ...request,
+        purpose: "initial_estimate",
+        selectedOffers: [selected],
+      }).success,
+    ).toBe(false);
+    for (const revision of [1, 2])
+      expect(
+        validators.CreateAgentRunRequestSchema.safeParse({
+          ...request,
+          purpose: "refinement",
+          selectedOffers: [selected, { ...selected, revision }],
+        }).success,
+      ).toBe(false);
+  });
   it("accepts scoped historical summaries but rejects future-version provenance", () => {
     const request = cases.cases.find((scenario) => scenario.name === "first-run")!.value;
     const context = {

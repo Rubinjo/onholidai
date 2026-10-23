@@ -90,7 +90,7 @@ def test_alternative_supplier_quotes_are_not_added_together_as_booked_components
                 "offers": [
                     {
                         "component": {
-                            **complete_component_facts(kind),
+                            **complete_component_facts(kind, query),
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
@@ -136,7 +136,7 @@ def test_departure_comparison_proposes_the_supported_cheaper_origin_without_chan
                 "offers": [
                     {
                         "component": {
-                            **complete_component_facts(kind),
+                            **complete_component_facts(kind, query),
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
@@ -189,7 +189,7 @@ def test_ai_estimate_proposes_origin_aware_order_for_review_without_changing_sav
                 "offers": [
                     {
                         "component": {
-                            **complete_component_facts(kind),
+                            **complete_component_facts(kind, query),
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",
@@ -272,7 +272,7 @@ def test_unavailable_baseline_does_not_hide_a_supported_departure_alternative():
                 "offers": [
                     {
                         "component": {
-                            **complete_component_facts(kind),
+                            **complete_component_facts(kind, query),
                             "id": f"a0000000-a000-4000-8000-a{index:011}",
                             "type": kind,
                             "bookingStatus": "unbooked",

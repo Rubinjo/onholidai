@@ -2,27 +2,22 @@
 
 import { useEffect, useState } from "react";
 
+
 import { planningJson } from "@/components/trip-setup/http";
+import { publicBookingStatusSchema } from "@/domain/booking/public";
+import { tripEnvelopeSchema } from "@/components/trip-workspace/use-trip";
 
 import { BookingRecovery } from "./recovery";
 import { RescheduleReview } from "./reschedule";
 import { CancellationReview } from "./cancellation";
+import { bookingComponentLabel } from "./terms-review";
 
+import type { z } from "zod";
 import type { CustomerSnapshot } from "@/domain/pricing/projections";
 
 type Component = CustomerSnapshot["components"][number];
-interface BookingStatusView {
-  id: string;
-  tripId: string;
-  status: string;
-  components: Array<{
-    componentId: string;
-    status: string;
-    providerReference: string | null;
-    safeReason?: string | null;
-  }>;
-  currentTripVersion: number;
-}
+const statusSchema = publicBookingStatusSchema;
+type BookingStatusView = z.infer<typeof statusSchema>;
 
 export function BookingStatus({
   bookingId,
@@ -40,14 +35,11 @@ export function BookingStatus({
     let active = true;
     const poll = async () => {
       try {
-        const next = (await planningJson(`/api/v1/bookings/${bookingId}`)) as BookingStatusView;
+        const next = statusSchema.parse(await planningJson(`/api/v1/bookings/${bookingId}`));
         if (active) {
           setBooking(next);
           setError(false);
-          const trip = (await planningJson(`/api/v1/trips/${next.tripId}`)) as {
-            version: number;
-            snapshot: { components: Component[] };
-          };
+          const trip = tripEnvelopeSchema.parse(await planningJson(`/api/v1/trips/${next.tripId}`));
           if (active && trip.version >= next.currentTripVersion)
             setCurrentComponents(trip.snapshot.components);
         }
@@ -72,7 +64,11 @@ export function BookingStatus({
             type="button"
             onClick={() =>
               void planningJson(`/api/v1/bookings/${bookingId}`)
-                .then((value) => setBooking(value as BookingStatusView))
+                .then(async () =>
+                  setBooking(
+                    statusSchema.parse(await planningJson(`/api/v1/bookings/${bookingId}`)),
+                  ),
+                )
                 .catch(() => setError(true))
             }
           >
@@ -83,10 +79,21 @@ export function BookingStatus({
       {booking && (
         <>
           <p>Status: {booking.status}</p>
+          {booking.termsVersion === 2 && booking.executionStatus === "invalidated" && (
+            <p>
+              Whole-trip provider execution is not activated. No services were attempted under this
+              review-only booking record.
+            </p>
+          )}
           <ul>
             {booking.components.map((component) => (
               <li key={component.componentId}>
-                {component.componentId}: {component.status}
+                {currentComponents.find((entry) => entry.id === component.componentId)
+                  ? bookingComponentLabel(
+                      currentComponents.find((entry) => entry.id === component.componentId)!,
+                    )
+                  : "Saved service"}
+                : {component.status.replaceAll("_", " ")}
                 {component.providerReference ? ` — reference ${component.providerReference}` : ""}
                 {component.safeReason && ` — ${component.safeReason}`}
                 {(component.status === "unknown" || component.status === "action_required") && (

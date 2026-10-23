@@ -1,4 +1,5 @@
 import type { BookingTerms } from "@/domain/booking/authorization";
+import type { BookingCoverageReport } from "@/domain/trip/booking-coverage";
 import type { BookingComponentState, BookingTransaction } from "@/domain/booking/schema";
 
 export interface RevalidationWorkflowInput {
@@ -29,6 +30,7 @@ export interface RevalidationWorkflowResult {
   terms: BookingTerms | null;
   termsHash: string | null;
   expiresAt: string | null;
+  coverage?: BookingCoverageReport;
 }
 export interface BookingWorkflowInput {
   transactionId: string;

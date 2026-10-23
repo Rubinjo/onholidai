@@ -12,6 +12,7 @@ import { checkGuestResearch } from "@/server/metrics/guest-planning";
 import { lockPlanningAccess } from "@/server/db/planning-access";
 import { planningProblems } from "@/server/errors";
 import { lockServiceGrant } from "@/server/auth/planning-resource";
+import { selectedOffersSchema } from "@/domain/trip/proposal";
 
 import {
   AgentEventSchema,
@@ -38,6 +39,7 @@ export const reserveRunSchema = z
     purpose: z.enum(["initial_estimate", "refinement", "finalization", "supplier_research"]),
     message: z.string().trim().min(1).max(12000),
     applicationPolicy: z.enum(["manual", "automatic"]).optional(),
+    selectedOffers: selectedOffersSchema.optional(),
   })
   .strict();
 export function runConflict(): never {
@@ -287,6 +289,11 @@ export class RunRepository {
       }
       if (trip.currentVersion !== input.baseTripVersion || trip.lifecycleState !== "draft")
         runConflict();
+      if (input.selectedOffers) {
+        if (input.purpose !== "refinement") runConflict();
+        const { selectedResearchRecords } = await import("@/server/supply/planning-research");
+        await selectedResearchRecords(transaction, input, input.selectedOffers, now);
+      }
       if (actor.kind === "guest") {
         const reused = await transaction
           .selectFrom("guestResearchRequests")
@@ -361,6 +368,7 @@ export class RunRepository {
             kind: "research_request",
             purpose: input.purpose,
             text: redactConversation(input.message),
+            ...(input.selectedOffers ? { selectedOffers: input.selectedOffers } : {}),
           },
           tripVersion: input.baseTripVersion,
           agentRunId: id,
@@ -396,6 +404,7 @@ export class RunRepository {
         baseTripVersion: input.actor.baseTripVersion,
         purpose: input.purpose,
         message: input.message,
+        ...(input.selectedOffers ? { selectedOffers: input.selectedOffers } : {}),
       };
       // Reservations may omit the default policy; only the stored policy is authoritative.
       if (
@@ -553,11 +562,7 @@ export class RunRepository {
           canonicalJson(event.clarification) !== canonicalJson(input.result.clarification)
         )
           runConflict();
-      } else if (
-        event.type !== input.status ||
-        (input.status === "completed" && row.purpose === "initial_estimate")
-      )
-        runConflict();
+      } else if (event.type !== input.status) runConflict();
       await transaction
         .updateTable("agentRuns")
         .set({

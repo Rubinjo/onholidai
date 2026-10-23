@@ -21,6 +21,134 @@ const productionEnvironment = {
 } as const;
 
 describe("deployment configuration validation", () => {
+  it("accepts the confirmed single-line supplier configuration without activating live access", () => {
+    const environment = {
+      PROVIDER_MODE: "deterministic",
+      NUITEE_ENVIRONMENT: "sandbox",
+      SUPPLIER_PROVIDERS:
+        '{"duffel":{"readSecretRef":"DUFFEL_READ_SECRET","transactionSecretRef":"DUFFEL_TRANSACTION_SECRET","products":{"flight":{"operations":{"search":{"support":"supported","access":"configured_unverified"}}}}},"nuitee":{"readSecretRef":"NUITEE_SECRET","transactionSecretRef":"NUITEE_SECRET","products":{"accommodation":{"operations":{"search":{"support":"supported","access":"configured_unverified","environment":"sandbox"},"detail":{"support":"supported","access":"configured_unverified","environment":"sandbox"}}}}},"viator":{"readSecretRef":"VIATOR_SECRET","transactionSecretRef":"VIATOR_SECRET","products":{"activity":{"operations":{"search":{"support":"supported","access":"configured_unverified"}}}}}}',
+    };
+    const config = loadServerConfig(environment);
+    expect(config.PROVIDER_MODE).toBe("deterministic");
+    const readiness = deriveProviderReadiness(config, environment);
+    for (const product of [
+      readiness.duffel.products.flight,
+      readiness.nuitee.products.accommodation,
+      readiness.viator.products.activity,
+    ]) {
+      expect(product.operations.search.access).not.toBe("verified");
+    }
+    expect(readiness.nuitee.products.accommodation.operations.revalidation.access).toBe("blocked");
+    expect(readiness.nuitee.products.accommodation.operations.book.access).toBe("blocked");
+  });
+
+  it("accepts a shared Nuitee key without activating other products or worker writes", () => {
+    const environment = {
+      PROVIDER_MODE: "live",
+      NUITEE_ENVIRONMENT: "sandbox",
+      NUITEE_SECRET: "synthetic-nuitee-shared-canary",
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        nuitee: {
+          readSecretRef: "NUITEE_SECRET",
+          transactionSecretRef: "NUITEE_SECRET",
+          products: {
+            accommodation: {
+              operations: {
+                search: {
+                  support: "supported",
+                  access: "verified",
+                  environment: "sandbox",
+                  evidenceRef: "synthetic-hotel-approval",
+                  verifiedAt: "2026-10-23T00:00:00Z",
+                },
+              },
+            },
+          },
+        },
+      }),
+    };
+    const config = loadServerConfig(environment);
+    expect(config).toHaveProperty("NUITEE_ENVIRONMENT", "sandbox");
+    const web = deriveProviderReadiness(config, environment);
+    const worker = deriveProviderReadiness(config, environment, "worker");
+    expect(web).toHaveProperty(
+      "nuitee.products.accommodation.operations.search.access",
+      "verified",
+    );
+    expect(web).toHaveProperty("nuitee.products.accommodation.operations.book.access", "blocked");
+    expect(worker).toHaveProperty(
+      "nuitee.products.accommodation.operations.search.access",
+      "unconfigured",
+    );
+    expect(worker).toHaveProperty(
+      "nuitee.products.accommodation.operations.book.access",
+      "blocked",
+    );
+    expect(web).not.toHaveProperty("nuitee.products.flight");
+    expect(web).not.toHaveProperty("nuitee.products.activity");
+    expect(JSON.stringify([web, worker])).not.toMatch(/canary|NUITEE_SECRET|SecretRef/);
+    expect(
+      deriveProviderReadiness(
+        loadServerConfig({ ...environment, NUITEE_ENVIRONMENT: "production" }),
+        environment,
+      ),
+    ).toHaveProperty(
+      "nuitee.products.accommodation.operations.search.access",
+      "configured_unverified",
+    );
+    expect(() => loadServerConfig({ NUITEE_ENVIRONMENT: "invalid" })).toThrow();
+    for (const product of ["flight", "activity"]) {
+      expect(() =>
+        loadServerConfig({
+          SUPPLIER_PROVIDERS: JSON.stringify({
+            nuitee: { products: { [product]: { operations: {} } } },
+          }),
+        }),
+      ).toThrow();
+    }
+  });
+
+  it("does not activate new Duffel stay operations from historical verified declarations", () => {
+    const verified = {
+      support: "supported",
+      access: "verified",
+      evidenceRef: "synthetic-historical-stays",
+      verifiedAt: "2026-10-21T00:00:00Z",
+    };
+    const environment = {
+      PROVIDER_MODE: "live",
+      DUFFEL_READ_SECRET: "synthetic-flight-read",
+      DUFFEL_WRITE_SECRET: "synthetic-worker-write",
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        duffel: {
+          readSecretRef: "DUFFEL_READ_SECRET",
+          transactionSecretRef: "DUFFEL_WRITE_SECRET",
+          products: {
+            flight: { operations: { search: verified } },
+            accommodation: {
+              operations: {
+                search: verified,
+                detail: verified,
+                revalidation: verified,
+                book: verified,
+                status: verified,
+              },
+            },
+          },
+        },
+      }),
+    };
+    const config = loadServerConfig(environment);
+    const web = deriveProviderReadiness(config, environment);
+    const worker = deriveProviderReadiness(config, environment, "worker");
+    expect(web.duffel.products.flight.operations.search.access).toBe("verified");
+    for (const operation of ["search", "detail", "revalidation", "book"] as const) {
+      expect(web.duffel.products.accommodation.operations[operation].support).toBe("unsupported");
+      expect(worker.duffel.products.accommodation.operations[operation].access).toBe("blocked");
+    }
+    expect(worker.duffel.products.accommodation.operations.status.access).toBe("verified");
+  });
+
   it("requires explicit, non-synthetic production authentication, database and signing credentials", () => {
     for (const key of [
       "DATABASE_URL",
@@ -205,7 +333,7 @@ describe("deployment configuration validation", () => {
     ).toBe("unconfigured");
   });
 
-  it.each(["flight", "accommodation"] as const)(
+  it.each(["flight"] as const)(
     "isolates Duffel %s readiness and does not inherit legacy flight evidence into Stays",
     (product) => {
       const environment = {
@@ -233,7 +361,7 @@ describe("deployment configuration validation", () => {
       const other = product === "flight" ? "accommodation" : "flight";
       expect(readiness.duffel.products[product].operations.search.access).toBe("verified");
       expect(readiness.duffel.products[other].operations.search).toMatchObject({
-        support: "unknown",
+        support: "unsupported",
         access: "blocked",
       });
       const legacyEnvironment = {
@@ -304,9 +432,10 @@ describe("deployment configuration validation", () => {
   });
 
   it("keeps only current providers in readiness and rejects invalid product declarations", () => {
-    expect(SUPPLIER_PROVIDER_IDS).toEqual(["duffel", "viator"]);
+    expect(SUPPLIER_PROVIDER_IDS).toEqual(["duffel", "nuitee", "viator"]);
     expect(Object.keys(deriveProviderReadiness(loadServerConfig({}), {}))).toEqual([
       "duffel",
+      "nuitee",
       "viator",
     ]);
     for (const providers of [

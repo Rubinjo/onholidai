@@ -4,7 +4,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 import { sql, type Kysely } from "kysely";
 import { z } from "zod";
 
-import { bookingTermsSchema, canonicalBookingJson } from "@/domain/booking/authorization";
+import { bookingComponentTermsSchema, canonicalBookingJson } from "@/domain/booking/authorization";
 import { projectBookingTransactionRow } from "@/domain/booking/schema";
 import { applyBookingOutcome } from "@/domain/booking/apply-outcomes";
 import { providerForComponent } from "@/server/supply/transactions";
@@ -147,9 +147,7 @@ export async function processProviderCallback(
           "A contradictory provider update was received. Existing confirmation evidence was preserved.",
       };
     } else if (input.outcome === "confirmed") {
-      const confirmedTerms = bookingTermsSchema.shape.components.element.parse(
-        input.confirmedTerms,
-      );
+      const confirmedTerms = bookingComponentTermsSchema.parse(input.confirmedTerms);
       if (
         canonicalBookingJson(confirmedTerms) !== canonicalBookingJson(authorizedTerms) ||
         !input.providerReference

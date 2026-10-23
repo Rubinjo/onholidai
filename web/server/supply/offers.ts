@@ -65,6 +65,9 @@ const planningOfferFields = {
       productCode: z.string().max(256).optional(),
       optionCode: z.string().max(256).optional(),
       availabilityId: z.string().max(256).optional(),
+      roomIds: z.array(z.string().max(256)).max(16).optional(),
+      rateIds: z.array(z.string().max(256)).max(16).optional(),
+      sessionId: z.string().max(256).optional(),
     })
     .strict()
     .optional(),

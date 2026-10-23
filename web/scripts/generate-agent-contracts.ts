@@ -56,6 +56,7 @@ const supportedKeywords = new Set([
   "x-equal-fields",
   "x-not-future-fields",
   "x-nonblank",
+  "x-unique-by",
   "x-protected-target",
 ]);
 const ruleKeys = new Set([
@@ -70,6 +71,7 @@ const ruleKeys = new Set([
   "x-equal-fields",
   "x-not-future-fields",
   "x-nonblank",
+  "x-unique-by",
   "x-protected-target",
 ]);
 const record = (value: unknown): value is Record<string, unknown> =>

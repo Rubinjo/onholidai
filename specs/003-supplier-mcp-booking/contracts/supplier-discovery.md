@@ -17,7 +17,9 @@ Tool arguments are closed typed objects: reject unknown fields/coercions that by
 
 Currency, party, origin, accepted constraints, eligible requirements and trip/version are derived server-side. Search dates/destinations/origin must fit the current authoritative planning scope. If an existing planner legitimately explores a new route, use its existing validated research/proposal scope; arbitrary model arguments cannot expand it. Provider native IDs are never authority to fetch unrelated inventory.
 
-Active inventory is Duffel flight/accommodation and Viator activity only. Keep rail in query types for compatibility, but every rail request (including rail-only) returns explicit unsupported/deferred capability information without a Trainline call, replacement provider or synthetic offer. Absence of rail must not reject a mixed request or discard its supported results. Capability support/access is product/operation-specific so Duffel Flights access cannot imply Stays access. The four-tool count is independent of the two-provider/three-product scope.
+Active inventory is Duffel flight, Nuitee accommodation and Viator activity only. No new Duffel Stays or Nuitee Flights/Experiences calls/default inventory/fallback. Keep rail in query types for compatibility, but every rail request (including rail-only) returns explicit unsupported/deferred capability information without a Trainline call, replacement provider or synthetic offer. Absence of rail must not reject a mixed request or discard supported results. Capability support/access is product/operation/environment-specific; Nuitee hotel access cannot enable other products. The four-tool count is independent of the three-provider/three-product scope.
+
+Nuitee rates require trusted location, nationality and room/age allocation; missing prerequisites remain explicit, not guessed. Property/rate reads stay on a fixed allowlist. Prebook creates a checkout session and is excluded until approved evidence establishes no hold/reservation/payment effects; payment-SDK disablement alone is insufficient. Fresh rate evidence is not automatically final live-revalidated checkout terms. Unsupported revalidation preserves useful discovery but blocks exact booking eligibility.
 
 Detail/revalidation references must belong to the current run's stored offers or server-approved imported selections. Browser-created refinements may import selected references from earlier same-owner/trip/current-version research only after access validation. A reference from another run without that grant is denied, including same-owner unrelated work. A new revision does not mutate old evidence or accepted trip state.
 
@@ -38,7 +40,7 @@ Provider search outcome is separate from inventory outcome:
 
 Each source includes a safe reason, retry eligibility/time when known and unknown-fact count. No fake successful source is manufactured when the live registry is empty. Every requested revalidation yields an explicit outcome; unchanged requires affirmative current matching evidence, and changed includes differences. Expiry cannot be extended locally without evidence. Estimated, quoted and live-revalidated labels do not imply inventory is held.
 
-Use provider plus component type/requirement to identify source outcomes and fairly allocate the 32-offer bound; do not merge Duffel flight and accommodation evidence or let one starve the other. Represent requested rail as an unsupported component-type outcome without inventing a replacement provider identity. Legacy saved supplier references retain their original attribution and cannot become newly verified current inventory through aliasing.
+Use provider plus component type/requirement to identify source outcomes and fairly allocate the 32-offer bound; do not merge Duffel flight, Nuitee accommodation or Viator activity evidence or let one starve another. Represent requested rail as an unsupported component-type outcome without inventing a replacement provider identity. Legacy saved supplier references, including Duffel stays, retain original attribution and cannot become newly verified Nuitee/current inventory through aliasing. Saved evidence remains readable; unsupported live refresh does not call an inactive product.
 
 ## Web routes and shared service
 
@@ -55,6 +57,29 @@ All internal reads reuse `internalPlanningApiResponse`, `internalActor`, signed 
 Browser search starts an existing agent run with `purpose: supplier_research`, request ID and expected trip version; extend existing run result read to return safe research references. Proposed browser sibling `planning-offers` detail/revalidation and `planning-capabilities` routes use existing planning resource/session/Origin protections and the same domain functions. Browser offer access derives ownership through source run/trip and current version, not the agent's active-run requirement. The browser never talks to MCP or receives internal credentials.
 
 Selection passes an opaque offer reference/revision in a structured refinement request; server validates provenance/current scope and the existing proposal pipeline independently materializes/reprices it. Read-only research purpose cannot return mutation operations. Application policy remains immutable per existing run.
+
+The implemented field is `selectedOffers`, an optional list of 1-32
+`{ offerRef: UUID, revision: positive integer }` entries, unique by `offerRef`
+even when revisions differ. It is accepted only for `purpose: refinement`.
+The source run must be completed `supplier_research`, belong to the same
+planning owner/trip/current version and remain accessible. Imported evidence
+must be the latest exact revision from an active product, with matching
+route-query dates, party, departure origin and currency.
+
+The existing conversation-message metadata retains the reservation selections;
+the fingerprint-bound, validated target dispatch request is the authoritative
+import grant. No copied offer records, additional grants table or duplicate
+accepted-offer store is introduced. The target runtime reads exact references
+through the existing in-process MCP detail tool. Unrelated active runs receive
+no access merely because they share the owner/trip.
+
+The server independently validates complete source facts, required evidence,
+party capacity and total budgets before persisting the existing trusted
+candidate. Model prices cannot override source prices. Source revision and
+expiry are rechecked before new acceptance; an already-applied idempotent
+receipt remains durable. Selection does not waive unresolved requirements,
+permit unrelated component removal or authorize any transaction. See
+[US2 evidence](../evidence/recommendations.md) for current acceptance.
 
 ## Errors, limits and safety
 

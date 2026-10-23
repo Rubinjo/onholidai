@@ -2027,6 +2027,31 @@ summary {
 .booking-readiness h2 {
   color: var(--accent-strong);
 }
+.booking-page {
+  overflow-wrap: anywhere;
+}
+.booking-overview {
+  max-width: 48rem;
+  padding-block: 1rem;
+  border-block-end: 2px solid var(--accent);
+}
+.booking-overview dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 1rem;
+}
+.booking-overview dt {
+  color: var(--text-muted);
+}
+.booking-overview dd {
+  margin: 0;
+}
+.booking-overview__services {
+  padding-inline-start: 1.25rem;
+}
+.booking-overview__services li {
+  margin-block: 1rem;
+}
 .booking-readiness [data-slot="button"] {
   margin: 0.4rem 0.4rem 0.4rem 0;
 }
@@ -2165,6 +2190,9 @@ summary {
   .trip-workspace__pane,
   .trip-workspace__pane--route {
     overflow: visible;
+  }
+  .trip-workspace__pane--conversation > .assistant-chat {
+    min-height: auto;
   }
   .trip-workspace__pane--route > section:first-child {
     overflow: visible;

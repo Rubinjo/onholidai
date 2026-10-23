@@ -817,6 +817,25 @@
           {
             "if": {
               "properties": {
+                "selectedOffers": {
+                  "type": "array"
+                }
+              },
+              "required": [
+                "selectedOffers"
+              ]
+            },
+            "then": {
+              "properties": {
+                "purpose": {
+                  "const": "refinement"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
                 "purpose": {
                   "enum": [
                     "initial_estimate",
@@ -864,6 +883,24 @@
           },
           "requestId": {
             "$ref": "#/components/schemas/UUIDString"
+          },
+          "selectedOffers": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SelectedOffer"
+                },
+                "maxItems": 32,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Selectedoffers",
+            "x-unique-by": "offerRef"
           }
         },
         "required": [
@@ -1598,6 +1635,23 @@
           "supplier_research"
         ],
         "type": "string"
+      },
+      "SelectedOffer": {
+        "additionalProperties": false,
+        "properties": {
+          "offerRef": {
+            "$ref": "#/components/schemas/UUIDString"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/PositiveInt"
+          }
+        },
+        "required": [
+          "offerRef",
+          "revision"
+        ],
+        "title": "SelectedOffer",
+        "type": "object"
       },
       "TerminalEvent": {
         "additionalProperties": false,

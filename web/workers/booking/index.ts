@@ -14,6 +14,7 @@ import type { Database } from "@/server/db/database";
 export async function runBookingWorker(
   database: Kysely<Database>,
   providers: TransactionProviderRegistry,
+  options: Parameters<typeof createBookingActivities>[2] = {},
 ): Promise<void> {
   const address = process.env.TEMPORAL_ADDRESS;
   if (!address) throw new Error("TEMPORAL_ADDRESS is required to run the booking worker");
@@ -23,7 +24,7 @@ export async function runBookingWorker(
     namespace: process.env.TEMPORAL_NAMESPACE ?? "default",
     taskQueue: process.env.TEMPORAL_BOOKING_TASK_QUEUE ?? "onholidai-booking",
     workflowsPath: fileURLToPath(new URL("../../server/workflows/index.ts", import.meta.url)),
-    activities: createBookingActivities(database, providers),
+    activities: createBookingActivities(database, providers, options),
   });
   const abort = new AbortController();
   let closePromise: Promise<void> | undefined;

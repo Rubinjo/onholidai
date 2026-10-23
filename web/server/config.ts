@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-export const SUPPLIER_PROVIDER_IDS = ["duffel", "viator"] as const;
+export const SUPPLIER_PROVIDER_IDS = ["duffel", "nuitee", "viator"] as const;
 export const SUPPLIER_OPERATIONS = [
   "search",
   "detail",
@@ -25,6 +25,7 @@ const operationConfigSchema = z
       .default("unconfigured"),
     evidenceRef: z.string().trim().min(1).max(256).nullable().default(null),
     verifiedAt: z.iso.datetime().nullable().default(null),
+    environment: z.enum(["sandbox", "production"]).optional(),
   })
   .strict();
 const secretReferenceSchema = z.string().regex(/^[A-Z][A-Z0-9_]{0,127}$/);
@@ -62,6 +63,12 @@ const viatorConfigSchema = z
     products: z.object({ activity: productConfigSchema.optional() }).strict().default({}),
   })
   .strict();
+const nuiteeConfigSchema = z
+  .object({
+    ...providerConfigFields,
+    products: z.object({ accommodation: productConfigSchema.optional() }).strict().default({}),
+  })
+  .strict();
 const providersConfigSchema = z
   .preprocess(
     (value) => {
@@ -75,6 +82,7 @@ const providersConfigSchema = z
     z
       .object({
         duffel: duffelConfigSchema.optional(),
+        nuitee: nuiteeConfigSchema.optional(),
         viator: viatorConfigSchema.optional(),
       })
       .strict(),
@@ -85,6 +93,7 @@ const serverConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PROVIDER_MODE: z.enum(["deterministic", "live"]).default("deterministic"),
   VIATOR_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
+  NUITEE_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
   GUEST_MAX_ACTIVE_RUNS: z.coerce.number().int().min(1).max(20).default(2),
   GUEST_MAX_RUNS_PER_HOUR: z.coerce.number().int().min(1).max(100).default(10),
   GUEST_MAX_SESSIONS_PER_HOUR: z.coerce.number().int().min(1).max(200).default(20),
@@ -122,6 +131,7 @@ export interface ProviderReadiness<Product extends SupplierProduct> {
 }
 export interface SupplierReadiness {
   duffel: ProviderReadiness<"flight" | "accommodation">;
+  nuitee: ProviderReadiness<"accommodation">;
   viator: ProviderReadiness<"activity">;
 }
 
@@ -131,14 +141,32 @@ export function deriveProviderReadiness(
   audience: "web" | "worker" = "web",
 ): SupplierReadiness {
   function productReadiness(
-    declaration:
-      z.infer<typeof duffelConfigSchema> | z.infer<typeof viatorConfigSchema> | undefined,
+    declaration: { readSecretRef?: string; transactionSecretRef?: string } | undefined,
     declaredOperations: z.infer<typeof operationsConfigSchema> | undefined,
+    evidenceEnvironment?: ServerConfig["NUITEE_ENVIRONMENT"],
+    legacyStays = false,
   ): ProductReadiness {
     const operations = Object.fromEntries(
       SUPPLIER_OPERATIONS.map((operation) => {
         const declared = declaredOperations?.[operation];
         const read = ["search", "detail", "revalidation"].includes(operation);
+        if (
+          (legacyStays && operation !== "status") ||
+          (evidenceEnvironment &&
+            ["revalidation", "book", "cancel", "reschedule"].includes(operation))
+        ) {
+          return [
+            operation,
+            {
+              support: "unsupported",
+              access: "blocked",
+              verifiedAt: null,
+              safeReason: legacyStays
+                ? "Duffel stays is inactive; saved evidence and approved status reads remain available."
+                : "Final stay revalidation and transactions require an established safe exact-terms path.",
+            } satisfies ProviderOperationReadiness,
+          ];
+        }
         const secretReference = read
           ? declaration?.readSecretRef
           : declaration?.transactionSecretRef;
@@ -157,6 +185,7 @@ export function deriveProviderReadiness(
               ? "blocked"
               : config.PROVIDER_MODE === "live" &&
                   declared?.access === "verified" &&
+                  (!evidenceEnvironment || declared.environment === evidenceEnvironment) &&
                   declared.evidenceRef &&
                   declared.verifiedAt
                 ? "verified"
@@ -184,7 +213,7 @@ export function deriveProviderReadiness(
     ) as Record<SupplierOperation, ProviderOperationReadiness>;
     return { operations };
   }
-  const { duffel, viator } = config.SUPPLIER_PROVIDERS;
+  const { duffel, nuitee, viator } = config.SUPPLIER_PROVIDERS;
   return {
     duffel: {
       provider: "duffel",
@@ -192,7 +221,23 @@ export function deriveProviderReadiness(
       products: {
         // Existing provider-level Duffel declarations describe Flights, never Stays.
         flight: productReadiness(duffel, duffel?.products.flight?.operations ?? duffel?.operations),
-        accommodation: productReadiness(duffel, duffel?.products.accommodation?.operations),
+        accommodation: productReadiness(
+          duffel,
+          duffel?.products.accommodation?.operations,
+          undefined,
+          true,
+        ),
+      },
+    },
+    nuitee: {
+      provider: "nuitee",
+      mode: config.PROVIDER_MODE,
+      products: {
+        accommodation: productReadiness(
+          nuitee,
+          nuitee?.products.accommodation?.operations ?? nuitee?.operations,
+          config.NUITEE_ENVIRONMENT,
+        ),
       },
     },
     viator: {

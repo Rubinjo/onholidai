@@ -24,6 +24,7 @@ const hitSchema = z
     currency: currencySchema,
     offerId: z.string().min(1).max(256),
     supplierMinor: z.number().int().nonnegative().nullable(),
+    customerMinor: z.number().int().nonnegative().safe().nullable().optional(),
     availability: z.enum(["available", "unavailable", "unknown"]).optional(),
     serviceStart: z.iso.datetime({ offset: true }).nullable().optional(),
     serviceEnd: z.iso.datetime({ offset: true }).nullable().optional(),
@@ -43,6 +44,9 @@ const hitSchema = z
         productCode: z.string().max(256).optional(),
         optionCode: z.string().max(256).optional(),
         availabilityId: z.string().max(256).optional(),
+        roomIds: z.array(z.string().max(256)).max(16).optional(),
+        rateIds: z.array(z.string().max(256)).max(16).optional(),
+        sessionId: z.string().max(256).optional(),
       })
       .strict()
       .optional(),
@@ -100,13 +104,15 @@ export function createReadAdapter(
       price: {
         currency: query.currency,
         supplierAmount: money(hit.supplierMinor),
-        platformMargin: money(margin),
+        platformMargin: hit.customerMinor === undefined ? money(margin) : null,
         customerPayableTaxes: money(hit.taxesMinor),
         customerPayableFees: money(hit.feesMinor),
         finalCustomerAmount: money(
-          hit.supplierMinor === null || hit.taxesMinor === null || hit.feesMinor === null
-            ? null
-            : hit.supplierMinor + margin + hit.taxesMinor + hit.feesMinor,
+          hit.customerMinor !== undefined
+            ? hit.customerMinor
+            : hit.supplierMinor === null || hit.taxesMinor === null || hit.feesMinor === null
+              ? null
+              : hit.supplierMinor + margin + hit.taxesMinor + hit.feesMinor,
         ),
         status: "estimated",
         source: provider,

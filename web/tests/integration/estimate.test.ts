@@ -14,7 +14,7 @@ import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import { RunRepository } from "../../server/agent-client/run-repository";
 import { acceptEstimate, recordEstimate } from "../../domain/trip/apply-estimate";
 import { createDuffelReadProvider } from "../../server/supply/providers/duffel-read";
-import { createDuffelStaysReadProvider } from "../../server/supply/providers/duffel-stays-read";
+import { createNuiteeReadProvider } from "../../server/supply/providers/nuitee-read";
 import { syntheticReadClient } from "../../server/supply/providers/synthetic";
 import { searchPlanningOffers } from "../../server/supply/read";
 import { materializePlanningOffer } from "../../server/supply/offers";
@@ -78,7 +78,7 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research"
         const found = await searchPlanningOffers(
           [
             createDuffelReadProvider(syntheticReadClient("flight")),
-            createDuffelStaysReadProvider(syntheticReadClient("accommodation")),
+            createNuiteeReadProvider(syntheticReadClient("accommodation")),
           ],
           {
             componentTypes: ["flight", "accommodation"],
@@ -90,6 +90,15 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research"
             travellerParty: snapshot.travellerParty,
           },
         );
+        expect(
+          found.offers.map((offer) => [offer.component.provider, offer.component.type]),
+        ).toEqual(
+          expect.arrayContaining([
+            ["duffel", "flight"],
+            ["nuitee", "accommodation"],
+          ]),
+        );
+        expect(found.outcomes.every((outcome) => outcome.status === "available")).toBe(true);
         for (const offer of found.offers)
           await database
             .insertInto("planningOfferRecords")

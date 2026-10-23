@@ -1,4 +1,143 @@
 import { expect, test } from "@playwright/test";
+import { z } from "zod";
+
+import {
+  seedBrowserWholeTrip,
+  recordedWholeTripCommand,
+  wholeTripInspectionSchema,
+} from "./whole-trip-fixture";
+
+test.describe("US3 recorded whole-trip review", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+  test.setTimeout(120_000);
+  test("complete review, keyboard consent, exact durable replay, expiry and reload without provider execution", async ({
+    page,
+    baseURL,
+  }) => {
+    if (!baseURL) throw new Error("Whole-trip browser review requires a baseURL");
+    const fixture = await seedBrowserWholeTrip(page, baseURL);
+    const inspect = async () =>
+      wholeTripInspectionSchema.parse(
+        await recordedWholeTripCommand({
+          action: "inspect",
+          ownerUserId: fixture.ownerUserId,
+          tripId: fixture.tripId,
+        }),
+      );
+    let authorizations = 0,
+      starts = 0;
+    let startRequest: unknown;
+    await page.route(`**/api/v1/trips/${fixture.tripId}/booking/authorizations`, async (route) => {
+      authorizations++;
+      const result = await recordedWholeTripCommand({
+        action: "authorize",
+        ownerUserId: fixture.ownerUserId,
+        tripId: fixture.tripId,
+        request: route.request().postDataJSON(),
+      });
+      await route.fulfill({ status: 201, json: result });
+    });
+    await page.route(`**/api/v1/trips/${fixture.tripId}/bookings`, async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      starts++;
+      startRequest = route.request().postDataJSON();
+      const result = await recordedWholeTripCommand({
+        action: "start",
+        ownerUserId: fixture.ownerUserId,
+        tripId: fixture.tripId,
+        request: startRequest,
+      });
+      await route.fulfill({ status: 202, json: result });
+    });
+    await page.goto(`/trips/${fixture.tripId}/booking`);
+    await expect(page.getByRole("heading", { name: "Your whole trip" })).toBeVisible();
+    await expect(page.getByText(/Remaining payable: £400.00/)).toBeVisible();
+    await expect(page.getByText(/Selected room references/)).toBeVisible();
+    await expect(page.getByText(/Changed from accepted estimate/)).toContainText(
+      "£95.00 to current price £100.00",
+    );
+    await expect(page.getByRole("button", { name: /book selected|buy component/i })).toHaveCount(0);
+    expect(await inspect()).toMatchObject({
+      authorizations: 0,
+      transactions: 0,
+      attempts: 0,
+      outbox: 0,
+    });
+    await page.setViewportSize({ width: 320, height: 800 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    const consent = page.getByRole("button", { name: "Authorize and start whole-trip booking" });
+    await expect(consent).toBeEnabled();
+    await consent.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(/No services were attempted/)).toBeVisible({ timeout: 35_000 });
+    expect(authorizations).toBe(1);
+    expect(starts).toBe(1);
+    const recorded = await inspect();
+    expect(recorded).toMatchObject({ authorizations: 1, transactions: 1, attempts: 0, outbox: 1 });
+    await recordedWholeTripCommand({
+      action: "start",
+      ownerUserId: fixture.ownerUserId,
+      tripId: fixture.tripId,
+      request: startRequest,
+    });
+    expect(await inspect()).toMatchObject({
+      authorizations: 1,
+      transactions: 1,
+      attempts: 0,
+      outbox: 1,
+    });
+    await page.clock.setFixedTime(new Date(Date.parse(fixture.state.review!.expiresAt!) + 1));
+    await expect(page.getByText(/These booking terms expired/)).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Booking progress" })).toBeVisible();
+    await expect(page.getByText(/No services were attempted/)).toBeVisible();
+    await expect(consent).toHaveCount(0);
+    expect(authorizations).toBe(1);
+    expect(starts).toBe(1);
+  });
+
+  test("missing return blocks all-trip consent on client and server without a subset escape", async ({
+    page,
+    baseURL,
+  }) => {
+    if (!baseURL) throw new Error("Whole-trip browser review requires a baseURL");
+    const fixture = await seedBrowserWholeTrip(page, baseURL, true);
+    await page.goto(`/trips/${fixture.tripId}/booking`);
+    await expect(page.getByRole("heading", { name: "Resolve before booking" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Authorize and start whole-trip booking" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    const response = await page.request.post(
+      `/api/v1/trips/${fixture.tripId}/booking/authorizations`,
+      {
+        headers: { origin: new URL(baseURL).origin },
+        data: {
+          requestId: crypto.randomUUID(),
+          tripVersion: 2,
+          termsHash: fixture.state.review!.termsHash,
+          operation: "book_trip",
+          componentId: null,
+          acknowledgedNonReversibleActions: [],
+        },
+      },
+    );
+    expect(response.status()).toBe(409);
+    expect(z.object({ code: z.string() }).parse(await response.json()).code).toBe(
+      "booking_coverage_changed",
+    );
+    const counts = wholeTripInspectionSchema.parse(
+      await recordedWholeTripCommand({
+        action: "inspect",
+        ownerUserId: fixture.ownerUserId,
+        tripId: fixture.tripId,
+      }),
+    );
+    expect(counts).toMatchObject({ authorizations: 0, transactions: 0, attempts: 0, outbox: 0 });
+  });
+});
 
 // Booking journeys need a finalized synthetic trip plus a running deterministic
 // web/agent/Temporal stack, so they follow the US1/US3 fixture convention.

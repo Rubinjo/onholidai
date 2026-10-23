@@ -32,6 +32,8 @@
 
 ## Notes
 
+- Re-reviewed on 2026-10-23 after the user selected revising intent rather than converging against obsolete Duffel Stays requirements. All 16 artifact-quality criteria pass. FR-003/005/027/031, US1/AC1-2/7-9, edge cases and SC-010 now cover Nuitee stays, retained Duffel Flights/Viator activities, inactive Nuitee Flights/Experiences, shared-key isolation and original Duffel stay provenance. The evidence-based comparison is in research; no price/coverage superiority or live approval is assumed.
+- Nuitee hotel prebook's no-hold/no-payment semantics remain an explicit fail-closed activation dependency, not an unmarked design assumption. Discovery remains useful with unsupported live revalidation; exact stay booking stays blocked until safe final terms can be established. Quality review is not feature implementation or live acceptance.
 - Reviewed on 2026-10-17; all 16 quality criteria pass. No unresolved clarification is required before planning.
 - Re-reviewed on 2026-10-19 for the approved in-place scope revision; all 16 quality criteria remain satisfied. FR-003/005/006/011/016/027/031 and SC-003/010 now cover Duffel Flights/Stays, Viator, independent product readiness, single-key read enforcement and useful no-rail planning. US1/AC6-7, US2/AC6 and US3/AC7 define the added acceptance cases. This review certifies artifact quality only, not implemented behavior or access approval.
 - Booking.com and Trainline are explicitly future scope, GetYourGuide is replaced, and no rail replacement is assumed. Supported complete trips are not globally blocked by deferred providers; unresolved required rail still blocks whole-trip authorization. Completed implementation evidence remains historical and T093 captures the necessary foundation correction.

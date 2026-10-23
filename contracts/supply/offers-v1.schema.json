@@ -133,6 +133,26 @@
         "availabilityId": {
           "type": "string",
           "maxLength": 256
+        },
+        "roomIds": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          }
+        },
+        "rateIds": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          }
+        },
+        "sessionId": {
+          "type": "string",
+          "maxLength": 256
         }
       },
       "additionalProperties": false
@@ -147,6 +167,42 @@
         {
           "type": "object",
           "properties": {
+            "bookingDisposition": {
+              "type": "string",
+              "enum": [
+                "required",
+                "not_required",
+                "unknown"
+              ]
+            },
+            "bookingDispositionEvidence": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "verificationStatus": {
+                  "type": "string",
+                  "enum": [
+                    "verified",
+                    "unverified",
+                    "failed"
+                  ]
+                },
+                "checkedAt": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                }
+              },
+              "required": [
+                "source",
+                "verificationStatus",
+                "checkedAt"
+              ],
+              "additionalProperties": false
+            },
             "planningDetails": {
               "type": "object",
               "properties": {
@@ -725,6 +781,42 @@
         {
           "type": "object",
           "properties": {
+            "bookingDisposition": {
+              "type": "string",
+              "enum": [
+                "required",
+                "not_required",
+                "unknown"
+              ]
+            },
+            "bookingDispositionEvidence": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "verificationStatus": {
+                  "type": "string",
+                  "enum": [
+                    "verified",
+                    "unverified",
+                    "failed"
+                  ]
+                },
+                "checkedAt": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                }
+              },
+              "required": [
+                "source",
+                "verificationStatus",
+                "checkedAt"
+              ],
+              "additionalProperties": false
+            },
             "planningDetails": {
               "type": "object",
               "properties": {
@@ -1298,6 +1390,42 @@
         {
           "type": "object",
           "properties": {
+            "bookingDisposition": {
+              "type": "string",
+              "enum": [
+                "required",
+                "not_required",
+                "unknown"
+              ]
+            },
+            "bookingDispositionEvidence": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "verificationStatus": {
+                  "type": "string",
+                  "enum": [
+                    "verified",
+                    "unverified",
+                    "failed"
+                  ]
+                },
+                "checkedAt": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                }
+              },
+              "required": [
+                "source",
+                "verificationStatus",
+                "checkedAt"
+              ],
+              "additionalProperties": false
+            },
             "planningDetails": {
               "type": "object",
               "properties": {
@@ -1867,6 +1995,42 @@
         {
           "type": "object",
           "properties": {
+            "bookingDisposition": {
+              "type": "string",
+              "enum": [
+                "required",
+                "not_required",
+                "unknown"
+              ]
+            },
+            "bookingDispositionEvidence": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "verificationStatus": {
+                  "type": "string",
+                  "enum": [
+                    "verified",
+                    "unverified",
+                    "failed"
+                  ]
+                },
+                "checkedAt": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                }
+              },
+              "required": [
+                "source",
+                "verificationStatus",
+                "checkedAt"
+              ],
+              "additionalProperties": false
+            },
             "planningDetails": {
               "type": "object",
               "properties": {
@@ -2442,6 +2606,42 @@
         {
           "type": "object",
           "properties": {
+            "bookingDisposition": {
+              "type": "string",
+              "enum": [
+                "required",
+                "not_required",
+                "unknown"
+              ]
+            },
+            "bookingDispositionEvidence": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "verificationStatus": {
+                  "type": "string",
+                  "enum": [
+                    "verified",
+                    "unverified",
+                    "failed"
+                  ]
+                },
+                "checkedAt": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                }
+              },
+              "required": [
+                "source",
+                "verificationStatus",
+                "checkedAt"
+              ],
+              "additionalProperties": false
+            },
             "planningDetails": {
               "type": "object",
               "properties": {

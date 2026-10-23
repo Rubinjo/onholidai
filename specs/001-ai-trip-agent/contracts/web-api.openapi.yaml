@@ -498,6 +498,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
   /trips/{tripId}/bookings:
+    get:
+      tags: [Booking]
+      operationId: getWholeTripBookingReview
+      summary: Restore owner-only review, coverage, commitments and bounded attempts without supplier calls or writes
+      parameters:
+        - $ref: "#/components/parameters/TripId"
+      responses:
+        "200":
+          description: Current safe whole-trip review state; private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "../../../contracts/trip-domain/booking-review-v2.schema.json#/$defs/BookingReviewState"
+        "401":
+          description: An account is required; guest planning does not confer booking authority
+        "404":
+          $ref: "#/components/responses/NotFound"
     post:
       tags: [Booking]
       operationId: startBooking
@@ -520,11 +537,11 @@ paths:
                   format: uuid
       responses:
         "202":
-          description: Idempotent booking workflow accepted
+          description: Exact idempotent v2 attempt recorded; consequential whole-trip provider execution remains disabled until its independent activation gate
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BookingTransaction"
+                $ref: "../../../contracts/trip-domain/booking-review-v2.schema.json#/$defs/PublicBookingTransaction"
         "409":
           description: Authorization is invalid, expired, consumed, or stale
           content:
@@ -544,7 +561,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RevalidationReview"
+                $ref: "../../../contracts/trip-domain/booking-review-v2.schema.json#/$defs/PublicRevalidationReview"
         "404":
           $ref: "#/components/responses/NotFound"
   /bookings/{bookingId}:
@@ -564,7 +581,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BookingTransaction"
+                $ref: "../../../contracts/trip-domain/booking-review-v2.schema.json#/$defs/PublicBookingStatus"
         "404":
           $ref: "#/components/responses/NotFound"
   /bookings/{bookingId}/components/{componentId}/reschedule-revalidations:

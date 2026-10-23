@@ -7,7 +7,9 @@ import { runBookingWorker } from "@/workers/booking/index";
 // explicitly and close the pools if startup fails or the worker shuts down.
 const application = createApplication(process.env, { audience: "worker" });
 try {
-  await runBookingWorker(application.database, new TransactionProviderRegistry());
+  await runBookingWorker(application.database, new TransactionProviderRegistry(), {
+    prerequisites: application.bookingPrerequisites,
+  });
 } finally {
   await application.shutdown();
 }

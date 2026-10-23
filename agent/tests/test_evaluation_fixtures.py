@@ -22,6 +22,7 @@ PAYLOAD_KEYS = (
     "ambiguities",
     "itineraryDays",
     "hardConflicts",
+    "decisions",
 )
 
 
@@ -49,6 +50,7 @@ def test_corpus_copies_hash_and_exact_counts_are_deterministic() -> None:
     )
     assert item_count == 500
     assert len(corpus["hardConflicts"]) == 20
+    assert len(corpus["decisions"]) == 26
     assert corpus["metadata"]["changeControl"]["reviewedReasonRequired"] is True
     assert corpus["metadata"]["changeControl"]["reviewedReason"]
 

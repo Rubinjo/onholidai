@@ -9,6 +9,7 @@ import { planningError, planningJson } from "@/components/trip-setup/http";
 import { Button } from "@/components/ui/button";
 
 import { BookingConsole } from "./booking-console";
+import { bookingComponentLabel } from "./terms-review";
 
 const readinessSchema = z.object({
   version: z.number(),
@@ -16,6 +17,63 @@ const readinessSchema = z.object({
   reviewFingerprint: z.string(),
 });
 const runSchema = z.object({ id: z.uuid(), status: z.string() });
+function WholeTripOverview({ trip }: { trip: TripEnvelope }) {
+  const destinations = [...trip.snapshot.destinations].sort(
+    (a, b) => a.routePosition - b.routePosition,
+  );
+  return (
+    <section className="booking-overview" aria-labelledby="whole-trip-heading">
+      <h2 id="whole-trip-heading">Your whole trip</h2>
+      <p>
+        {trip.snapshot.departureOrigin?.name ?? "Departure origin needs confirmation"} to{" "}
+        {destinations.map((entry) => entry.name).join(", ")} and return.
+      </p>
+      <dl>
+        <div>
+          <dt>Dates</dt>
+          <dd>
+            {destinations[0]?.arrivalDate ?? "Not scheduled"} to{" "}
+            {destinations.at(-1)?.departureDate ?? "Not scheduled"}
+          </dd>
+        </div>
+        <div>
+          <dt>Party</dt>
+          <dd>
+            {trip.snapshot.travellerParty.adults} adults
+            {trip.snapshot.travellerParty.children.length
+              ? `; children aged ${trip.snapshot.travellerParty.children.map((child) => child.ageAtTripStart).join(", ")}`
+              : "; no children"}
+          </dd>
+        </div>
+        <div>
+          <dt>Accepted trip</dt>
+          <dd>
+            Version {trip.version}; {trip.snapshot.components.length} selected services
+          </dd>
+        </div>
+      </dl>
+      {trip.snapshot.components.length ? (
+        <ul className="booking-overview__services">
+          {trip.snapshot.components.map((component) => (
+            <li key={component.id}>
+              <strong>{bookingComponentLabel(component)}</strong>
+              <p>
+                {component.provider}; {component.serviceStart} to {component.serviceEnd};{" "}
+                {component.travellerIds.length} travellers;{" "}
+                {component.bookingStatus.replaceAll("_", " ")}.
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>
+          No paid travel, stay or activity services have been selected. Missing requirements must be
+          resolved before booking.
+        </p>
+      )}
+    </section>
+  );
+}
 export function BookingReview({ initialTrip }: { initialTrip: TripEnvelope }) {
   const [trip, setTrip] = useState(initialTrip),
     [readiness, setReadiness] = useState<z.infer<typeof readinessSchema> | null>(null);
@@ -131,11 +189,18 @@ export function BookingReview({ initialTrip }: { initialTrip: TripEnvelope }) {
   }
   if (trip.lifecycleState !== "draft")
     return (
-      <BookingConsole
-        tripId={trip.tripId}
-        tripVersion={trip.version}
-        components={trip.snapshot.components}
-      />
+      <main className="booking-page planning-page">
+        <h1>Review booking</h1>
+        <WholeTripOverview trip={trip} />
+        <BookingConsole
+          tripId={trip.tripId}
+          tripVersion={trip.version}
+          components={trip.snapshot.components}
+        />
+        <p>
+          <Link href={`/trips/${trip.tripId}`}>Back to your trip</Link>
+        </p>
+      </main>
     );
   const requiresAcknowledgement = Boolean(
     readiness && (readiness.report.unverified.length || readiness.report.exceptions.length),
@@ -147,6 +212,7 @@ export function BookingReview({ initialTrip }: { initialTrip: TripEnvelope }) {
         Check your itinerary here, then review live availability, prices and booking terms. Nothing
         is reserved or paid for without your separate authorization.
       </p>
+      <WholeTripOverview trip={trip} />
       <section className="booking-readiness" aria-labelledby="readiness-heading">
         <h2 id="readiness-heading">Your itinerary before booking</h2>
         <p>Reviewing trip version {trip.version}.</p>

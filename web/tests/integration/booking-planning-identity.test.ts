@@ -4,7 +4,9 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import { hasIsolatedDatabaseConfiguration, withIsolatedTestDatabase } from "../helpers/database";
-import { seedAuthorizedBooking } from "../helpers/booking";
+import { seedReviewedWholeTrip } from "../helpers/booking";
+import { reviewNow } from "../fixtures/whole-trip-review";
+import { authorizeBooking } from "../../domain/booking/authorize";
 import { allocateWizardPrincipal } from "../../server/db/planning-principal-repository";
 import { resolveBookingActor } from "../../server/auth/planning-actor";
 import { startBooking } from "../../domain/booking/start";
@@ -16,7 +18,7 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())(
   () => {
     it("retains account consent and execution basis while resolving trip through a dedicated principal", async () => {
       await withIsolatedTestDatabase(async ({ database }) => {
-        const seed = await seedAuthorizedBooking(database, { startTransaction: false });
+        const seed = await seedReviewedWholeTrip(database);
         const principal = await allocateWizardPrincipal(database, {
           accountUserId: seed.userId,
           guestSessionId: null,
@@ -28,10 +30,24 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())(
           .execute();
         const actor = await resolveBookingActor(database, seed.tripId, seed.userId);
         expect(actor).toEqual({ accountUserId: seed.userId, planningOwnerId: principal });
-        const booking = await startBooking(database, actor, seed.tripId, {
-          requestId: randomUUID(),
-          authorizationId: seed.authorizationId,
-        });
+        const authorization = await authorizeBooking(
+          database,
+          actor,
+          seed.tripId,
+          seed.request,
+          reviewNow,
+          seed.prerequisites,
+        );
+        const booking = await startBooking(
+          database,
+          actor,
+          seed.tripId,
+          {
+            requestId: randomUUID(),
+            authorizationId: authorization.id,
+          },
+          { now: reviewNow, prerequisites: seed.prerequisites },
+        );
         expect(booking.executionBasis.ownerUserId).toBe(seed.userId);
         expect(
           (

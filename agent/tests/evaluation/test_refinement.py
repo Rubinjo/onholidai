@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import cast
 
 import httpx
+import pytest
 
 from onholidai_agent.api.store import WebRunStore
 from onholidai_agent.graph.refine import refine
@@ -12,6 +13,7 @@ from onholidai_agent.integrations.nebius import DeterministicModel, NebiusClient
 from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import CreateAgentRunRequest
 from tests.contract.test_refinement_tools import RefinementSource, refinement_request
+from tests.integration.test_estimate import Sources
 
 
 def test_extra_nights_and_required_mornings_produce_reviewable_operations():
@@ -26,6 +28,60 @@ def test_extra_nights_and_required_mornings_produce_reviewable_operations():
     assert result.root.proposal.base_trip_version == 2
     assert result.root.proposal.rationale
     assert source.trip == before
+
+
+@pytest.mark.parametrize("budget", [False, True])
+def test_selected_supplier_research_uses_proposals_without_model_prices_or_a_forced_choice(
+    budget: bool,
+):
+    corpus = json.loads((Path(__file__).parents[1] / "fixtures/evaluation-corpus.json").read_text())
+
+    class SelectedSource(Sources):
+        async def selected_offers(self, request: CreateAgentRunRequest) -> list[dict[str, object]]:
+            return deepcopy(corpus["decisions"][0]["offers"][1:])
+
+    source = SelectedSource()
+    snapshot = cast(dict[str, object], source.trip["snapshot"])
+    snapshot["availabilityWindows"] = [{"startDate": "2030-05-10", "endDate": "2030-05-15"}]
+    retained = deepcopy(corpus["decisions"][0]["offers"][0]["component"])
+    retained.update(
+        id="b0000000-0000-4000-8000-000000000009",
+        serviceStart="2030-05-10T08:00:00Z",
+        serviceEnd="2030-05-10T10:00:00Z",
+    )
+    snapshot["components"] = [retained]
+    if budget:
+        snapshot["constraints"] = [
+            {
+                "category": "budget",
+                "priority": "required",
+                "status": "active",
+                "statement": "Maximum EUR 150.00 total",
+            }
+        ]
+    before = deepcopy(source.trip)
+    raw = refinement_request("Use this sourced option").model_dump(mode="json", by_alias=True)
+    raw["actor"]["baseTripVersion"] = 1
+    raw["context"]["tripSummary"]["version"] = 1
+    raw["selectedOffers"] = [{"offerRef": "b0000000-0000-4000-8000-000000000001", "revision": 1}]
+    result = asyncio.run(refine(CreateAgentRunRequest.model_validate(raw), source)).root
+    if budget:
+        assert result.kind == "clarification"
+        assert result.clarification.material_reason == "price"
+        assert source.trip == before
+        return
+    assert result.kind == "proposal"
+    assert result.proposal.operations[0].target == "/components"
+    assert retained in cast(list[object], result.proposal.operations[0].value)
+    assert source.trip == before
+    assert "reserved" in " ".join(result.proposal.warnings)
+
+
+def test_consequential_guidance_points_to_review_without_claiming_booking_is_unavailable():
+    result = asyncio.run(refine(refinement_request("book everything"), RefinementSource())).root
+    assert result.kind == "answer"
+    assert "unavailable in the planning release" not in result.message
+    assert "review" in result.message
 
 
 def test_frozen_refinement_and_ambiguity_corpus():

@@ -21,11 +21,41 @@ import { deriveProviderReadiness, loadServerConfig } from "../../server/config";
 
 vi.mock("server-only", () => ({}));
 describe("injected planning suppliers", () => {
+  it("keeps Nuitee research unavailable without trusted nationality and occupancy and never prebooks", async () => {
+    const { createNuiteeHttpClient } = await import("../../server/supply/providers/nuitee-http");
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    const client = createNuiteeHttpClient({
+      apiKey: "synthetic-nuitee-key",
+      environment: "sandbox",
+      fetch,
+      resolveSearch: () => null,
+    });
+    const trip = createSyntheticTripSnapshot();
+    await expect(
+      client.search(
+        {
+          componentTypes: ["accommodation"],
+          currency: "GBP",
+          departureOrigin: null,
+          destinationIds: trip.destinations.map((destination) => destination.id),
+          startDate: "2030-05-01",
+          endDate: "2030-05-08",
+          travellerParty: trip.travellerParty,
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ status: "access_blocked" });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(client.capabilities.revalidation).toBe("unsupported");
+    for (const operation of ["prebook", "book", "pay", "cancel", "reschedule", "revalidate"]) {
+      expect(client).not.toHaveProperty(operation);
+    }
+  });
   it("maps deterministic quotes without granting supplier write capabilities", async () => {
     const trip = createSyntheticTripSnapshot();
     const providers = [
       createDuffelReadProvider(syntheticReadClient("flight")),
-      createReadAdapter("duffel", "accommodation", syntheticReadClient("accommodation")),
+      createReadAdapter("nuitee", "accommodation", syntheticReadClient("accommodation")),
     ];
     const result = await searchPlanningOffers(providers, {
       componentTypes: ["flight", "accommodation"],
@@ -119,16 +149,16 @@ describe("injected planning suppliers", () => {
         ],
         execute,
       };
-      const source = createReadAdapter("duffel", "accommodation", client);
+      const source = createReadAdapter("nuitee", "accommodation", client);
       const result = await searchPlanningOffers([source], query);
       expect(result.outcomes[0]).toMatchObject({
-        provider: "duffel",
+        provider: "nuitee",
         componentType: "accommodation",
         status: "available",
       });
       const offer = projectPublicPlanningOffer(result.offers[0]);
       expect(offer.component).toMatchObject({
-        provider: "duffel",
+        provider: "nuitee",
         type: "accommodation",
         serviceStart: null,
         serviceEnd: null,
@@ -162,7 +192,7 @@ describe("injected planning suppliers", () => {
       .parse(
         await syntheticReadClient("accommodation").search(query, new AbortController().signal),
       )[0];
-    const source = createReadAdapter("duffel", "accommodation", {
+    const source = createReadAdapter("nuitee", "accommodation", {
       search: async () => [
         {
           ...hit,
@@ -188,6 +218,59 @@ describe("injected planning suppliers", () => {
 
   describe("truthful bounded supplier search outcomes", () => {
     afterEach(() => vi.useRealTimers());
+
+    it("measures current-source p95 within ten seconds and every search within twelve seconds under controlled delays", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2029-01-01T00:00:00Z"));
+      const request = query();
+      const original = structuredClone(request);
+      const durations: number[] = [];
+      for (let sample = 0; sample < 20; sample++) {
+        const sources = createPlanningProviders("deterministic").map((source, lane) => ({
+          ...source,
+          search: async (input: SupplyReadQuery, signal: AbortSignal) => {
+            if (sample >= 18 && source.capabilities.provider === "nuitee")
+              return new Promise<readonly unknown[]>(() => {});
+            await new Promise<void>((resolve) => setTimeout(resolve, sample * 250 + lane * 50));
+            return source.search(input, signal);
+          },
+        }));
+        const started = Date.now();
+        const pending = searchPlanningOffers(sources, request).then((result) => {
+          durations.push(Date.now() - started);
+          return result;
+        });
+        await vi.advanceTimersByTimeAsync(8_000);
+        const result = await pending;
+        expect(result.outcomes.at(-1)).toMatchObject({
+          componentType: "rail",
+          status: "unsupported",
+        });
+        expect(result.offers.some((offer) => offer.component.type === "flight")).toBe(true);
+        expect(result.offers.some((offer) => offer.component.type === "activity")).toBe(true);
+        if (sample >= 18) {
+          expect(result.outcomes).toContainEqual(
+            expect.objectContaining({
+              provider: "nuitee",
+              componentType: "accommodation",
+              status: "deadline",
+            }),
+          );
+          expect(result.offers.some((offer) => offer.component.type === "accommodation")).toBe(
+            false,
+          );
+        }
+        expect(vi.getTimerCount()).toBe(0);
+      }
+      const sorted = [...durations].sort((left, right) => left - right);
+      const p95 = sorted[Math.ceil(sorted.length * 0.95) - 1];
+      expect(sorted).toHaveLength(20);
+      expect(p95).toBe(8_000);
+      expect(p95).toBeLessThanOrEqual(10_000);
+      expect(Math.max(...sorted)).toBe(8_000);
+      expect(Math.max(...sorted)).toBeLessThanOrEqual(12_000);
+      expect(request).toEqual(original);
+    });
 
     function query(
       componentTypes: SupplyReadQuery["componentTypes"] = [
@@ -235,7 +318,7 @@ describe("injected planning suppliers", () => {
           retryable: false,
         }),
         expect.objectContaining({
-          provider: "duffel",
+          provider: "nuitee",
           componentType: "accommodation",
           status: "unconfigured",
         }),
@@ -286,7 +369,7 @@ describe("injected planning suppliers", () => {
         providers.map((source) => [source.capabilities.provider, source.capabilities.search]),
       ).toEqual([
         ["duffel", ["flight"]],
-        ["duffel", ["accommodation"]],
+        ["nuitee", ["accommodation"]],
         ["viator", ["activity"]],
       ]);
       const result = await searchPlanningOffers(providers, query());
@@ -335,13 +418,13 @@ describe("injected planning suppliers", () => {
       },
     );
 
-    it("isolates Duffel products, preserves Viator results and never mutates caller state or invokes writes", async () => {
+    it("isolates Nuitee failures, preserves Duffel/Viator results and never mutates caller state or invokes writes", async () => {
       let writes = 0;
       const request = query();
       const before = structuredClone(request);
       const flight = provider("duffel", "flight");
       const stay: SupplyReadProvider = {
-        capabilities: { provider: "duffel", search: ["accommodation"], readOnly: true },
+        capabilities: { provider: "nuitee", search: ["accommodation"], readOnly: true },
         search: async (input) => {
           input.destinationIds.length = 0;
           throw new SupplyReadError("access_blocked");
@@ -356,7 +439,11 @@ describe("injected planning suppliers", () => {
       const result = await searchPlanningOffers([flight, stay, activity], request);
       expect(result.offers.map((offer) => offer.component.type)).toContain("flight");
       expect(result.offers.map((offer) => offer.component.type)).toContain("activity");
-      expect(result.outcomes.filter((outcome) => outcome.provider === "duffel")).toEqual([
+      expect(
+        result.outcomes.filter(
+          (outcome) => outcome.provider === "duffel" || outcome.provider === "nuitee",
+        ),
+      ).toEqual([
         expect.objectContaining({ componentType: "flight", status: "available" }),
         expect.objectContaining({ componentType: "accommodation", status: "access_blocked" }),
       ]);
@@ -368,6 +455,7 @@ describe("injected planning suppliers", () => {
       const environment = {
         PROVIDER_MODE: "live",
         DUFFEL_READ_SECRET: "synthetic-read-canary",
+        NUITEE_SECRET: "synthetic-stay-canary",
         VIATOR_SECRET: "synthetic-shared-canary",
         SUPPLIER_PROVIDERS: JSON.stringify({
           duffel: {
@@ -383,6 +471,11 @@ describe("injected planning suppliers", () => {
                   },
                 },
               },
+            },
+          },
+          nuitee: {
+            readSecretRef: "NUITEE_SECRET",
+            products: {
               accommodation: {
                 operations: { search: { support: "supported", access: "blocked" } },
               },
@@ -567,11 +660,15 @@ describe("injected planning suppliers", () => {
     it("bounds and deduplicates fairly by product even when one adapter serves multiple products", async () => {
       const sharedOfferId = "synthetic-shared-offer";
       const multi: SupplyReadProvider = {
-        capabilities: { provider: "duffel", search: ["flight", "accommodation"], readOnly: true },
+        capabilities: {
+          provider: "synthetic-multi",
+          search: ["flight", "accommodation"],
+          readOnly: true,
+        },
         search: async (input, signal) => {
           const type = input.componentTypes[0];
           if (type !== "flight" && type !== "accommodation") throw new Error("Unexpected query");
-          const offers = await provider("duffel", type).search(input, signal);
+          const offers = await provider("synthetic-multi", type).search(input, signal);
           const first = planningOfferSchema.parse(offers[0]);
           return Array.from({ length: 32 }, () => ({
             ...first,
@@ -584,7 +681,9 @@ describe("injected planning suppliers", () => {
       expect(new Set(result.offers.map((offer) => offer.component.type))).toEqual(
         new Set(["flight", "accommodation", "activity"]),
       );
-      expect(result.outcomes.filter((outcome) => outcome.provider === "duffel")).toHaveLength(2);
+      expect(
+        result.outcomes.filter((outcome) => outcome.provider === "synthetic-multi"),
+      ).toHaveLength(2);
     });
 
     it("deduplicates before truncating so repeated flight hits cannot starve distinct offers", async () => {
@@ -604,7 +703,7 @@ describe("injected planning suppliers", () => {
     it("returns exactly 32 unique offers with fair product allocation when all three products fill the budget", async () => {
       const providers = [
         provider("duffel", "flight"),
-        provider("duffel", "accommodation"),
+        provider("nuitee", "accommodation"),
         provider("viator", "activity"),
       ].map((source): SupplyReadProvider => ({
         ...source,
@@ -639,7 +738,7 @@ describe("injected planning suppliers", () => {
     it("does not starve return-leg requirements behind many outbound offers", async () => {
       const sources = [
         provider("duffel", "flight"),
-        provider("duffel", "accommodation"),
+        provider("nuitee", "accommodation"),
         provider("viator", "activity"),
       ].map((source): SupplyReadProvider => ({
         ...source,
@@ -669,7 +768,7 @@ describe("injected planning suppliers", () => {
       const sources = [
         provider("duffel", "flight"),
         provider("synthetic-flights", "flight"),
-        provider("duffel", "accommodation"),
+        provider("nuitee", "accommodation"),
         provider("viator", "activity"),
       ].map((source): SupplyReadProvider => ({
         ...source,
@@ -701,7 +800,7 @@ describe("injected planning suppliers", () => {
             ...wrongSource,
             capabilities: { ...wrongSource.capabilities, provider: "duffel" },
           },
-          provider("duffel", "accommodation"),
+          provider("nuitee", "accommodation"),
           {
             capabilities: { provider: "viator", search: ["activity"], readOnly: true },
             search: async () => Array.from({ length: 33 }, () => ({})),
@@ -765,7 +864,7 @@ describe("injected planning suppliers", () => {
       const signals: AbortSignal[] = [];
       const sources = ["flight", "accommodation"].map((type): SupplyReadProvider => ({
         capabilities: {
-          provider: "duffel",
+          provider: type === "flight" ? "duffel" : "nuitee",
           search: [type === "flight" ? "flight" : "accommodation"],
           readOnly: true,
         },

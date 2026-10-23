@@ -73,9 +73,11 @@ export async function researchDraftImpact(
       options.sort(
         (a, b) =>
           a.component.price.finalCustomerAmount.minorUnits -
-          b.component.price.finalCustomerAmount.minorUnits,
+            b.component.price.finalCustomerAmount.minorUnits ||
+          a.component.provider.localeCompare(b.component.provider) ||
+          a.component.supplierOfferId.localeCompare(b.component.supplierOfferId),
       );
-      return options[Math.floor(((options.length - 1) * candidate.preferences.spend) / 100)];
+      return options[0];
     });
     const components = selected.map((offer) => ({
       ...offer.component,

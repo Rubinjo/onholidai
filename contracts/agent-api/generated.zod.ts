@@ -38,6 +38,7 @@ import type {
   RetrieveRelevantContextCall,
   RetrieveRelevantContextInput,
   RunPurpose,
+  SelectedOffer,
   TerminalEvent,
   Text1000,
   Text120,
@@ -469,6 +470,9 @@ export const PromptContextSchema: z.ZodType<PromptContext> = z
       ),
   })
   .strict();
+export const SelectedOfferSchema: z.ZodType<SelectedOffer> = z
+  .object({ offerRef: UUIDStringSchema, revision: PositiveIntSchema })
+  .strict();
 export const CreateAgentRunRequestSchema: z.ZodType<CreateAgentRunRequest> = z
   .object({
     actor: ActorContextSchema,
@@ -478,6 +482,12 @@ export const CreateAgentRunRequestSchema: z.ZodType<CreateAgentRunRequest> = z
     message: Text12000Schema,
     purpose: RunPurposeSchema,
     requestId: UUIDStringSchema,
+    selectedOffers: z
+      .union([z.array(SelectedOfferSchema).min(1).max(32), z.null()])
+      .superRefine((value, context) =>
+        validateContractRules(value, { "x-unique-by": "offerRef" }, protectedKeys, context),
+      )
+      .default(null),
   })
   .strict()
   .superRefine((value, context) =>
@@ -485,6 +495,10 @@ export const CreateAgentRunRequestSchema: z.ZodType<CreateAgentRunRequest> = z
       value,
       {
         allOf: [
+          {
+            if: { properties: { selectedOffers: { type: "array" } }, required: ["selectedOffers"] },
+            then: { properties: { purpose: { const: "refinement" } } },
+          },
           {
             if: {
               properties: { purpose: { enum: ["initial_estimate", "refinement", "finalization"] } },

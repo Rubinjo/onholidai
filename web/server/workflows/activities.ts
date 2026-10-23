@@ -14,9 +14,10 @@ export type BookingActivityImplementations = BookingWorkflowActivities;
 export function createBookingActivities(
   database: Kysely<Database>,
   providers: TransactionProviderRegistry,
+  options: Parameters<typeof createRevalidationActivities>[2] = {},
 ): BookingActivityImplementations {
   return {
-    ...createRevalidationActivities(database, providers),
+    ...createRevalidationActivities(database, providers, options),
     ...createExecutionActivities(database, providers),
   };
 }

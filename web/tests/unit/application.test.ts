@@ -4,6 +4,68 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 describe("explicit application composition", () => {
+  it.each(["deterministic", "live"] as const)(
+    "keeps only the current product matrix in %s roots even when legacy access was declared verified",
+    async (mode) => {
+      const { createApplication } = await import("../../server/application");
+      const { createReadAdapter } = await import("../../server/supply/providers/adapter");
+      const search = vi.fn(async () => []);
+      const current = [
+        createReadAdapter("duffel", "flight", { search }),
+        createReadAdapter("nuitee", "accommodation", { search }),
+        createReadAdapter("viator", "activity", { search }),
+      ];
+      const inactive = [
+        createReadAdapter("duffel", "accommodation", { search }),
+        createReadAdapter("nuitee", "flight", { search }),
+        createReadAdapter("nuitee", "activity", { search }),
+        createReadAdapter("booking.com", "accommodation", { search }),
+      ];
+      const verified = {
+        support: "supported",
+        access: "verified",
+        evidenceRef: "synthetic-only",
+        verifiedAt: "2030-01-01T00:00:00Z",
+        environment: "sandbox",
+      };
+      const application = createApplication(
+        {
+          PROVIDER_MODE: mode,
+          DUFFEL_READ_SECRET: "synthetic-duffel-key",
+          NUITEE_SECRET: "synthetic-nuitee-key",
+          VIATOR_SECRET: "synthetic-viator-key",
+          SUPPLIER_PROVIDERS: JSON.stringify({
+            duffel: {
+              readSecretRef: "DUFFEL_READ_SECRET",
+              products: {
+                flight: { operations: { search: verified } },
+                accommodation: { operations: { search: verified } },
+              },
+            },
+            nuitee: {
+              readSecretRef: "NUITEE_SECRET",
+              products: {
+                accommodation: { operations: { search: verified } },
+              },
+            },
+            viator: {
+              readSecretRef: "VIATOR_SECRET",
+              products: {
+                activity: { operations: { search: verified } },
+              },
+            },
+          }),
+        },
+        { planningProviders: [...current, ...inactive] },
+      );
+      try {
+        expect(application.planningProviders).toEqual(current);
+        expect(search).not.toHaveBeenCalled();
+      } finally {
+        await application.shutdown();
+      }
+    },
+  );
   it("enables only ready live search adapters while preserving unrelated application reads", async () => {
     const { createApplication } = await import("../../server/application");
     const { createDuffelReadProvider } = await import("../../server/supply/providers/duffel-read");
@@ -193,12 +255,20 @@ describe("explicit application composition", () => {
         PROVIDER_MODE: "live",
         DUFFEL_READ_SECRET: "synthetic-duffel-read",
         DUFFEL_TRANSACTION_SECRET: "synthetic-never-used-write",
+        NUITEE_SECRET: "synthetic-nuitee-read",
         VIATOR_SECRET: "synthetic-viator-read",
         SUPPLIER_PROVIDERS: JSON.stringify({
           duffel: {
             readSecretRef: "DUFFEL_READ_SECRET",
             transactionSecretRef: "DUFFEL_TRANSACTION_SECRET",
             products: { flight: { operations: { search: verified } } },
+          },
+          nuitee: {
+            readSecretRef: "NUITEE_SECRET",
+            transactionSecretRef: "NUITEE_SECRET",
+            products: {
+              accommodation: { operations: { search: { ...verified, environment: "sandbox" } } },
+            },
           },
           viator: {
             readSecretRef: "VIATOR_SECRET",
@@ -210,14 +280,14 @@ describe("explicit application composition", () => {
     );
     try {
       expect(application.planningProviders.map((provider) => provider.capabilities.search)).toEqual(
-        [["flight"], ["activity"]],
+        [["flight"], ["accommodation"], ["activity"]],
       );
       expect(application.config.VIATOR_ENVIRONMENT).toBe("sandbox");
       const snapshot = createSyntheticTripSnapshot();
       const result = await searchPlanningOffers(
         application.planningProviders,
         {
-          componentTypes: ["flight", "activity", "rail"],
+          componentTypes: ["flight", "accommodation", "activity", "rail"],
           departureOrigin: snapshot.departureOrigin,
           destinationIds: snapshot.destinations.map((place) => place.id),
           destinations: snapshot.destinations,
@@ -232,6 +302,7 @@ describe("explicit application composition", () => {
       expect(result.offers).toEqual([]);
       expect(result.outcomes.map((source) => source.status)).toEqual([
         "unsupported",
+        "access_blocked",
         "unsupported",
         "unsupported",
       ]);

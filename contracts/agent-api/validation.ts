@@ -85,6 +85,13 @@ export function contractRulesSatisfied(
   const normalizeKey = (key: string): string => key.toLowerCase().replace(/[^a-z0-9]/g, "");
   const protectedNames = new Set(protectedKeys.map(normalizeKey));
   if (!matches(value, rules)) return false;
+  const uniqueKey = rules["x-unique-by"];
+  if (
+    typeof uniqueKey === "string" &&
+    Array.isArray(value) &&
+    new Set(value.map((item) => JSON.stringify(field(item, uniqueKey)))).size !== value.length
+  )
+    return false;
   if (Array.isArray(rules["x-equal-fields"])) {
     for (const pair of rules["x-equal-fields"]) {
       if (

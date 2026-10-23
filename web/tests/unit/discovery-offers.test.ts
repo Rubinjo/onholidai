@@ -25,7 +25,7 @@ const query = {
 describe("incomplete discovery is not an accepted component", () => {
   it("preserves missing dates, fees, totals and terms as null, with safe public facts", async () => {
     const client = syntheticReadClient("accommodation");
-    const adapter = createReadAdapter("duffel", "accommodation", {
+    const adapter = createReadAdapter("nuitee", "accommodation", {
       search: async (input, signal) =>
         ((await client.search(input, signal)) as Record<string, unknown>[]).map((hit) => ({
           ...hit,

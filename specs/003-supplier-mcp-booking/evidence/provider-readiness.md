@@ -2,6 +2,181 @@
 
 Date: 2026-10-18. Contract: [provider-readiness](../contracts/provider-readiness.md).
 
+## Current scope revision (2026-10-23)
+
+Current targets are Duffel Flights, Nuitee stays and Viator activities. The
+dated Duffel Stays approvals/probes and older "current scope" sections below
+are preserved historical evidence, not instructions to reactivate that lane.
+User reports Duffel Flights-only access and Nuitee access; no credentials or
+authenticated requests were inspected/executed in this revision.
+
+| Product                      | Implementation evidence                                                                                                                                           | Provider-test / live approval                               | Remaining gate                                                                                                                                                                             |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Duffel Flights               | Existing mapped read client; historical synthetic tests only                                                                                                      | No new certification                                        | Existing per-operation prerequisites remain                                                                                                                                                |
+| Nuitee stays                 | Fixed-host rates/property-detail client; 22 synthetic wire cases, persisted multi-room revision/privacy certification and five-project deterministic browser acceptance; foundation passed | User-reported access only, operation/environment unverified | Trusted nationality/occupancy, live operation approval, prebook safety, exact pricing/payment path, booking/status correlation |
+| Viator activities            | Existing mapped read client; historical synthetic tests only                                                                                                      | No new certification; booking-tier entitlement unverified   | Actual merchant booking/status permission and trusted prerequisites                                                                                                                        |
+| Duffel Stays                 | Historical implementation/probes below                                                                                                                            | Not a current activation target                             | Preserve saved provenance/approved reconciliation; disable new discovery/refresh/book writes                                                                                               |
+| Nuitee Flights / Experiences | Evaluated in [research](../research.md#2026-10-23-provider-selection-revision), not selected                                                                      | Not checked or required                                     | Separately approved future scope, no fallback                                                                                                                                              |
+
+Nuitee hotel prebook is documented checkout-session creation, not established
+read-only revalidation. Keep it excluded unless a no-hold/no-payment variant
+is explicitly evidenced. Unsupported revalidation blocks whole-trip stay
+authorization, not unrelated discovery. Reusable prebook IDs do not prove
+idempotency. Read implementation is not live activation or a successful provider
+probe.
+
+### Subsequent discovery acceptance
+
+T028/T031/T032 are complete; see the
+[execution record](discovery.md#2026-10-23-t028t031t032-discovery-acceptance).
+Final results: 281 current web tests / 24 files, 226 web and 41 Python
+contracts, 44 foundation tests, 45 actual MCP/export tests and 10 browser cases
+across all five projects, without skips. Browser fault/prerequisite/legacy cases
+use explicit UI fixtures at 320px; the separate real deterministic browser
+journey exercises actual MCP and persisted reads. Controlled-clock search
+p95/maximum are both 8,000 ms, not measured live or browser latency. These
+results do not change any provider/environment/operation approval above.
+
+## 2026-10-23 manual confirmation and foundation closeout
+
+### Subsequent T097/T098 persisted certification
+
+The earlier incomplete T097/T098 status below is superseded by this execution.
+Reused the synthetic Nuitee response in the existing provider fixture module.
+The production HTTP mapper, with mocked fetch and an isolated database, now
+round-trips selected multi-room/child allocation, sourced session/rate/room IDs,
+exact SSP plus property charges, changed refund/meal/customer-price facts and
+immutable original revisions through persisted owner and active-run reads.
+Fresh detail remains incomplete (`unknown`, estimated, no service instants or
+invented expiry); unsupported final revalidation issues no HTTP. A separate
+seeded saved-evidence expiry fixture returns expired status without claiming
+that the Nuitee rates API supplies a checkout deadline. No accepted trip,
+proposal or booking mutation occurs. The fixed three-request trace is rates,
+property data and rates again, never prebook/payment/booking.
+
+The existing research introduction still named Duffel for stays. A failing UI
+regression reproduced that mismatch before the copy was corrected to Nuitee.
+No layout or interaction redesign was introduced.
+
+| T098 executed check | Result |
+| --- | --- |
+| Isolated `pnpm --dir web test:foundation` | 44 passed / 4 files; zero skips/unhandled errors |
+| All web contracts plus current supplier access/browser-panel/config/application/provider/discovery suites | 277 passed / 24 files; zero skips |
+| Actual FastMCP protocol plus Python canonical export tests | 45 passed; zero skips |
+| Agent/snapshot/promoted contract drift and shared supply validation | Passed; 16 wire cases |
+| Web/Python typecheck, targeted ESLint/Ruff and changed-test formatting | Passed |
+
+T097/T098 are complete. TypeScript persistence and actual MCP protocol are
+tested at their existing boundaries; protocol callbacks remain mocked, not a
+new deployed cross-process end-to-end test. T028/T031/T032, browser E2E, latency
+and live supplier approvals remain independent. No secrets/environment files
+were inspected; only synthetic roles in a separate disposable cluster were used.
+
+The user confirmed all requested manual configuration updates. Restricted
+environment files were not read or modified; this is user-performed confirmation,
+not an independently inspected deployment. The supplied single-line JSON is now
+covered by a configuration-loader regression with deterministic mode, no real
+secrets, no verified access and blocked Nuitee final revalidation/book operations.
+
+Docker was available on this retry. Provisioned a separate disposable
+`postgis/postgis:18-3.6` container from the cached image using synthetic credentials
+and `infra/postgres/test-roles.sql`, bound only to loopback. The existing
+application database was untouched. The first foundation execution exposed four
+estimate failures caused by its fixture still injecting retired Duffel Stays.
+Replaced that fixture with Nuitee, retaining the essential-accommodation safety
+check and asserting the current provider/product matrix.
+
+| Executed check | Result |
+| --- | --- |
+| `pnpm --dir web test:foundation`, isolated synthetic test URLs | 44 passed / 4 files; zero skips or unhandled errors |
+| Supplier access/browser component, all web contract tests, config/application/provider/discovery units | 276 passed / 24 files; zero skips |
+| `pytest agent/tests/integration/test_supplier_mcp.py` | 41 passed; actual in-process FastMCP protocol |
+| Python canonical contract suite via `pnpm test:contracts` | 41 passed |
+| Canonical exports, agent/snapshot/promoted-contract drift, shared supply cases | Passed; 16 shared supply wire cases |
+| Web TypeScript and Python Pyright | Passed; Python zero errors/warnings |
+| Targeted ESLint/Ruff and changed-test Prettier/Black checks | Passed |
+
+The first general contract command ran without database variables and skipped 13
+database cases; the final 276-test run above includes all web contract tests with
+the isolated credentials and no skips. That final run supersedes the skipped
+result. The Vite future-native-loader notice remains a non-failing existing
+warning.
+
+New persisted tests prove current source identity and fair product ordering,
+Nuitee evidence reads through owner and active-run contexts, independent Nuitee
+outage results, unchanged trip version/no proposals/no booking transactions, and
+original saved Duffel stay attribution with unsupported detail/revalidation and
+no appended revision/fallback. New MCP cases exercise the canonical Nuitee
+multi-room fixture through all four tools, including partial outcomes and
+unsupported/changed/expired result transport. These MCP cases mock the trusted
+web callback; they do not claim a database-to-MCP end-to-end journey.
+
+T095/T017/T096 are complete. T097 remains incomplete for the full persisted
+Nuitee wire-level expired/changed/multi-room journey, and T098 remains downstream
+of it despite the now-green foundation check. Browser E2E/latency/human acceptance
+and all live approvals remain separate. No supplier API, prebook, reservation,
+payment or booking was called. The disposable test container is removed after
+validation; no reusable real credential or service is left behind.
+
+## 2026-10-23 Nuitee read correction verification
+
+T094 regressions were run before the configuration/composition/client changes.
+They reproduced rejected Nuitee declarations, absent Nuitee composition/client,
+and inactive-product behavior. A later explicit deterministic-root test also
+failed before the root adopted the same current-product matrix as live roots.
+The official [Search OpenAPI](https://docs.liteapi.travel/openapi/api-search.json)
+and [Hotel Data OpenAPI](https://docs.liteapi.travel/openapi/api-hotel-data.json)
+were checked against the mapping. Offer-level totals/SSP are single-item arrays;
+taxes/fees are inside `retailRate`. Property content uses `GET /v3.0/data/hotel`.
+Only public documentation and synthetic fixtures were used.
+
+Implemented boundaries:
+
+- Canonical `nuitee` accommodation; retained Duffel flight/Viator activity.
+  Both application modes reject inactive injected products; read selection
+  cannot call legacy Duffel stays or Nuitee Flights/Experiences as fallback.
+  Legacy Duffel evidence retains its original identity; refresh is unsupported.
+- Explicit `NUITEE_ENVIRONMENT`, shared trusted-server reference support,
+  environment-matching verification evidence and independent operations.
+  Nuitee final revalidation/book/cancel/reschedule remain hard-blocked.
+  Worker composition creates no read clients or new Nuitee transaction adapter.
+- Trusted nationality, one mapped location, exact per-room adults/child ages;
+  absent or inconsistent facts fail before HTTP. Rates/property detail only:
+  fixed host/method allowlist, no redirects, bounded payloads/responses,
+  six-second transport ceiling and inherited caller cancellation.
+- Selected multi-room IDs, occupancy numbers, source session and exact
+  minor-unit arithmetic; inconsistent sums/currencies/precision/occupancy
+  fail explicitly. Sourced public SSP plus known same-currency property
+  charges is estimated only; net economics/margin are never substituted.
+  Included charges are not double-counted; absent fees, unsupported currency
+  conversion and package/membership restrictions leave customer total unknown.
+  Service instants/expiry/final payment and checkout terms are not invented.
+- Query-bound property grants are in-memory and bounded; after restart/eviction
+  a new search may be needed. Removed/changed offer IDs are not silently
+  substituted. Existing persisted evidence remains readable.
+- No prebook, payment or booking method/endpoint in the client. No assertion
+  that checkout creation is a safe read or that a reusable prebook ID is
+  idempotent.
+
+| Executed check                                                                                            | Result                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Focused web supplier/config/composition/legacy/schema/browser-panel subset                                | 228 passed, 15 files, zero skipped                                                                                                               |
+| Nuitee wire cases, included above                                                                         | 22 passed; synthetic HTTP only                                                                                                                   |
+| Python contract-export and actual in-process MCP integration subset                                       | 41 passed, zero skipped; includes new shared Nuitee schema fixture                                                                               |
+| Web TypeScript; Python Pyright                                                                            | Passed; Python zero errors/warnings                                                                                                              |
+| Targeted ESLint; Python Ruff                                                                              | Passed                                                                                                                                           |
+| Snapshot/internal/public supply and agent artifact drift; promoted contracts                              | Passed; 16 shared supply validation cases                                                                                                        |
+| Current non-skipped foundation gate                                                                       | Blocked before collection: missing `TEST_DATABASE_ADMIN_URL`, `TEST_DATABASE_MIGRATION_URL`, `TEST_DATABASE_APP_URL`, `TEST_DATABASE_WORKER_URL` |
+| Persisted Nuitee browser/internal/MCP journey, browser E2E, latency percentiles, live provider operations | Not certified/run in this increment                                                                                                              |
+
+The environment-example read was denied; the user approved proceeding with
+accessible dependent work while T095 remains incomplete. The manual secret-free
+update is documented in [operations](../../../docs/operations.md#supplier-readiness-configuration);
+it has not been confirmed. Historical completed tasks and authenticated Duffel
+observations below are preserved, not reused as Nuitee certification.
+
+## Historical ledger introduction (2026-10-18)
+
 This is an initial implementation ledger, not activation approval. No provider
 credentials, account identifiers, passenger/payment data or raw payloads appear
 here. No external provider calls were made. Public documentation does not prove

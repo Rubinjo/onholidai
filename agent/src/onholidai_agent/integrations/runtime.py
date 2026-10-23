@@ -26,6 +26,27 @@ class EstimateSources:
     async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]:
         return await self.store.get_trip(request)
 
+    async def selected_offers(self, request: CreateAgentRunRequest) -> list[dict[str, object]]:
+        from .supplier_mcp import supplier_server
+
+        offers: list[dict[str, object]] = []
+        async with asyncio.timeout(12), Client(supplier_server(self.store, request)) as client:
+            for selected in request.selected_offers or []:
+                response = await client.call_tool(
+                    "supplier_offer_details",
+                    {"offerRef": selected.offer_ref, "revision": selected.revision},
+                )
+                data = cast(dict[str, object], response.structured_content)
+                offer = data.get("offer")
+                if (
+                    not isinstance(offer, dict)
+                    or offer.get("offerRef") != selected.offer_ref
+                    or offer.get("revision") != selected.revision
+                ):
+                    raise ValueError("selected_offer_unavailable")
+                offers.append(cast(dict[str, object], offer))
+        return offers
+
     async def search(
         self, request: CreateAgentRunRequest, query: dict[str, object]
     ) -> dict[str, object]:

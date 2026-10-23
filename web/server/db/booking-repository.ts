@@ -1,19 +1,154 @@
 import "server-only";
 
 import { sql, type Transaction } from "kysely";
+import { z } from "zod";
+
+import { bookingComponentTermsSchema, canonicalBookingJson } from "@/domain/booking/authorization";
+import { executionBasisSchema } from "@/domain/booking/schema";
+import { tripSnapshotSchema } from "@/domain/trip/schema";
+import { ProblemError } from "@/server/errors";
 
 import type { Database } from "@/server/db/database";
-import type { BookingAuthorization } from "@/domain/booking/authorization";
+import type { BookingAuthorization, BookingTermsV2 } from "@/domain/booking/authorization";
 import type { BookingTransaction } from "@/domain/booking/schema";
 
 export class BookingRepository {
   constructor(private readonly transaction: Transaction<Database>) {}
 
-  async insertAuthorization(authorization: BookingAuthorization): Promise<void> {
+  async reviewRecords(tripId: string, ownerUserId: string, tripVersion: number) {
+    const [review, authorization, history, active, confirmations] = await Promise.all([
+      this.transaction
+        .selectFrom("bookingRevalidations")
+        .selectAll()
+        .where("tripId", "=", tripId)
+        .where("ownerUserId", "=", ownerUserId)
+        .orderBy("createdAt", "desc")
+        .orderBy("workflowId", "desc")
+        .limit(1)
+        .executeTakeFirst(),
+      this.transaction
+        .selectFrom("bookingAuthorizations")
+        .selectAll()
+        .where("tripId", "=", tripId)
+        .where("ownerUserId", "=", ownerUserId)
+        .where("tripVersion", "=", tripVersion)
+        .orderBy("createdAt", "desc")
+        .orderBy("authorizedAt", "desc")
+        .limit(1)
+        .executeTakeFirst(),
+      this.transaction
+        .selectFrom("bookingTransactions")
+        .selectAll()
+        .where("tripId", "=", tripId)
+        .where("ownerUserId", "=", ownerUserId)
+        .orderBy("startedAt", "desc")
+        .orderBy("id", "desc")
+        .limit(10)
+        .execute(),
+      this.transaction
+        .selectFrom("bookingTransactions")
+        .selectAll()
+        .where("tripId", "=", tripId)
+        .where("ownerUserId", "=", ownerUserId)
+        .where("executionStatus", "=", "active")
+        .where("status", "in", ["requested", "running", "partially_confirmed", "action_required"])
+        .orderBy("startedAt", "desc")
+        .limit(1)
+        .executeTakeFirst(),
+      this.transaction
+        .selectFrom("bookingConfirmations")
+        .selectAll()
+        .distinctOn("componentId")
+        .where("tripId", "=", tripId)
+        .orderBy("componentId")
+        .orderBy("confirmedAt", "desc")
+        .limit(32)
+        .execute(),
+    ]);
+    const transactionIds = [
+      ...new Set([...history.map((entry) => entry.id), ...(active ? [active.id] : [])]),
+    ];
+    const dispatched = transactionIds.length
+      ? await this.transaction
+          .selectFrom("bookingComponentAttempts")
+          .select(["transactionId", "componentId"])
+          .distinctOn(["transactionId", "componentId"])
+          .where("transactionId", "in", transactionIds)
+          .where("status", "!=", "claimed")
+          .limit(352)
+          .execute()
+      : [];
+    return { review, authorization, history, active, confirmations, dispatched };
+  }
+
+  async assertConfirmedBasis(tripId: string, terms: BookingTermsV2): Promise<void> {
+    for (const component of terms.components.filter(
+      (entry) => entry.disposition === "already_confirmed",
+    )) {
+      const mismatch = () =>
+        new ProblemError({
+          title: "Confirmed commitment does not match this review",
+          status: 409,
+          code: "booking_commitment_mismatch",
+          detail:
+            "Refresh the whole-trip review without replacing or repeating existing commitments.",
+        });
+      if (!z.uuid().safeParse(component.confirmationId).success) throw mismatch();
+      const saved = await this.transaction
+        .selectFrom("bookingConfirmations")
+        .innerJoin(
+          "bookingTransactions",
+          "bookingTransactions.id",
+          "bookingConfirmations.transactionId",
+        )
+        .select(["bookingConfirmations.terms", "bookingTransactions.executionBasis"])
+        .where("bookingConfirmations.tripId", "=", tripId)
+        .where("bookingConfirmations.componentId", "=", component.componentId)
+        .where("bookingConfirmations.id", "=", component.confirmationId)
+        .executeTakeFirst();
+      if (!saved) throw mismatch();
+      const confirmed = bookingComponentTermsSchema.parse(saved.terms);
+      let provider: string | undefined = "provider" in confirmed ? confirmed.provider : undefined;
+      if (!provider) {
+        const basis = executionBasisSchema.parse(saved.executionBasis);
+        const version = await this.transaction
+          .selectFrom("tripVersions")
+          .select("snapshot")
+          .where("tripId", "=", tripId)
+          .where("version", "=", basis.startingTripVersion)
+          .executeTakeFirst();
+        provider = version
+          ? tripSnapshotSchema
+              .parse(version.snapshot)
+              .components.find((entry) => entry.id === component.componentId)?.provider
+          : undefined;
+      }
+      if (
+        provider !== component.provider ||
+        confirmed.supplierOfferId !== component.supplierOfferId ||
+        confirmed.inventoryId !== component.inventoryId ||
+        confirmed.serviceStart !== component.serviceStart ||
+        confirmed.serviceEnd !== component.serviceEnd ||
+        confirmed.currency !== component.currency ||
+        confirmed.finalCustomerMinor !== component.finalCustomerMinor ||
+        confirmed.cancellationTerms !== component.cancellationTerms ||
+        canonicalBookingJson([...confirmed.travellerIds].sort()) !==
+          canonicalBookingJson([...component.travellerIds].sort())
+      )
+        throw mismatch();
+    }
+  }
+
+  async insertAuthorization(
+    authorization: BookingAuthorization,
+    identity?: { requestId: string; requestFingerprint: string },
+  ): Promise<void> {
     await this.transaction
       .insertInto("bookingAuthorizations")
       .values({
         id: authorization.id,
+        requestId: identity?.requestId ?? null,
+        requestFingerprint: identity?.requestFingerprint ?? null,
         tripId: authorization.tripId,
         ownerUserId: authorization.userId,
         tripVersion: authorization.tripVersion,

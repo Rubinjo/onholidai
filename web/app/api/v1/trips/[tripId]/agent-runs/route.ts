@@ -6,6 +6,7 @@ import { lockPlanningAccess } from "@/server/db/planning-access";
 import { RunRepository } from "@/server/agent-client/run-repository";
 import { dispatchEstimate } from "@/server/agent-client/client";
 import { publicRun } from "@/server/agent-client/results";
+import { selectedOffersSchema } from "@/domain/trip/proposal";
 
 const command = z
   .object({
@@ -15,6 +16,7 @@ const command = z
     message: z.string().trim().min(1).max(12000),
     applicationPolicy: z.enum(["manual", "automatic"]).optional(),
     purpose: z.enum(["initial_estimate", "refinement", "finalization", "supplier_research"]),
+    selectedOffers: selectedOffersSchema.optional(),
   })
   .strict();
 export async function POST(request: Request, route: { params: Promise<{ tripId: string }> }) {
@@ -37,6 +39,7 @@ export async function POST(request: Request, route: { params: Promise<{ tripId: 
           message: input.message,
           purpose: input.purpose,
           ...(input.applicationPolicy ? { applicationPolicy: input.applicationPolicy } : {}),
+          ...(input.selectedOffers ? { selectedOffers: input.selectedOffers } : {}),
         });
       });
       try {

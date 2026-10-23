@@ -103,6 +103,7 @@ export type CreateAgentRunRequest = {
   message: Text12000;
   purpose: RunPurpose;
   requestId: UUIDString;
+  selectedOffers?: Array<SelectedOffer> | null;
 };
 export type DraftOperation = {
   operation: "add" | "replace" | "remove" | "reorder";
@@ -203,6 +204,7 @@ export type RetrieveRelevantContextInput = {
   reason: Text500;
 };
 export type RunPurpose = "initial_estimate" | "refinement" | "finalization" | "supplier_research";
+export type SelectedOffer = { offerRef: UUIDString; revision: PositiveInt };
 export type TerminalEvent = {
   cursor: PositiveInt;
   occurredAt: UTCDateTime;

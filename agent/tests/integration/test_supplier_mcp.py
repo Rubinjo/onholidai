@@ -13,6 +13,8 @@ from pydantic import ValidationError
 from onholidai_agent.api.security import ServiceTokenContext, verify_service_token
 from onholidai_agent.api.store import WebRunStore
 from onholidai_agent.graph.router import dispatch
+from onholidai_agent.integrations.nebius import DeterministicModel, NebiusClient
+from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.integrations.supplier_mcp import supplier_server
 from onholidai_agent.models.api import AgentRun, ChangeProposal, CreateAgentRunRequest
 from tests.integration.test_estimate import request
@@ -37,6 +39,48 @@ def research_request(owner: str | None = None) -> CreateAgentRunRequest:
     if owner:
         actor["userId"] = owner
     return CreateAgentRunRequest.model_validate(body)
+
+
+def test_selected_runtime_reads_only_exact_granted_revisions_through_the_real_mcp_protocol():
+    async def check():
+        raw = request().model_dump(mode="json", by_alias=True)
+        raw["purpose"] = "refinement"
+        raw["selectedOffers"] = [{"offerRef": REF, "revision": 2}]
+        selected_request = CreateAgentRunRequest.model_validate(raw)
+        calls: list[httpx.Request] = []
+        cases = json.loads((ROOT / "contracts/supply/validation-cases.json").read_text())
+        expected = {
+            **next(
+                case["value"]
+                for case in cases["offerCases"]
+                if case["id"] == "public-nuitee-multi-room-discovery"
+            ),
+            "sourceMode": "deterministic",
+            "queryFingerprint": None,
+            "partyFingerprint": None,
+            "offerRef": REF,
+            "revision": 2,
+        }
+
+        def web(http: httpx.Request) -> httpx.Response:
+            calls.append(http)
+            assert http.method == "GET"
+            assert http.url.path.endswith(f"/planning-offers/{REF}")
+            assert http.url.params["revision"] == "2"
+            assert http.headers["x-request-id"] == selected_request.request_id
+            return httpx.Response(200, json={"outcome": "unknown", "offer": expected})
+
+        async with httpx.AsyncClient(
+            base_url="http://web", transport=httpx.MockTransport(web)
+        ) as http:
+            sources = EstimateSources(
+                WebRunStore(http, SECRET),
+                NebiusClient(DeterministicModel(), "synthetic-model"),
+            )
+            assert await sources.selected_offers(selected_request) == [expected]
+        assert len(calls) == 1
+
+    asyncio.run(check())
 
 
 def test_real_protocol_has_exactly_four_closed_read_tools_and_signed_calls():
@@ -332,11 +376,12 @@ def test_invalid_wire_results_fail_closed(tool: str, result: dict[str, object]):
     asyncio.run(check())
 
 
-def test_public_offer_output_uses_canonical_schema():
+@pytest.mark.parametrize("case_id", ["public-flight", "public-nuitee-multi-room-discovery"])
+def test_public_offer_output_uses_canonical_schema(case_id: str):
     async def check() -> None:
         cases = json.loads((ROOT / "contracts/supply/validation-cases.json").read_text())
         valid = {
-            **next(case["value"] for case in cases["offerCases"] if case["valid"]),
+            **next(case["value"] for case in cases["offerCases"] if case["id"] == case_id),
             "sourceMode": "deterministic",
             "queryFingerprint": None,
             "partyFingerprint": None,
@@ -373,6 +418,66 @@ def test_public_offer_output_uses_canonical_schema():
             ):
                 result = await client.call_tool("supplier_search", QUERY, raise_on_error=False)
                 assert result.is_error is not success
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize("outcome", ["unsupported", "changed", "expired"])
+def test_nuitee_multi_room_evidence_through_all_four_read_tools(outcome: str):
+    async def check() -> None:
+        cases = json.loads((ROOT / "contracts/supply/validation-cases.json").read_text())
+        offer = {
+            **next(
+                case["value"]
+                for case in cases["offerCases"]
+                if case["id"] == "public-nuitee-multi-room-discovery"
+            ),
+            "offerRef": REF,
+            "revision": 1,
+            "sourceMode": "deterministic",
+            "queryFingerprint": None,
+            "partyFingerprint": None,
+        }
+        responses = {
+            "planning-search": {
+                "offers": [offer],
+                "outcomes": [
+                    {"provider": "duffel", "componentType": "flight", "status": "error"},
+                    {"provider": "nuitee", "componentType": "accommodation", "status": "available"},
+                    {"provider": "viator", "componentType": "activity", "status": "no_matches"},
+                ],
+            },
+            REF: {"outcome": "available", "offer": offer},
+            "revalidations": {"outcome": outcome, "offer": offer, "differences": []},
+            "planning-capabilities": {
+                "capabilities": [
+                    {"provider": "nuitee", "componentType": "accommodation"},
+                ]
+            },
+        }
+        calls: list[str] = []
+
+        def web(http: httpx.Request) -> httpx.Response:
+            endpoint = http.url.path.rsplit("/", 1)[-1]
+            calls.append(endpoint)
+            return httpx.Response(200, json=responses[endpoint])
+
+        trusted = research_request()
+        before = deepcopy(trusted)
+        async with (
+            httpx.AsyncClient(base_url="http://web", transport=httpx.MockTransport(web)) as http,
+            Client(supplier_server(WebRunStore(http, SECRET), trusted)) as client,
+        ):
+            for tool, args, endpoint in [
+                ("supplier_search", QUERY, "planning-search"),
+                ("supplier_offer_details", {"offerRef": REF, "revision": 1}, REF),
+                ("supplier_revalidate_offer", {"offerRef": REF, "revision": 1}, "revalidations"),
+                ("supplier_capabilities", {}, "planning-capabilities"),
+            ]:
+                result = await client.call_tool(tool, args)
+                assert result.structured_content == responses[endpoint]
+        assert calls == ["planning-search", REF, "revalidations", "planning-capabilities"]
+        assert trusted == before
 
     asyncio.run(check())
 

@@ -9,9 +9,113 @@ import { readOwnedTripVersion } from "@/domain/trip/read";
 import { tripSnapshotSchema } from "@/domain/trip/schema";
 import { startWorkflow } from "@/server/workflows/client";
 import { inTransaction } from "@/server/db/transaction";
+import { BookingRepository } from "@/server/db/booking-repository";
+import { publicSupplierText } from "@/lib/privacy";
+
+import {
+  bookingComponentTermsSchema,
+  bookingTermsSchema,
+  currentWholeTripCoverage,
+  isWholeTripTerms,
+  projectBookingTerms,
+} from "./authorization";
+import { deriveBookingCoverage } from "../trip/booking-coverage";
+import {
+  bookingReviewStateSchema,
+  projectBookingCoverage,
+  projectRevalidationOutcomes,
+} from "./public";
+import { projectBookingTransactionRow, projectPublicBookingTransaction } from "./schema";
 
 import type { Database } from "@/server/db/database";
 import type { BookingActor } from "@/server/auth/planning-actor";
+
+export async function readBookingReview(
+  database: Kysely<Database>,
+  proof: string | BookingActor,
+  tripId: string,
+  now = new Date(),
+) {
+  const actor = await bookingActor(database, proof, tripId);
+  return inTransaction(database, async (transaction) => {
+    const current = await readOwnedTripVersion(transaction, actor.planningOwnerId, tripId);
+    const snapshot = tripSnapshotSchema.parse(current.snapshot);
+    const records = await new BookingRepository(transaction).reviewRecords(
+      tripId,
+      actor.accountUserId,
+      current.version,
+    );
+    const terms = records.review?.terms ? bookingTermsSchema.parse(records.review.terms) : null;
+    const coverage =
+      terms && isWholeTripTerms(terms) && records.review?.tripVersion === current.version
+        ? currentWholeTripCoverage(terms, snapshot, current.version, now)
+        : deriveBookingCoverage(snapshot, { tripVersion: current.version, now });
+    const projectAttempt = (row: NonNullable<typeof records.active>) =>
+      projectPublicBookingTransaction(
+        projectBookingTransactionRow(row),
+        new Set(
+          records.dispatched
+            .filter((entry) => entry.transactionId === row.id)
+            .map((entry) => entry.componentId),
+        ),
+      );
+    const authorization = records.authorization;
+    return bookingReviewStateSchema.parse({
+      tripId,
+      tripVersion: current.version,
+      coverage: projectBookingCoverage(coverage),
+      review: records.review
+        ? {
+            workflowId: records.review.workflowId,
+            tripId,
+            tripVersion: records.review.tripVersion,
+            status: records.review.status,
+            outcomes: projectRevalidationOutcomes(records.review.outcomes),
+            termsHash: records.review.termsHash,
+            terms: terms ? projectBookingTerms(terms) : null,
+            expiresAt: records.review.expiresAt?.toISOString() ?? null,
+            coverage: projectBookingCoverage(coverage),
+          }
+        : null,
+      authorization: authorization
+        ? {
+            id: authorization.id,
+            tripId,
+            tripVersion: authorization.tripVersion,
+            operation: authorization.operation,
+            componentId: authorization.componentId,
+            termsHash: authorization.termsHash,
+            status:
+              authorization.status === "authorized" &&
+              authorization.expiresAt.getTime() <= now.getTime()
+                ? "expired"
+                : authorization.status,
+            requestId: authorization.requestId,
+            authorizedAt: authorization.authorizedAt.toISOString(),
+            expiresAt: authorization.expiresAt.toISOString(),
+          }
+        : null,
+      activeAttempt: records.active ? projectAttempt(records.active) : null,
+      latestAttempt: records.history[0] ? projectAttempt(records.history[0]) : null,
+      history: records.history.map(projectAttempt),
+      confirmedCommitments: records.confirmations.map((confirmation) => {
+        const saved = bookingComponentTermsSchema.parse(confirmation.terms);
+        return {
+          id: confirmation.id,
+          componentId: confirmation.componentId,
+          providerReference: publicSupplierText(confirmation.providerReference),
+          serviceStart: saved.serviceStart,
+          serviceEnd: saved.serviceEnd,
+          travellerIds: saved.travellerIds,
+          finalCustomerMinor: saved.finalCustomerMinor,
+          currency: saved.currency,
+          cancellationTerms: publicSupplierText(saved.cancellationTerms),
+          confirmedAt: confirmation.confirmedAt.toISOString(),
+        };
+      }),
+    });
+  });
+}
 
 const requestSchema = z
   .object({ requestId: z.uuid(), expectedVersion: z.number().int().positive() })

@@ -3,6 +3,7 @@ import { ProblemError } from "@/server/errors";
 import { ConversationRepository } from "@/server/db/conversation-repository";
 import { lockServiceGrant } from "@/server/auth/planning-resource";
 import { inTransaction } from "@/server/db/transaction";
+import { selectedOffersSchema } from "@/domain/trip/proposal";
 
 import { runContext } from "./run-repository";
 import { createAgentServiceToken } from "./credentials";
@@ -40,6 +41,15 @@ export async function dispatchEstimate(
           run.baseTripVersion,
         )
       : {};
+  const requestMessage = await application.database
+    .selectFrom("conversationMessages")
+    .select("content")
+    .where("agentRunId", "=", run.id)
+    .where("role", "=", "user")
+    .executeTakeFirstOrThrow();
+  const selectedOffers = requestMessage.content.selectedOffers
+    ? selectedOffersSchema.parse(requestMessage.content.selectedOffers)
+    : undefined;
   const body: CreateAgentRunRequest = CreateAgentRunRequestSchema.parse({
     contractVersion: "1",
     actor: {
@@ -55,6 +65,7 @@ export async function dispatchEstimate(
     conversationId: run.conversationId,
     purpose: run.purpose,
     message,
+    ...(selectedOffers ? { selectedOffers } : {}),
     // The agent fetches the authoritative bounded view through get_trip; do not
     // duplicate a potentially large snapshot in the creation command.
     context: {

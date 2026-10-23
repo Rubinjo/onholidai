@@ -4,10 +4,11 @@ import { sql, type Kysely } from "kysely";
 
 import {
   bookingTermsSchema,
+  bookingTermsV2Schema,
   hashBookingTerms,
   type BookingTerms,
 } from "../../domain/booking/authorization";
-import { startBooking } from "../../domain/booking/start";
+import { bookingTransactionSchema } from "../../domain/booking/schema";
 import { commitTripMutation } from "../../domain/trip/commit";
 import { createTrip } from "../../domain/trip/create";
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
@@ -15,9 +16,15 @@ import { tripSnapshotSchema, type TripSnapshot } from "../../domain/trip/schema"
 import { BookingRepository } from "../../server/db/booking-repository";
 import { inTransaction } from "../../server/db/transaction";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
+import {
+  reviewNow,
+  wholeTripReviewFixture,
+  wholeTripTermsFixture,
+} from "../fixtures/whole-trip-review";
 
 import type { Database } from "../../server/db/database";
 import type { BookingTransaction } from "../../domain/booking/schema";
+import type { TrustedBookingPrerequisiteReader } from "../../server/supply/payment";
 
 export interface SeededBooking {
   userId: string;
@@ -37,8 +44,8 @@ export interface SeedBookingOptions {
   startTransaction?: boolean;
 }
 
-// Seeds a finalized trip with unbooked flight, rail and stay components plus one
-// authorized exact-term booking request, mirroring the US4 independent fixture.
+// Historical v1 fixture for legacy execution/reconciliation tests. New starts
+// must use a complete v2 review instead of this saved authorization.
 export async function seedAuthorizedBooking(
   database: Kysely<Database>,
   options: SeedBookingOptions = {},
@@ -208,9 +215,44 @@ export async function seedAuthorizedBooking(
   const transaction =
     options.startTransaction === false
       ? null
-      : await startBooking(database, userId, trip.tripId, {
-          requestId: randomUUID(),
-          authorizationId,
+      : await inTransaction(database, async (connection) => {
+          const id = randomUUID();
+          const historical = bookingTransactionSchema.parse({
+            id,
+            tripId: trip.tripId,
+            authorizationId,
+            operation: "book_trip",
+            status: "requested",
+            components: terms.components.map((entry) => ({
+              componentId: entry.componentId,
+              status: "authorized",
+              providerReference: null,
+              safeReason: null,
+            })),
+            startedAt: now.toISOString(),
+            completedAt: null,
+            executionBasis: {
+              ownerUserId: userId,
+              operation: "book_trip",
+              authorizationId,
+              startingTripVersion: finalized.version,
+              terms,
+              termsHash: hashBookingTerms(terms),
+              expiresAt,
+            },
+            lastObservedTripVersion: finalized.version,
+            executionStatus: "active",
+            workflowId: `historical-booking-${id}`,
+            requestId: randomUUID(),
+          });
+          if (
+            !(await new BookingRepository(connection).startTransaction({
+              transaction: historical,
+              ownerUserId: userId,
+            }))
+          )
+            throw new Error("Historical booking fixture could not be persisted");
+          return historical;
         });
   return {
     userId,
@@ -220,5 +262,114 @@ export async function seedAuthorizedBooking(
     authorizationId,
     transaction,
     snapshot,
+  };
+}
+
+export async function seedReviewedWholeTrip(
+  database: Kysely<Database>,
+  mutateSnapshot?: (snapshot: TripSnapshot) => void,
+  status: "accepted" | "completed" = "completed",
+  ownerUserId?: string,
+  now = reviewNow,
+  acceptedEstimateReductionMinor = 0,
+) {
+  const fixture = wholeTripReviewFixture();
+  const checkedAt = now.toISOString(),
+    expiresAt = new Date(now.getTime() + 300_000).toISOString();
+  for (const evidence of fixture.evidence) {
+    evidence.checkedAt = checkedAt;
+    evidence.expiresAt = expiresAt;
+  }
+  for (const component of fixture.snapshot.components) {
+    component.checkedAt = checkedAt;
+    component.expiresAt = expiresAt;
+    component.price.checkedAt = checkedAt;
+    component.price.expiresAt = expiresAt;
+    if (component.planningDetails) component.planningDetails.checkedAt = checkedAt;
+  }
+  fixture.snapshot.components[0].price.supplierAmount.minorUnits -= acceptedEstimateReductionMinor;
+  fixture.snapshot.components[0].price.finalCustomerAmount.minorUnits -=
+    acceptedEstimateReductionMinor;
+  fixture.snapshot.price.supplierTotal.minorUnits -= acceptedEstimateReductionMinor;
+  fixture.snapshot.price.finalCustomerTotal.minorUnits -= acceptedEstimateReductionMinor;
+  const terms = bookingTermsV2Schema.parse(wholeTripTermsFixture(fixture, now));
+  const snapshot = structuredClone(fixture.snapshot);
+  mutateSnapshot?.(snapshot);
+  const userId = ownerUserId ?? randomUUID();
+  if (!ownerUserId)
+    await sql`INSERT INTO app."user" (id, name, email) VALUES (${userId}, 'Recorded review owner', ${`review-${userId}@example.invalid`})`.execute(
+      database,
+    );
+  const creationSnapshot = projectCustomerSnapshot(createSyntheticTripSnapshot());
+  creationSnapshot.itineraryDays = [];
+  const trip = await createTrip(database, userId, {
+    requestId: randomUUID(),
+    title: "Recorded whole-trip review",
+    currency: "GBP",
+    snapshot: creationSnapshot,
+  });
+  const requestId = randomUUID();
+  await commitTripMutation(database, {
+    tripId: trip.tripId,
+    ownerUserId: userId,
+    expectedVersion: 1,
+    lifecycleState: "finalized",
+    requestId,
+    idempotencyKey: `recorded-review:${requestId}`,
+    requestFingerprint: createHash("sha256").update(requestId).digest("hex"),
+    snapshot,
+    initiatingActor: "user",
+    proposalId: null,
+    changeSummary: ["finalization", "feasibility_policy_v1"],
+    inverseOperation: { operation: "replace", target: "/", value: trip.snapshot },
+    nonReversibleReason: null,
+    outboxEventId: randomUUID(),
+    auditEventId: randomUUID(),
+  });
+  const workflowId = randomUUID();
+  await database
+    .insertInto("bookingRevalidations")
+    .values({
+      workflowId,
+      tripId: trip.tripId,
+      ownerUserId: userId,
+      requestId: randomUUID(),
+      requestFingerprint: "a".repeat(64),
+      tripVersion: 2,
+      status,
+      outcomes: sql<unknown[]>`${JSON.stringify([])}::jsonb`,
+      terms: status === "completed" ? terms : null,
+      termsHash: status === "completed" ? hashBookingTerms(terms) : null,
+      coverage: status === "completed" ? terms.coverage : null,
+      expiresAt: status === "completed" ? new Date(expiresAt) : null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .execute();
+  const prerequisites: TrustedBookingPrerequisiteReader = {
+    read: async ({ componentId }) => {
+      const evidence = fixture.evidence.find((entry) => entry.componentId === componentId);
+      return {
+        travellers: evidence?.travellerReadiness ?? null,
+        payment: evidence?.paymentReadiness ?? null,
+      };
+    },
+  };
+  return {
+    userId,
+    tripId: trip.tripId,
+    tripVersion: 2,
+    terms,
+    snapshot,
+    workflowId,
+    prerequisites,
+    request: {
+      requestId: randomUUID(),
+      tripVersion: 2,
+      termsHash: hashBookingTerms(terms),
+      operation: "book_trip" as const,
+      componentId: null,
+      acknowledgedNonReversibleActions: [],
+    },
   };
 }

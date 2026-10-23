@@ -309,9 +309,9 @@ async function boundedSearch(
 }
 
 const deferredProviders = new Set(["booking", "booking.com", "trainline", "getyourguide"]);
-const currentProviderByType = {
+export const currentProviderByType = {
   flight: "duffel",
-  accommodation: "duffel",
+  accommodation: "nuitee",
   activity: "viator",
   rail: null,
   transfer: null,
@@ -323,10 +323,16 @@ export function productReadiness(
   operation: "search" | "detail" | "revalidation",
 ) {
   if (!readiness) return undefined;
-  if (type === "flight" || type === "accommodation") {
+  if (type === "flight") {
     return {
       mode: readiness.duffel.mode,
-      operation: readiness.duffel.products[type].operations[operation],
+      operation: readiness.duffel.products.flight.operations[operation],
+    };
+  }
+  if (type === "accommodation") {
+    return {
+      mode: readiness.nuitee.mode,
+      operation: readiness.nuitee.products.accommodation.operations[operation],
     };
   }
   if (type === "activity")
@@ -396,7 +402,7 @@ export async function searchPlanningOffers(
       const selected = providers.filter(
         (provider) =>
           !deferredProviders.has(provider.capabilities.provider) &&
-          (!["duffel", "viator"].includes(provider.capabilities.provider) ||
+          (!["duffel", "nuitee", "viator"].includes(provider.capabilities.provider) ||
             provider.capabilities.provider === currentProviderByType[type]) &&
           provider.capabilities.search.includes(type),
       );

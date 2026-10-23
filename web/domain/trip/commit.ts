@@ -13,6 +13,7 @@ import {
 import { TripRepository, type TripRepositoryPort } from "@/server/db/trip-repository";
 import {
   assertBookingWritesEditable,
+  assertBookingCommitmentsPreserved,
   invalidateBookingStateForTripVersion,
 } from "@/domain/booking/invalidate";
 
@@ -201,13 +202,20 @@ export async function commitTripMutation(
     if (trip && trip.currentVersion !== input.expectedVersion) {
       throw new TripVersionConflictError(input.expectedVersion, trip.currentVersion);
     }
-    if (!input.creation) {
+    if (!input.creation && trip) {
       const ownBookingTransaction =
         input.initiatingActor === "booking_workflow" ? input.traceId : null;
       await assertBookingWritesEditable(
         transaction,
         input.tripId,
         input.initiatingActor,
+        ownBookingTransaction,
+      );
+      await assertBookingCommitmentsPreserved(
+        transaction,
+        input.tripId,
+        trip.currentVersion,
+        input.snapshot,
         ownBookingTransaction,
       );
     }

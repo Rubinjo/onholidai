@@ -9,12 +9,12 @@ import {
   qualifiedInstant,
   requiredArrivalMinutes,
 } from "./feasibility-policy";
+import { feasibilityIssueSchema } from "./itinerary.ts";
 
 import type { TripSnapshot } from "./schema";
 
-export const feasibilityIssueSchema = z
-  .object({ code: z.string(), message: z.string(), relatedIds: z.array(z.uuid()) })
-  .strict();
+export { feasibilityIssueSchema } from "./itinerary.ts";
+
 export const feasibilityReportSchema = z
   .object({
     policyVersion: z.literal("1"),

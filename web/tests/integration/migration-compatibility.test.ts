@@ -6,15 +6,30 @@ import { join } from "node:path";
 
 import { Pool, type PoolClient } from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { vi } from "vitest";
 
 import { loadMigrationFiles, migrate } from "../../server/db/migrate";
 import { decodeTripSnapshot } from "../../domain/trip/schema";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import {
+  wholeTripReviewFixture,
+  wholeTripTermsFixture,
+  reviewNow,
+} from "../fixtures/whole-trip-review";
+import { bookingTermsV1Schema, hashBookingTerms } from "../../domain/booking/authorization";
+import { seedReviewedWholeTrip } from "../helpers/booking";
+import { authorizeBooking } from "../../domain/booking/authorize";
+import { startBooking } from "../../domain/booking/start";
+import { readBookingReview } from "../../domain/booking/revalidate";
+import { createBookingActivities } from "../../server/workflows/book-activities";
+import { TransactionProviderRegistry } from "../../server/supply/transactions";
+import {
   createIsolatedTestDatabase,
   hasIsolatedDatabaseConfiguration,
   type IsolatedTestDatabase,
 } from "../helpers/database";
+
+vi.mock("server-only", () => ({}));
 
 describe("migration discovery", () => {
   it("rejects a gap before connecting", async () => {
@@ -172,6 +187,222 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
       await rm(directory, { force: true, recursive: true });
     }
   });
+
+  it("stores fresh v2 metadata and prevents mutation of final review, authorization identity and execution basis", async () => {
+    const seeded = await seedReviewedWholeTrip(fixture.database);
+    const authorization = await authorizeBooking(
+      fixture.database,
+      seeded.userId,
+      seeded.tripId,
+      seeded.request,
+      reviewNow,
+      seeded.prerequisites,
+    );
+    const booking = await startBooking(
+      fixture.database,
+      seeded.userId,
+      seeded.tripId,
+      { requestId: randomUUID(), authorizationId: authorization.id },
+      { now: reviewNow, prerequisites: seeded.prerequisites },
+    );
+    expect(
+      await fixture.database
+        .selectFrom("bookingAuthorizations")
+        .select(["termsVersion", "continuationOf", "rootAttemptId"])
+        .where("id", "=", authorization.id)
+        .executeTakeFirstOrThrow(),
+    ).toEqual({ termsVersion: 2, continuationOf: null, rootAttemptId: null });
+    expect(
+      await fixture.database
+        .selectFrom("bookingTransactions")
+        .select(["termsVersion", "continuationOf", "rootAttemptId"])
+        .where("id", "=", booking.id)
+        .executeTakeFirstOrThrow(),
+    ).toEqual({ termsVersion: 2, continuationOf: null, rootAttemptId: null });
+    await expect(
+      fixture.database
+        .updateTable("bookingRevalidations")
+        .set({ termsHash: "f".repeat(64) })
+        .where("workflowId", "=", seeded.workflowId)
+        .execute(),
+    ).rejects.toThrow("completed booking revalidation terms are immutable");
+    await expect(
+      fixture.database
+        .updateTable("bookingAuthorizations")
+        .set({ requestId: randomUUID() })
+        .where("id", "=", authorization.id)
+        .execute(),
+    ).rejects.toThrow("booking authorization terms are immutable");
+    await expect(
+      fixture.database
+        .updateTable("bookingTransactions")
+        .set({ executionBasis: { ...booking.executionBasis, termsHash: "f".repeat(64) } })
+        .where("id", "=", booking.id)
+        .execute(),
+    ).rejects.toThrow("booking execution basis is immutable");
+  }, 30_000);
+
+  it("upgrades migration 014 v1 authorization, confirmation and reconciliation evidence without rehashing it", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "onholidai-pre-whole-trip-"));
+    let prior: IsolatedTestDatabase | undefined;
+    try {
+      for (const migration of (await loadMigrationFiles()).filter((entry) => entry.version < 15))
+        await writeFile(join(directory, migration.filename), migration.sql);
+      prior = await createIsolatedTestDatabase({ migrationsDirectory: directory });
+      const recorded = wholeTripReviewFixture(),
+        raw = wholeTripTermsFixture(recorded);
+      const terms = bookingTermsV1Schema.parse({
+        departureOrigin: raw.departureOrigin,
+        travellerParty: raw.travellerParty,
+        components: raw.components.map((entry) => ({
+          componentId: entry.componentId,
+          supplierOfferId: entry.supplierOfferId,
+          inventoryId: entry.inventoryId,
+          serviceStart: entry.serviceStart,
+          serviceEnd: entry.serviceEnd,
+          travellerIds: entry.travellerIds,
+          finalCustomerMinor: entry.finalCustomerMinor,
+          taxesMinor: entry.taxesMinor,
+          feesMinor: entry.feesMinor,
+          currency: entry.currency,
+          cancellationTerms: entry.cancellationTerms,
+          expiresAt: entry.expiresAt,
+          nonReversible: false,
+        })),
+        totalPrice: raw.totalPrice,
+        nonReversibleActions: [],
+      });
+      const hash = hashBookingTerms(terms),
+        authorizationId = randomUUID(),
+        transactionId = randomUUID();
+      const basis = {
+        ownerUserId: "synthetic-owner",
+        operation: "book_trip",
+        authorizationId,
+        startingTripVersion: 1,
+        terms,
+        termsHash: hash,
+        expiresAt: terms.components[0].expiresAt,
+      };
+      await query(prior.connectionString, async (client) => {
+        await client.query(
+          `INSERT INTO app."user" (id,name,email) VALUES ('synthetic-owner','Recorded owner','recorded@example.invalid')`,
+        );
+        await client.query(
+          `INSERT INTO app.trips (id,owner_user_id,title,currency) VALUES ($1,'synthetic-owner','Recorded v1','GBP')`,
+          [tripId],
+        );
+        await client.query(
+          `INSERT INTO app.trip_versions
+          (trip_id,version,schema_version,snapshot,initiating_actor,initiating_request_id,change_summary,non_reversible_reason)
+          VALUES ($1,1,1,$2::jsonb,'user',$3,'["historical"]','Historical creation')`,
+          [tripId, JSON.stringify(recorded.snapshot), randomUUID()],
+        );
+        await client.query(
+          `INSERT INTO app.booking_authorizations
+          (id,trip_id,owner_user_id,trip_version,operation,terms,terms_hash,status,authorized_at,expires_at)
+          VALUES ($1,$2,'synthetic-owner',1,'book_trip',$3::jsonb,$4,'consumed',$5,$6)`,
+          [
+            authorizationId,
+            tripId,
+            JSON.stringify(terms),
+            hash,
+            reviewNow,
+            terms.components[0].expiresAt,
+          ],
+        );
+        await client.query(
+          `INSERT INTO app.booking_transactions
+          (id,trip_id,owner_user_id,authorization_id,operation,workflow_id,request_id,status,components,execution_basis,last_observed_trip_version,execution_status)
+          VALUES ($1,$2,'synthetic-owner',$3,'book_trip',$4,$5,'requested',$6::jsonb,$7::jsonb,1,'active')`,
+          [
+            transactionId,
+            tripId,
+            authorizationId,
+            `historical-${transactionId}`,
+            randomUUID(),
+            JSON.stringify(
+              terms.components.map((entry) => ({
+                componentId: entry.componentId,
+                status: "authorized",
+                providerReference: null,
+                safeReason: null,
+              })),
+            ),
+            JSON.stringify(basis),
+          ],
+        );
+        await client.query(
+          `INSERT INTO app.booking_confirmations
+          (id,transaction_id,trip_id,component_id,provider_reference,terms,confirmed_at)
+          VALUES ($1,$2,$3,$4,'recorded-confirmation',$5::jsonb,$6)`,
+          [
+            randomUUID(),
+            transactionId,
+            tripId,
+            terms.components[0].componentId,
+            JSON.stringify(terms.components[0]),
+            reviewNow,
+          ],
+        );
+      });
+      await expect(migrate(prior.migrationConnectionString)).resolves.toEqual([
+        "015_whole_trip_terms.sql",
+      ]);
+      const saved = await prior.database
+        .selectFrom("bookingAuthorizations")
+        .selectAll()
+        .where("id", "=", authorizationId)
+        .executeTakeFirstOrThrow();
+      expect(saved.termsVersion).toBe(1);
+      expect(saved.requestId).toBeNull();
+      expect(saved.terms).toEqual(terms);
+      expect(saved.termsHash).toBe(hash);
+      expect(hashBookingTerms(bookingTermsV1Schema.parse(saved.terms))).toBe(hash);
+      expect(
+        (
+          await prior.database
+            .selectFrom("bookingTransactions")
+            .select("executionBasis")
+            .where("id", "=", transactionId)
+            .executeTakeFirstOrThrow()
+        ).executionBasis,
+      ).toEqual(basis);
+      const providers = new TransactionProviderRegistry(),
+        execute = vi.fn();
+      providers.register({
+        provider: "duffel",
+        capabilities: {
+          book: true,
+          status: true,
+          cancel: false,
+          reschedule: false,
+          idempotency: true,
+        },
+        execute,
+        getStatus: async () => ({
+          status: "confirmed",
+          providerReference: "recorded-confirmation",
+          evidenceId: "recorded-status",
+          confirmedTerms: terms.components[0],
+        }),
+      });
+      expect(
+        await createBookingActivities(prior.database, providers).reconcileProviderStatus(
+          transactionId,
+          terms.components[0].componentId,
+        ),
+      ).toMatchObject({ status: "confirmed", providerReference: "recorded-confirmation" });
+      const safe = await readBookingReview(prior.database, "synthetic-owner", tripId, reviewNow);
+      expect(safe.latestAttempt?.termsVersion).toBe(1);
+      expect(safe.confirmedCommitments).toHaveLength(1);
+      expect(execute).not.toHaveBeenCalled();
+      expect(await migrate(prior.migrationConnectionString)).toEqual([]);
+    } finally {
+      await prior?.cleanup();
+      await rm(directory, { force: true, recursive: true });
+    }
+  }, 30_000);
 
   it("upgrades valid historical evidence without rewriting snapshots", async () => {
     const directory = await mkdtemp(join(tmpdir(), "onholidai-prior-migrations-"));

@@ -8,6 +8,7 @@ export interface ReadHttpOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
   now?: () => Date;
+  decimalFields?: readonly string[];
 }
 
 export interface WireHit {
@@ -15,6 +16,7 @@ export interface WireHit {
   offerId: string;
   currency: string;
   supplierMinor: number | null;
+  customerMinor?: number | null;
   taxesMinor: number | null;
   feesMinor: number | null;
   serviceStart: string | null;
@@ -30,6 +32,9 @@ export interface WireHit {
     rateId?: string;
     productCode?: string;
     optionCode?: string;
+    roomIds?: string[];
+    rateIds?: string[];
+    sessionId?: string;
   };
   minimumAge: number | null;
   maximumAge: number | null;
@@ -269,7 +274,12 @@ export function readJson(
             (key: string, value: unknown, context?: { source?: string }) => {
               if (
                 typeof value === "number" &&
-                ["fromPrice", "recommendedRetailPrice", "totalExtraCharges"].includes(key)
+                [
+                  "fromPrice",
+                  "recommendedRetailPrice",
+                  "totalExtraCharges",
+                  ...(options.decimalFields ?? []),
+                ].includes(key)
               ) {
                 // Modern JSON.parse exposes the original numeric token, avoiding precision
                 // loss before decimal scaling. Older runtimes must not guess lost digits.

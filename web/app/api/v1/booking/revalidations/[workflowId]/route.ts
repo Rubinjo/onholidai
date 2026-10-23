@@ -1,6 +1,11 @@
 import { bookingApiResponse, browserUser } from "@/server/api";
 import { ProblemError } from "@/server/errors";
 import { bookingTermsSchema, projectBookingTerms } from "@/domain/booking/authorization";
+import {
+  bookingCoverageReportSchema,
+  projectBookingCoverage,
+  projectRevalidationOutcomes,
+} from "@/domain/booking/public";
 
 export async function GET(
   request: Request,
@@ -27,10 +32,13 @@ export async function GET(
       tripId: record.tripId,
       tripVersion: record.tripVersion,
       status: record.status,
-      outcomes: record.outcomes,
+      outcomes: projectRevalidationOutcomes(record.outcomes),
       termsHash: record.termsHash,
       terms,
       expiresAt: record.expiresAt?.toISOString() ?? null,
+      ...(record.coverage
+        ? { coverage: projectBookingCoverage(bookingCoverageReportSchema.parse(record.coverage)) }
+        : {}),
     };
   });
 }

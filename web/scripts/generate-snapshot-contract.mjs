@@ -10,6 +10,16 @@ import {
   itineraryDaySchema,
 } from "../domain/trip/schema.ts";
 import { planningOfferSchema, publicPlanningOfferSchema } from "../server/supply/offers.ts";
+import {
+  bookingCoverageReportSchema,
+  bookingReviewStateSchema,
+  publicAuthorizationSchema,
+  publicBookingTransactionSchema,
+  publicBookingTermsSchema,
+  publicWholeTripTermsSchema,
+  revalidationViewSchema,
+  publicBookingStatusSchema,
+} from "../domain/booking/public.ts";
 
 const outputPath = resolve(process.cwd(), "../contracts/trip-domain/snapshot-v1.schema.json");
 const generated = `${JSON.stringify(
@@ -100,4 +110,41 @@ if (process.argv.includes("--check")) {
   );
 } else {
   await writeFile(offersPath, offers, "utf8");
+}
+
+const bookingPath = resolve(
+  process.cwd(),
+  "../contracts/trip-domain/booking-review-v2.schema.json",
+);
+const booking = `${JSON.stringify(
+  {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://onholidai.local/contracts/trip-domain/booking-review-v2.schema.json",
+    title: "Customer whole-trip booking review",
+    description:
+      "Public v1/v2 review, coverage and durable state. Exact material equality, trusted evidence and expiry are independently enforced server-side.",
+    $defs: Object.fromEntries(
+      Object.entries({
+        BookingCoverageReport: bookingCoverageReportSchema,
+        BookingReviewState: bookingReviewStateSchema,
+        PublicBookingTerms: publicBookingTermsSchema,
+        PublicWholeTripTerms: publicWholeTripTermsSchema,
+        PublicBookingAuthorization: publicAuthorizationSchema,
+        PublicBookingTransaction: publicBookingTransactionSchema,
+        PublicRevalidationReview: revalidationViewSchema,
+        PublicBookingStatus: publicBookingStatusSchema,
+      }).map(([name, schema]) => [name, z.toJSONSchema(schema, { target: "draft-2020-12" })]),
+    ),
+  },
+  null,
+  2,
+)}\n`;
+if (process.argv.includes("--check")) {
+  assertGeneratedArtifact(
+    await readFile(bookingPath, "utf8"),
+    booking,
+    "booking-review-v2.schema.json has drifted",
+  );
+} else {
+  await writeFile(bookingPath, booking, "utf8");
 }

@@ -1,7 +1,10 @@
-def complete_component_facts(kind: str) -> dict[str, object]:
+def complete_component_facts(
+    kind: str, query: dict[str, object] | None = None
+) -> dict[str, object]:
+    query = query or {}
     return {
-        "serviceStart": "2030-05-01T12:00:00Z",
-        "serviceEnd": "2030-05-08T12:00:00Z",
+        "serviceStart": str(query.get("startDate", "2030-05-01")) + "T12:00:00Z",
+        "serviceEnd": str(query.get("endDate", "2030-05-08")) + "T12:00:00Z",
         "details": {"description": "Synthetic planning facts", "type": kind},
         "cancellationTerms": "Unverified synthetic terms",
     }

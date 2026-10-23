@@ -122,7 +122,7 @@ that the sections do not overlap before restoring a saved version.
 
 ## Provider capabilities
 
-Deterministic doubles are the default. Current search composition is Duffel Flights/Stays and Viator activities; Booking.com and Trainline are deferred, and GetYourGuide is replaced. Rail-only and mixed searches return an explicit unsupported/deferred rail outcome, without invoking rail adapters or substituting inventory. Supported mixed-query results are retained. Read-only HTTP transports, revisioned evidence, the four-tool in-memory MCP facade and the workspace comparison panel are implemented and tested with synthetic fixtures. This is discovery, not completion of [feature 003](../specs/003-supplier-mcp-booking/tasks.md) or verified supplier access. Existing saved provider identities and confirmations must not be relabelled.
+Deterministic doubles are the default. Current search composition is Duffel Flights, Nuitee stays and Viator activities; Booking.com and Trainline are deferred, and GetYourGuide is replaced. Nuitee Flights/Experiences are inactive, with no fallback. Duffel stays remains a historical identity only: saved evidence/confirmations retain their original provider, but cannot be refreshed or used for new discovery/booking. Rail-only and mixed searches return an explicit unsupported/deferred rail outcome, without invoking rail adapters or substituting inventory. Supported mixed-query results are retained. Read-only HTTP transports, revisioned evidence, the four-tool in-memory MCP facade and the workspace comparison panel are implemented and tested with synthetic fixtures. This is discovery, not completion of [feature 003](../specs/003-supplier-mcp-booking/tasks.md) or verified supplier access.
 
 Search results distinguish available inventory, successful no-matches, unconfigured/blocked access, unsupported coverage, rate limiting, deadlines and errors per provider/product. Source mode is explicit (`deterministic`, `live` or `unknown` for an undeclared injected client). The internal search route supplies product readiness and request cancellation; configured-but-unverified live access does not execute. Reads have an eight-second source ceiling, propagate abort, and deduplicate before fairly allocating up to 32 offers across products and requirement/selection groups. There are no default retries: only a trusted `SupplyReadError` with a bounded rate-limit delay can trigger one read retry, and only when that delay fits the original source deadline. The retry does not reset that deadline, and cancellation stops the wait without another supplier call. Arbitrary exception messages/payloads never become public retry guidance or error text. Search and evidence refresh enforce a twelve-second overall budget at access/persistence boundaries; cancelled or expired work cannot append evidence. Refresh rejects a known-stale revision before a supplier call and rechecks the latest revision under the source-run lock before appending, so concurrent refreshes cannot overwrite immutable evidence.
 
@@ -148,7 +148,7 @@ rechecked after in-flight reads. All responses are private/no-store.
 
 Capability responses distinguish the adapter's implemented read operations from
 configured product access. Configuration cannot enable an unsupported operation:
-Duffel Stays quote revalidation remains unsupported even with a verified
+Nuitee final revalidation remains unsupported even with a verified
 configuration declaration. Detail/revalidation check their own product's support
 and access, including Viator independently of Duffel. Blocked or unverified reads
 preserve prior evidence without appending a revision. Coverage, property types,
@@ -157,8 +157,8 @@ and deadline ceilings are reported separately. Demonstration property variants
 are synthetic fixtures, not evidence of live property coverage or age eligibility.
 
 The web composition root resolves only configured read-secret references.
-Duffel write keys are never used as a read fallback. Viator's shared upstream
-key is constrained by fixed read endpoint/method allowlists, not by its name.
+Duffel write keys are never used as a read fallback. Nuitee's and Viator's shared upstream
+keys are constrained by fixed read endpoint/method allowlists, not by their names.
 `VIATOR_ENVIRONMENT` accepts `sandbox` (the default) or `production`; change it
 only when deploying approved production access. Duffel test/live behavior is
 determined by the injected read token, using its fixed API host.
@@ -169,12 +169,35 @@ respectively `providerPlaceIds["duffel:flight"]` (IATA) and
 `providerPlaceIds["viator:destination"]` (numeric supplier destination ID) from
 the authoritative saved trip. Missing mappings return unsupported coverage.
 Trusted deployments may inject `supplierMappings` at `createApplication`.
-Stays additionally requires separately verified access and an explicit trusted
-coordinate/radius/room allocation resolver; room counts are not inferred.
+Nuitee stays additionally requires separately verified sandbox/production access and
+an explicit trusted `staySearch` resolver returning nationality, exact room allocation
+(including child ages), and either bounded supplier `hotelIds` or a `placeId`.
+The current trip schema does not establish those facts automatically: the default
+resolver returns an explicit access prerequisite without calling Nuitee.
+Never infer nationality, room count or service-date eligibility from destination names.
+Nuitee uses fixed `POST /v3.0/hotels/rates` and `GET /v3.0/data/hotel` endpoints on
+`api.liteapi.travel`, with a six-second transport ceiling within the existing
+eight-second source/twelve-second overall limits. Property detail is restricted
+to an offer and query previously returned by this client; process restart or
+bounded grant eviction may require a new search. Previously persisted evidence
+remains readable. Arbitrary hotel IDs/URLs cannot be forwarded from tool input.
+Array-valued offer prices, per-room totals and occupancy numbers are checked
+against the selected allocation. Public display uses only sourced suggested
+selling price plus known excluded fees in the same currency, never net cost or
+invented margin. Missing fees, foreign-currency property charges and package/
+membership restrictions leave the public total unknown; included fees are not
+added again. Dates remain date-only research facts, not fabricated timezone
+instants. No expiry, checkout payment schedule or complete booking terms are invented.
+Prebook creates a checkout session; `usePaymentSdk=false` does not establish
+read-only safety. No prebook, payment or booking endpoint is included in this
+client, and Nuitee final revalidation/new transactions remain blocked.
 Viator availability requires an exact day and trusted product age-band mapping;
 `ageAtTripStart` alone does not establish service-date eligibility.
 
-Stays quote/revalidation remains unsupported in the current code. On
+### Historical Duffel Stays evidence (not current activation)
+
+The following Duffel Stays observations are historical and confer no Nuitee
+approval. Duffel stays is now inactive regardless of a saved declaration. On
 2026-10-21 the user supplied quote-only side-effect confirmation and approved
 implementing T017 plus a bounded sandbox probe with the existing separate read
 token. This is not verified read-token permission or live activation; see the
@@ -236,23 +259,40 @@ for executed checks and the separate unverified gates.
 
 ### Supplier readiness configuration
 
-`SUPPLIER_PROVIDERS` is JSON containing only optional `duffel` and `viator` entries. Remove old Booking.com/Trainline/GetYourGuide entries from current configuration; their presence is a validation error, not an activation request. This does not migrate or delete historical trip/booking data.
+`SUPPLIER_PROVIDERS` is JSON containing only optional `duffel`, `nuitee` and `viator` entries. Remove old Booking.com/Trainline/GetYourGuide entries from current configuration; their presence is a validation error, not an activation request. This does not migrate or delete historical trip/booking data.
 
-Each entry has `readSecretRef`, `transactionSecretRef` and `products`. References name separately provisioned environment secrets, not literal API keys. Duffel supports `products.flight` and `products.accommodation`; Viator supports `products.activity`. Each product has an `operations` map for `search`, `detail`, `revalidation`, `book`, `status`, `idempotency`, `cancel` and `reschedule`. Each operation records `support` (`supported`, `unsupported`, `unknown`), `access` (`unconfigured`, `configured_unverified`, `verified`, `blocked`), and optional approved `evidenceRef` / ISO `verifiedAt`. Missing facts remain unknown; key presence alone never verifies an operation or Viator booking entitlement.
+Each entry has `readSecretRef`, `transactionSecretRef` and `products`. References name separately provisioned environment secrets, not literal API keys. Active products are Duffel `products.flight`, Nuitee `products.accommodation` and Viator `products.activity`. Duffel `products.accommodation` declarations remain accepted for legacy status compatibility, but cannot activate any new stay operation. Each product has an `operations` map for `search`, `detail`, `revalidation`, `book`, `status`, `idempotency`, `cancel` and `reschedule`. Each operation records `support` (`supported`, `unsupported`, `unknown`), `access` (`unconfigured`, `configured_unverified`, `verified`, `blocked`), and optional approved `evidenceRef` / ISO `verifiedAt`. Nuitee verified declarations additionally require `environment` matching `NUITEE_ENVIRONMENT` (`sandbox` by default, or `production`). Missing facts remain unknown; key presence alone never verifies an operation, payment access or Viator booking entitlement.
 
-For example, this intentionally unverified configuration uses one upstream Viator key, not two separately scoped Viator keys:
+For example, this intentionally unverified configuration permits one shared upstream key for each of Nuitee and Viator, not fictional separately scoped keys:
 
 ```json
 {
   "duffel": {
     "readSecretRef": "DUFFEL_READ_SECRET",
-    "transactionSecretRef": "DUFFEL_WRITE_SECRET",
+    "transactionSecretRef": "DUFFEL_TRANSACTION_SECRET",
     "products": {
       "flight": {
         "operations": { "search": { "support": "supported", "access": "configured_unverified" } }
-      },
+      }
+    }
+  },
+  "nuitee": {
+    "readSecretRef": "NUITEE_SECRET",
+    "transactionSecretRef": "NUITEE_SECRET",
+    "products": {
       "accommodation": {
-        "operations": { "search": { "support": "unknown", "access": "unconfigured" } }
+        "operations": {
+          "search": {
+            "support": "supported",
+            "access": "configured_unverified",
+            "environment": "sandbox"
+          },
+          "detail": {
+            "support": "supported",
+            "access": "configured_unverified",
+            "environment": "sandbox"
+          }
+        }
       }
     }
   },
@@ -268,7 +308,19 @@ For example, this intentionally unverified configuration uses one upstream Viato
 }
 ```
 
-Provision Duffel's distinct read and write keys only in web and worker respectively. Identical references are rejected, as are identical nonempty key values when both are supplied to one process. Distinct references cannot prove upstream scope: verify actual Duffel permissions separately. The same Viator secret reference/value may be provisioned in trusted web-read and worker processes; the planned read client's closed non-transactional endpoint allowlist is still required before live activation. No supplier key belongs in Python, MCP, browser configuration, logs or workflow history.
+Provision Duffel's distinct read and write keys only in web and worker respectively. Identical references are rejected, as are identical nonempty key values when both are supplied to one process. Distinct references cannot prove upstream scope: verify actual Duffel permissions separately. The same Nuitee or Viator secret reference/value may be provisioned in trusted web-read and worker processes; this does not grant a read-only upstream scope or activate transactions. No supplier key belongs in Python, MCP, browser configuration, logs or workflow history.
+
+The environment-example file is access-restricted in this implementation session.
+On 2026-10-23 the user confirmed completing the requested manual configuration
+updates, including Nuitee and the single-line supplier JSON. This is user-reported
+confirmation, not independent inspection of environment files. A configuration
+regression validates the supplied secret-free JSON without loading those files.
+Keep server-only `NUITEE_SECRET` private and `NUITEE_ENVIRONMENT=sandbox`;
+keep `PROVIDER_MODE=deterministic` until independent operation/environment
+verification and trusted search facts are provisioned. No key values should be
+pasted into chat. The current foundation gate passed 44 tests without skips
+against a disposable synthetic PostGIS cluster; see the
+[current verification record](../specs/003-supplier-mcp-booking/evidence/provider-readiness.md#2026-10-23-manual-confirmation-and-foundation-closeout).
 
 Web composition evaluates read readiness and excludes restricted writes. Worker composition evaluates restricted operation readiness and creates no planning providers. Live injected search adapters must have verified readiness for every product they advertise; one verified Duffel product cannot authorize another. Deterministic mode never reports live verification. The legacy provider-level `operations` map remains a compatibility input only for Duffel Flights (never Stays) or Viator activity; an explicit product declaration takes precedence without inheriting omitted operation evidence.
 

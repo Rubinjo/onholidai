@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { withIsolatedTestDatabase, hasIsolatedDatabaseConfiguration } from "../helpers/database";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
+import { nuiteeRatesResponse } from "../fixtures/providers";
 import { createTrip } from "../../domain/trip/create";
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import { RunRepository } from "../../server/agent-client/run-repository";
@@ -21,14 +22,14 @@ import {
 } from "../../server/supply/planning-research";
 import { deriveProviderReadiness, loadServerConfig } from "../../server/config";
 import {
-  createDuffelStaysReadProvider,
-  createDuffelStaysHttpClient,
-} from "../../server/supply/providers/duffel-stays-read";
+  createNuiteeReadProvider,
+  createNuiteeHttpClient,
+} from "../../server/supply/providers/nuitee-read";
 import {
   createViatorReadProvider,
   createViatorHttpClient,
 } from "../../server/supply/providers/viator-read";
-import { normalizePlanningOffer } from "../../server/supply/offers";
+import { normalizePlanningOffer, projectPublicPlanningOffer } from "../../server/supply/offers";
 import { SupplyReadError } from "../../server/supply/read";
 
 vi.mock("server-only", () => ({}));
@@ -36,6 +37,301 @@ vi.mock("server-only", () => ({}));
 describe.skipIf(!hasIsolatedDatabaseConfiguration())(
   "supplier evidence access and immutable revisions",
   () => {
+    it("persists selected Nuitee multi-room rates and changed detail without inventing checkout or expiry", async () => {
+      await withIsolatedTestDatabase(async ({ database }) => {
+        const owner = randomUUID();
+        await sql`INSERT INTO app."user" (id,name,email) VALUES (${owner},'Synthetic',${owner + "@example.invalid"})`.execute(
+          database,
+        );
+        const snapshot = projectCustomerSnapshot(createSyntheticTripSnapshot());
+        snapshot.itineraryDays = [];
+        snapshot.travellerParty = {
+          adults: 4,
+          children: [{ id: randomUUID(), ageAtTripStart: 7 }],
+        };
+        const trip = await createTrip(database, owner, {
+          requestId: randomUUID(),
+          title: "Nuitee wire evidence",
+          currency: "GBP",
+          snapshot,
+        });
+        const run = await new RunRepository(database).reserve({
+          userId: owner,
+          tripId: trip.tripId,
+          requestId: randomUUID(),
+          baseTripVersion: 1,
+          purpose: "supplier_research",
+          message: "Compare two rooms",
+        });
+        const actor = { userId: owner, tripId: trip.tripId, baseTripVersion: 1 };
+        const context = { ...actor, requestId: run.requestId };
+        const wire = nuiteeRatesResponse();
+        const selected = wire.data[0].roomTypes[0];
+        selected.offerRetailRate[0].amount = "200.20";
+        selected.suggestedSellingPrice[0].amount = "220.40";
+        selected.rates[0].childCount = 1;
+        selected.rates[0].childrenAges = [7];
+        selected.rates.push({
+          ...structuredClone(selected.rates[0]),
+          occupancyNumber: 2,
+          rateId: "second_rate",
+          mappedRoomId: "second_room",
+          childCount: 0,
+          childrenAges: [],
+        });
+        const transport = vi.fn<typeof fetch>(async (url) =>
+          Response.json(
+            String(url).includes("/data/hotel")
+              ? { data: { id: "synthetic_hotel", name: "Synthetic hotel", hotelType: "hotel" } }
+              : wire,
+          ),
+        );
+        const provider = createNuiteeReadProvider(
+          createNuiteeHttpClient({
+            apiKey: "synthetic-shared-key-canary",
+            environment: "sandbox",
+            fetch: transport,
+            resolveSearch: () => ({
+              hotelIds: ["synthetic_hotel"],
+              guestNationality: "GB",
+              sessionId: "sourced_session",
+              occupancies: [
+                { adults: 2, children: [7] },
+                { adults: 2, children: [] },
+              ],
+            }),
+          }),
+        );
+        const result = await searchResearch(database, [provider], context, {
+          componentTypes: ["accommodation"],
+          startDate: "2030-05-01",
+          endDate: "2030-05-08",
+          destinationIds: snapshot.destinations.map((place) => place.id),
+        });
+        expect(result.offers).toHaveLength(1);
+        const original = result.offers[0];
+        expect(original).toMatchObject({
+          component: { provider: "nuitee", price: { finalCustomerMinor: 23040 } },
+          supplierReferences: {
+            rateIds: ["synthetic_rate", "second_rate"],
+            roomIds: ["synthetic_room", "second_room"],
+            sessionId: "sourced_session",
+          },
+        });
+        const reference = { offerRef: original.offerRef!, revision: 1 };
+        for (const reader of [actor, context]) {
+          expect((await readResearchOffer(database, reader, reference)).offer).toEqual(original);
+        }
+        selected.suggestedSellingPrice[0].amount = "240.40";
+        selected.rates[0].cancellationPolicies.refundableTag = "NRFN";
+        selected.rates[0].boardName = "Room only";
+        const updated = await refreshResearchOffer(
+          database,
+          [provider],
+          context,
+          reference,
+          "detail",
+        );
+        expect(updated.outcome).toBe("unknown");
+        expect(updated.differences).toHaveLength(1);
+        expect(updated.offer).toMatchObject({
+          offerRef: reference.offerRef,
+          revision: 2,
+          component: {
+            provider: "nuitee",
+            serviceStart: null,
+            serviceEnd: null,
+            expiresAt: null,
+            price: { finalCustomerMinor: 25040, status: "estimated" },
+          },
+          evidence: { status: "estimated", availability: "unknown", expiresAt: null },
+        });
+        expect(updated.offer.component.planningDetails?.fareConditions).toContain("NRFN");
+        expect(updated.offer.component.planningDetails?.fareConditions).toContain("Room only");
+        for (const reader of [actor, context]) {
+          expect(
+            (await readResearchOffer(database, reader, { ...reference, revision: 2 })).offer,
+          ).toEqual(updated.offer);
+          expect((await readResearchOffer(database, reader, reference)).offer).toEqual(original);
+        }
+        expect((await listResearch(database, actor)).offers).toEqual([updated.offer]);
+        const calls = transport.mock.calls.length;
+        expect(
+          (
+            await refreshResearchOffer(
+              database,
+              [provider],
+              context,
+              { ...reference, revision: 2 },
+              "revalidation",
+            )
+          ).outcome,
+        ).toBe("unsupported");
+        expect(transport).toHaveBeenCalledTimes(calls);
+        expect(transport.mock.calls.map(([url]) => String(url))).toEqual([
+          "https://api.liteapi.travel/v3.0/hotels/rates",
+          "https://api.liteapi.travel/v3.0/data/hotel?hotelId=synthetic_hotel",
+          "https://api.liteapi.travel/v3.0/hotels/rates",
+        ]);
+        const saved = await database
+          .selectFrom("planningOfferRecords")
+          .selectAll()
+          .where("offerRef", "=", reference.offerRef)
+          .where("revision", "=", 2)
+          .executeTakeFirstOrThrow();
+        const expired = normalizePlanningOffer(saved.offer);
+        expired.offerRef = randomUUID();
+        expired.component.id = randomUUID();
+        expired.revision = 1;
+        expired.component.expiresAt = "2020-01-01T00:00:00Z";
+        expired.component.price.expiresAt = expired.component.expiresAt;
+        await database
+          .insertInto("planningOfferRecords")
+          .values({
+            runId: run.id,
+            componentId: expired.component.id,
+            offerRef: expired.offerRef,
+            offer: expired,
+            query: saved.query,
+          })
+          .execute();
+        const readExpired = await readResearchOffer(database, actor, {
+          offerRef: expired.offerRef,
+          revision: 1,
+        });
+        expect(readExpired).toMatchObject({
+          outcome: "expired",
+          offer: { component: { offerStatus: "expired", price: { status: "expired" } } },
+        });
+        expect(JSON.stringify([result, updated, readExpired])).not.toMatch(
+          /synthetic-shared-key-canary|supplierAmount|platformMargin|guestNationality|NUITEE_SECRET/,
+        );
+        expect(
+          await database
+            .selectFrom("trips")
+            .select("currentVersion")
+            .where("id", "=", trip.tripId)
+            .executeTakeFirstOrThrow(),
+        ).toMatchObject({ currentVersion: 1 });
+        expect(await database.selectFrom("changeProposals").selectAll().execute()).toHaveLength(0);
+        expect(await database.selectFrom("bookingTransactions").selectAll().execute()).toHaveLength(
+          0,
+        );
+      });
+    }, 60_000);
+
+    it("isolates a Nuitee outage and preserves saved Duffel stay evidence without refresh or fallback", async () => {
+      await withIsolatedTestDatabase(async ({ database }) => {
+        const owner = randomUUID();
+        await sql`INSERT INTO app."user" (id,name,email) VALUES (${owner},'Synthetic',${owner + "@example.invalid"})`.execute(
+          database,
+        );
+        const snapshot = projectCustomerSnapshot(createSyntheticTripSnapshot());
+        snapshot.itineraryDays = [];
+        const trip = await createTrip(database, owner, {
+          requestId: randomUUID(),
+          title: "Current and historical stay evidence",
+          currency: "GBP",
+          snapshot,
+        });
+        const run = await new RunRepository(database).reserve({
+          userId: owner,
+          tripId: trip.tripId,
+          requestId: randomUUID(),
+          baseTripVersion: 1,
+          purpose: "supplier_research",
+          message: "Compare current sources",
+        });
+        const actor = { userId: owner, tripId: trip.tripId, baseTripVersion: 1 };
+        const context = { ...actor, requestId: run.requestId };
+        const providers = createPlanningProviders("deterministic");
+        const query = {
+          componentTypes: ["flight", "accommodation", "activity", "rail"],
+          startDate: "2030-05-01",
+          endDate: "2030-05-08",
+          destinationIds: snapshot.destinations.map((place) => place.id),
+        };
+        const result = await searchResearch(database, providers, context, query);
+        const stay = result.offers.find((offer) => offer.component.type === "accommodation")!;
+        const saved = await database
+          .selectFrom("planningOfferRecords")
+          .selectAll()
+          .where("offerRef", "=", stay.offerRef!)
+          .executeTakeFirstOrThrow();
+        const legacy = normalizePlanningOffer(saved.offer);
+        legacy.offerRef = randomUUID();
+        legacy.component.id = randomUUID();
+        legacy.component.provider = "duffel";
+        legacy.attribution.provider = "duffel";
+        legacy.component.supplierOfferId = "historical_duffel_stay";
+        legacy.component.price.source = "duffel";
+        legacy.supplierReferences = {
+          accommodationId: "historical_duffel_hotel",
+          searchResultId: "historical_duffel_result",
+        };
+        await database
+          .insertInto("planningOfferRecords")
+          .values({
+            runId: run.id,
+            componentId: legacy.component.id,
+            offerRef: legacy.offerRef,
+            offer: legacy,
+            query: saved.query,
+          })
+          .execute();
+        const reference = { offerRef: legacy.offerRef, revision: 1 };
+        for (const reader of [actor, context]) {
+          expect((await readResearchOffer(database, reader, reference)).offer).toEqual(
+            projectPublicPlanningOffer(legacy),
+          );
+        }
+        for (const operation of ["detail", "revalidation"] as const) {
+          const refreshed = await refreshResearchOffer(
+            database,
+            providers,
+            context,
+            reference,
+            operation,
+          );
+          expect(refreshed.outcome).toBe("unsupported");
+          expect(refreshed.offer).toEqual(projectPublicPlanningOffer(legacy));
+        }
+        const nuitee = providers.find((source) => source.capabilities.provider === "nuitee")!;
+        vi.spyOn(nuitee, "search").mockRejectedValue(new SupplyReadError("error"));
+        const partial = await searchResearch(database, providers, context, query);
+        expect(partial.outcomes).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ provider: "duffel", status: "available" }),
+            expect.objectContaining({ provider: "nuitee", status: "error" }),
+            expect.objectContaining({ provider: "viator", status: "available" }),
+            expect.objectContaining({ componentType: "rail", status: "unsupported" }),
+          ]),
+        );
+        expect(partial.offers).toHaveLength(3);
+        expect(partial.offers.some((offer) => offer.component.type === "accommodation")).toBe(
+          false,
+        );
+        expect(
+          await database
+            .selectFrom("planningOfferRecords")
+            .select("revision")
+            .where("offerRef", "=", legacy.offerRef)
+            .execute(),
+        ).toEqual([{ revision: 1 }]);
+        expect(
+          await database
+            .selectFrom("trips")
+            .select("currentVersion")
+            .where("id", "=", trip.tripId)
+            .executeTakeFirstOrThrow(),
+        ).toMatchObject({ currentVersion: 1 });
+        expect(await database.selectFrom("changeProposals").selectAll().execute()).toHaveLength(0);
+        expect(await database.selectFrom("bookingTransactions").selectAll().execute()).toHaveLength(
+          0,
+        );
+      });
+    }, 60_000);
+
     it("retries read evidence once on rate guidance and commits only one concurrent revision", async () => {
       await withIsolatedTestDatabase(async ({ database }) => {
         const owner = randomUUID();
@@ -447,16 +743,16 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())(
           }
         }
         const transport = vi.fn<typeof fetch>();
-        const liveStays = createDuffelStaysReadProvider(
-          createDuffelStaysHttpClient({
-            readToken: "synthetic-read-canary",
-            accessApproved: true,
+        const liveStays = createNuiteeReadProvider(
+          createNuiteeHttpClient({
+            apiKey: "synthetic-read-canary",
+            environment: "sandbox",
             fetch: transport,
             resolveSearch: () => null,
           }),
         );
-        readiness.duffel.mode = "live";
-        readiness.duffel.products.accommodation.operations.revalidation = {
+        readiness.nuitee.mode = "live";
+        readiness.nuitee.products.accommodation.operations.revalidation = {
           support: "supported",
           access: "verified",
           verifiedAt: "2026-10-20T00:00:00Z",
@@ -473,7 +769,7 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())(
           queryLimits: { maximumComponentTypes: 4, maximumDestinations: 8 },
         });
         expect(reported.capabilities[0]).toMatchObject({
-          provider: "duffel",
+          provider: "nuitee",
           componentType: "accommodation",
           operations: {
             revalidation: { support: "unsupported", access: "blocked", verifiedAt: null },
@@ -593,6 +889,14 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())(
           destinationIds: snapshot.destinations.map((place) => place.id),
         });
         expect(result.offers).toHaveLength(4);
+        expect(
+          result.offers.map((offer) => [offer.component.provider, offer.component.type]),
+        ).toEqual([
+          ["duffel", "flight"],
+          ["nuitee", "accommodation"],
+          ["viator", "activity"],
+          ["duffel", "flight"],
+        ]);
         expect(result.outcomes.at(-1)).toMatchObject({
           componentType: "rail",
           status: "unsupported",
@@ -601,6 +905,10 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())(
         expect(first.offerRef).toBeTruthy();
         const reference = { offerRef: first.offerRef!, revision: first.revision! };
         const actor = { userId: owner, tripId: trip.tripId, baseTripVersion: 1 };
+        const stay = result.offers.find((offer) => offer.component.type === "accommodation")!;
+        const stayReference = { offerRef: stay.offerRef!, revision: stay.revision! };
+        expect((await readResearchOffer(database, actor, stayReference)).offer).toEqual(stay);
+        expect((await readResearchOffer(database, context, stayReference)).offer).toEqual(stay);
         expect((await readResearchOffer(database, actor, reference)).offer?.offerRef).toBe(
           reference.offerRef,
         );

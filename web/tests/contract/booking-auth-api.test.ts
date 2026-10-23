@@ -11,6 +11,14 @@ import { previewEdit, applyEdit } from "../../domain/trip/edit";
 import { createBookingIntent } from "../../server/auth/booking-intent";
 import { POST as intent } from "../../app/api/v1/booking-intents/route";
 import { POST as link } from "../../app/api/v1/booking-intents/[intentId]/link/route";
+import { GET as reviewState, POST as start } from "../../app/api/v1/trips/[tripId]/bookings/route";
+import { POST as authorize } from "../../app/api/v1/trips/[tripId]/booking/authorizations/route";
+import {
+  bookingReviewStateSchema,
+  publicAuthorizationSchema,
+  publicBookingTransactionSchema,
+} from "../../domain/booking/public";
+import { seedReviewedWholeTrip } from "../helpers/booking";
 import {
   bookingIntentRequestSchema,
   linkRequestSchema,
@@ -138,4 +146,118 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("booking authentication HTT
     ).toBe(410);
     expect((await intent(state.request("/api/v1/booking-intents", "", input))).status).toBe(404);
   });
+
+  it("restores only an account owner's safe durable state without GET side effects", async () => {
+    const account = await registerFixtureAccount(state);
+    const seeded = await seedReviewedWholeTrip(
+      state.fixture.database,
+      undefined,
+      "completed",
+      account.id,
+      new Date(),
+    );
+    const route = { params: Promise.resolve({ tripId: seeded.tripId }) };
+    expect(
+      (await reviewState(state.request(`/api/v1/trips/${seeded.tripId}/bookings`), route)).status,
+    ).toBe(401);
+    const request = () => {
+      const input = state.request(`/api/v1/trips/${seeded.tripId}/bookings`, "");
+      input.headers.set("cookie", account.cookie);
+      return input;
+    };
+    const before = await state.fixture.database
+      .selectFrom("outboxEvents")
+      .select("id")
+      .orderBy("id")
+      .execute();
+    const first = await reviewState(request(), route);
+    expect(first.status).toBe(200);
+    expect(first.headers.get("cache-control")).toBe("private, no-store");
+    const safe = bookingReviewStateSchema.parse(await first.json());
+    expect(safe.coverage.eligible).toBe(true);
+    expect(safe.review?.terms?.components).toHaveLength(4);
+    expect(
+      bookingReviewStateSchema.parse(await (await reviewState(request(), route)).json()),
+    ).toEqual(safe);
+    expect(
+      await state.fixture.database.selectFrom("outboxEvents").select("id").orderBy("id").execute(),
+    ).toEqual(before);
+    expect(
+      await state.fixture.database.selectFrom("bookingTransactions").select("id").execute(),
+    ).toHaveLength(0);
+    expect(JSON.stringify(safe)).not.toMatch(
+      /supplierOfferId|inventoryId|paymentReadiness|travellerReadiness|supplierAmount|recorded-payment/,
+    );
+    const other = await registerFixtureAccount(state),
+      foreign = request();
+    foreign.headers.set("cookie", other.cookie);
+    expect((await reviewState(foreign, route)).status).toBe(404);
+    expect(
+      (await reviewState(request(), { params: Promise.resolve({ tripId: crypto.randomUUID() }) }))
+        .status,
+    ).toBe(404);
+  }, 30_000);
+
+  it("records and replays one exact account-authorized v2 start with safe HTTP DTOs", async () => {
+    const account = await registerFixtureAccount(state);
+    const seeded = await seedReviewedWholeTrip(
+      state.fixture.database,
+      undefined,
+      "completed",
+      account.id,
+      new Date(),
+    );
+    state.application.bookingPrerequisites = seeded.prerequisites;
+    const route = { params: Promise.resolve({ tripId: seeded.tripId }) };
+    const request = (path: string, body: unknown, cookie = account.cookie) => {
+      const result = state.request(path, "", body);
+      result.headers.set("cookie", cookie);
+      return result;
+    };
+    const consentPath = `/api/v1/trips/${seeded.tripId}/booking/authorizations`;
+    expect(
+      (await authorize(state.request(consentPath, state.credential, seeded.request), route)).status,
+    ).toBe(401);
+    const response = await authorize(request(consentPath, seeded.request), route);
+    expect(response.status).toBe(201);
+    const receipt = publicAuthorizationSchema.parse(await response.json());
+    expect(
+      publicAuthorizationSchema.parse(
+        await (await authorize(request(consentPath, seeded.request), route)).json(),
+      ),
+    ).toEqual(receipt);
+    expect(
+      (
+        await authorize(
+          request(consentPath, {
+            ...seeded.request,
+            requestId: crypto.randomUUID(),
+            selectedComponentIds: [seeded.terms.components[0].componentId],
+          }),
+          route,
+        )
+      ).status,
+    ).toBe(422);
+    const input = { requestId: crypto.randomUUID(), authorizationId: receipt.id },
+      path = `/api/v1/trips/${seeded.tripId}/bookings`;
+    const started = await start(request(path, input), route);
+    expect(started.status).toBe(202);
+    const booking = publicBookingTransactionSchema.parse(await started.json());
+    expect(
+      publicBookingTransactionSchema.parse(await (await start(request(path, input), route)).json()),
+    ).toEqual(booking);
+    expect(booking.components).toHaveLength(4);
+    expect(booking.executionStatus).toBe("invalidated");
+    expect(
+      await state.fixture.database.selectFrom("bookingAuthorizations").select("id").execute(),
+    ).toHaveLength(1);
+    expect(
+      await state.fixture.database.selectFrom("bookingTransactions").select("id").execute(),
+    ).toHaveLength(1);
+    expect(
+      await state.fixture.database.selectFrom("bookingComponentAttempts").select("id").execute(),
+    ).toHaveLength(0);
+    const other = await registerFixtureAccount(state);
+    expect((await start(request(path, input, other.cookie), route)).status).toBe(404);
+  }, 30_000);
 });

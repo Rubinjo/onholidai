@@ -6,6 +6,7 @@ import { inTransaction } from "@/server/db/transaction";
 import { fingerprint, runConflict } from "@/server/agent-client/run-repository";
 import { ProposalRepository } from "@/server/db/proposal-repository";
 import { IdempotencyRepository } from "@/server/db/idempotency-repository";
+import { selectedRunOffers } from "@/server/supply/planning-research";
 
 import { acceptEstimate, acceptEstimateSchema } from "./apply-estimate";
 import { commitTripMutation } from "./commit";
@@ -77,6 +78,18 @@ export async function acceptProposal(
         run.resultCursor !== run.eventCursor
       )
         runConflict();
+      if (row.purpose === "refinement") {
+        await selectedRunOffers(
+          transaction,
+          {
+            userId,
+            tripId,
+            requestId: run.requestId,
+            baseTripVersion: input.expectedVersion,
+          },
+          row.agentRunId,
+        );
+      }
       if (
         candidate.snapshot.components.some(
           (component) =>

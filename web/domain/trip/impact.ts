@@ -11,6 +11,7 @@ export function previewDraftEdit(
   base: TripSnapshot,
   version: number,
   operations: readonly unknown[],
+  trustedCandidate?: TripSnapshot,
 ) {
   if (base.components.some((component) => component.bookingStatus !== "unbooked")) {
     throw new ProblemError({
@@ -19,7 +20,9 @@ export function previewDraftEdit(
       code: "protected_booking",
     });
   }
-  const candidate = applyDraftOperations(base, operations, false);
+  const candidate = trustedCandidate
+    ? structuredClone(trustedCandidate)
+    : applyDraftOperations(base, operations, false);
   const changed = [...new Set([...Object.keys(base), ...Object.keys(candidate)])].filter(
     (key) =>
       JSON.stringify(base[key as keyof TripSnapshot]) !==
@@ -77,10 +80,14 @@ export function previewDraftEdit(
     candidate.components = candidate.components.map((component) => ({
       ...component,
       itineraryItemIds: [],
-      offerStatus: "expired",
-      price: { ...component.price, status: "expired" },
+      ...(!trustedCandidate
+        ? {
+            offerStatus: "expired" as const,
+            price: { ...component.price, status: "expired" as const },
+          }
+        : {}),
     }));
-    candidate.price.status = "expired";
+    if (!trustedCandidate) candidate.price.status = "expired";
   }
   const snapshot = tripSnapshotSchema.parse(candidate);
   const affectedFacts = [

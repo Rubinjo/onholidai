@@ -32,7 +32,7 @@ describe("read-only refinement repricing", () => {
       new Set(["flight", "accommodation", "activity"]),
     );
     expect(new Set(review.snapshot.components.map((entry) => entry.provider))).toEqual(
-      new Set(["duffel", "viator"]),
+      new Set(["duffel", "nuitee", "viator"]),
     );
     expect(review.snapshot.price.finalCustomerTotal.minorUnits).toBe(
       review.snapshot.components.reduce(

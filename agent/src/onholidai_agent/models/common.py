@@ -173,6 +173,11 @@ def matches(value: object, schema: Mapping[str, object]) -> bool:
 def check_rules(value: object, rules: Mapping[str, object]) -> None:
     if not matches(value, rules):
         raise ValueError("Contract fields are inconsistent")
+    unique_key = rules.get("x-unique-by")
+    if isinstance(unique_key, str) and isinstance(value, list):
+        values = [field_value(item, unique_key) for item in cast(list[object], value)]
+        if len({json.dumps(item, sort_keys=True) for item in values}) != len(values):
+            raise ValueError("Repeated selected source reference")
     for left, right in cast(list[list[str]], rules.get("x-equal-fields", [])):
         left_value = field_value(value, left)
         if left_value is not None and left_value != field_value(value, right):

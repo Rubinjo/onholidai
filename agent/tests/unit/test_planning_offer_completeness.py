@@ -92,24 +92,10 @@ def test_unsupported_rail_keeps_supported_planning_and_requirement_unresolved():
     ]
     before = deepcopy(sources.trip)
     result = asyncio.run(estimate(request(), sources)).root
-    assert result.kind == "proposal"
-    components = next(
-        operation.value
-        for operation in result.proposal.operations
-        if operation.target == "/components"
-    )
-    assert {component["type"] for component in cast(list[dict[str, object]], components)} == {
-        "flight",
-        "accommodation",
-        "activity",
-    }
-    assert any(
-        "rail" in warning and "unsupported" in warning for warning in result.proposal.warnings
-    )
-    assert any(
-        "Unverified required requirement: Use rail" in warning
-        for warning in result.proposal.warnings
-    )
+    assert result.kind == "clarification"
+    assert "Rail inventory is unsupported" in result.clarification.question
+    assert "remains unresolved" in result.clarification.question
+    assert result.clarification.question.count("?") == 1
     assert sources.trip == before
 
 
@@ -122,10 +108,63 @@ def test_only_incomplete_required_inventory_cannot_create_zero_cost_proposal():
         ) -> dict[str, object]:
             incomplete = offer("accommodation")
             cast(dict[str, object], incomplete["component"])["price"] = None
-            return {"offers": [offer(), incomplete]}
+            flight = offer()
+            cast(dict[str, object], flight["component"]).update(
+                complete_component_facts("flight", query)
+            )
+            return {"offers": [flight, incomplete]}
 
-    with pytest.raises(ValueError, match="source_unavailable"):
-        asyncio.run(estimate(request(), IncompleteSources()))
+    result = asyncio.run(estimate(request(), IncompleteSources())).root
+    assert result.kind == "answer"
+    assert "Useful supplier research" in result.message
+    assert "remain unknown" in result.message
+
+
+def test_explicit_rail_deferral_continues_supported_planning_without_waiving_the_requirement():
+    class SupportedSources(Sources):
+        async def search(
+            self, request: CreateAgentRunRequest, query: dict[str, object]
+        ) -> dict[str, object]:
+            values = []
+            for kind in ("flight", "accommodation"):
+                value = offer(kind)
+                cast(dict[str, object], value["component"]).update(
+                    complete_component_facts(kind, query)
+                )
+                value.update(
+                    eligibility={"status": "eligible"},
+                    occupancy={"maximumAdults": 10, "maximumChildren": 10},
+                )
+                values.append(value)
+            return {
+                "offers": values,
+                "outcomes": [{"componentType": "rail", "status": "unsupported"}],
+            }
+
+    source = SupportedSources()
+    cast(dict[str, object], source.trip["snapshot"])["constraints"] = [
+        {
+            "category": "transport",
+            "priority": "required",
+            "statement": "Use rail between destinations",
+            "status": "active",
+        }
+    ]
+    before = deepcopy(source.trip)
+    result = asyncio.run(
+        estimate(
+            request().model_copy(
+                update={"message": "Keep rail unresolved while planning the supported parts"}
+            ),
+            source,
+        )
+    ).root
+    assert result.kind == "proposal"
+    assert any(
+        "Required rail remains unresolved" in warning for warning in result.proposal.warnings
+    )
+    assert not any(operation.target == "/constraints" for operation in result.proposal.operations)
+    assert source.trip == before
 
 
 @pytest.mark.parametrize("availability", ["unknown", "unavailable"])

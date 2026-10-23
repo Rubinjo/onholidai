@@ -3,9 +3,10 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { resolveBookingActor } from "@/server/auth/planning-actor";
 import {
-  bookingTermsSchema,
+  bookingComponentTermsSchema,
   canonicalBookingJson,
   hashBookingTerms,
+  isWholeTripTerms,
 } from "@/domain/booking/authorization";
 import {
   projectBookingTransactionRow,
@@ -45,6 +46,8 @@ export function createBookingActivities(
 
     async assertExecutionBasis(transactionId: string, componentId: string) {
       const transaction = await load(transactionId);
+      if (isWholeTripTerms(transaction.executionBasis.terms))
+        throw new Error("Whole-trip provider execution is not activated");
       if (transaction.executionStatus !== "active") {
         throw new Error("Execution basis is invalid or expired");
       }
@@ -123,6 +126,8 @@ export function createBookingActivities(
 
     async claimProviderWrite(transactionId: string, componentId: string) {
       const transaction = await load(transactionId);
+      if (isWholeTripTerms(transaction.executionBasis.terms))
+        throw new Error("Whole-trip provider execution is not activated");
       const terms = transaction.executionBasis.terms.components.find(
         (item) => item.componentId === componentId,
       );
@@ -190,6 +195,8 @@ export function createBookingActivities(
       requestFingerprint: string,
     ): Promise<BookingComponentState> {
       const transaction = await load(transactionId);
+      if (isWholeTripTerms(transaction.executionBasis.terms))
+        throw new Error("Whole-trip provider execution is not activated");
       const terms = transaction.executionBasis.terms.components.find(
         (item) => item.componentId === componentId,
       );
@@ -234,9 +241,7 @@ export function createBookingActivities(
           terms,
         });
         if (result.status === "confirmed") {
-          const confirmedTerms = bookingTermsSchema.shape.components.element.parse(
-            result.confirmedTerms,
-          );
+          const confirmedTerms = bookingComponentTermsSchema.parse(result.confirmedTerms);
           if (
             canonicalBookingJson(confirmedTerms) !== canonicalBookingJson(terms) ||
             !result.evidenceId ||
@@ -393,9 +398,7 @@ export function createBookingActivities(
       const key = `${transaction.id}:${componentId}:${transaction.operation}:${transaction.executionBasis.termsHash}`;
       const result = await provider.getStatus(key);
       if (result.status === "confirmed") {
-        const confirmedTerms = bookingTermsSchema.shape.components.element.parse(
-          result.confirmedTerms,
-        );
+        const confirmedTerms = bookingComponentTermsSchema.parse(result.confirmedTerms);
         if (
           !result.providerReference ||
           !result.evidenceId ||

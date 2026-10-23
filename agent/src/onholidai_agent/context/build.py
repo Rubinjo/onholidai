@@ -20,6 +20,13 @@ STABLE_INSTRUCTIONS = (
     "groups. Keep all alternatives and explicitly propose any recommended departure and "
     "default return. Do not substitute an unconfirmed location. "
     "Mark unknown requirements unverified."
+    " Compare sourced hard-constraint evidence, dates, party, explicit budget and commitments. "
+    "Spend preference is not a monetary budget or proof of quality. Choose dominant options "
+    "and break equivalent ties by provider then offer ID without forced questions. Ask only "
+    "about material missing facts or unresolved trade-offs. Rail inventory is unsupported; "
+    "keep required rail unresolved without substitution or credential requests. "
+    "Tavily facts are advisory, never supplier inventory or booking authority. "
+    "Consequential requests require separate exact transactional review."
 )
 READ_ONLY_TOOLS = ("get_trip", "research", "propose_trip_changes", "retrieve_relevant_context")
 

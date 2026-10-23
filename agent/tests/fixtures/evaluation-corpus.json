@@ -1,9 +1,9 @@
 {
   "metadata": {
-    "corpusVersion": "1.4.0",
+    "corpusVersion": "1.5.0",
     "policyVersion": "1",
     "seed": "onholidai-evaluation-v1-seed-20261011",
-    "corpusHash": "sha256:a3b080fa74e88215d03c495e634bea163f4d77af30d47f2483b89bec26119cea",
+    "corpusHash": "sha256:2b68ebe0f6b1bd3403f8d565bd1af0471a0ca2c334b8321a0aa9fb5af5ae241a",
     "generationCommand": "corepack pnpm --dir web corpus:generate",
     "evaluationCommand": "corepack pnpm --dir web test -- evaluation-corpus",
     "providerConfiguration": "synthetic-provider-v1",
@@ -14,11 +14,12 @@
       "ambiguities": 20,
       "itineraryDays": 100,
       "itineraryItems": 500,
-      "hardConflicts": 20
+      "hardConflicts": 20,
+      "decisions": 26
     },
     "changeControl": {
       "reviewedReasonRequired": true,
-      "reviewedReason": "US3 revision 1.4.0: repair the four date-window hard-conflict inputs so each is a storable snapshot whose availability window starts after the planned day, letting the feasibility policy (code date_duration) rather than the snapshot schema reject it. Preserve estimate/refinement cases, seed and denominators; a complete evaluation remains required before acceptance.",
+      "reviewedReason": "US2 revision 1.5.0: add 26 executable supplier decision cases for dominance, equivalence, competition, required unknowns, constraints, explicit budgets, currency, dates, party, commitments and unsupported rail. Preserve all existing estimate/refinement/itinerary inputs, seed and denominators.",
       "policy": "Every revision must record a reviewed reason and run a fresh complete evaluation."
     }
   },
@@ -57724,6 +57725,4687 @@
         "disposition": "requires_resolution"
       },
       "expectedCode": "constraint_conflict"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "flight-dominant",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "flight-equivalent",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "flight-competitive",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic non-refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "clarification",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "flight-ineligible",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "ineligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "b"
+      }
+    },
+    {
+      "id": "flight-unknown",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [
+            {
+              "id": "b0000000-b000-4000-8000-b00000000003",
+              "category": "accessibility",
+              "priority": "required",
+              "statement": "Step-free access is required",
+              "status": "active"
+            }
+          ],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "unverified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "unverified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "clarification",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "flight-constraint",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [
+            {
+              "id": "b0000000-b000-4000-8000-b00000000003",
+              "category": "accessibility",
+              "priority": "required",
+              "statement": "Step-free access is required",
+              "status": "active"
+            }
+          ],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "unsupported",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "b"
+      }
+    },
+    {
+      "id": "accommodation-dominant",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "nuitee",
+            "supplierOfferId": "b",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "nuitee",
+            "supplierOfferId": "a",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "accommodation-equivalent",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "nuitee",
+            "supplierOfferId": "b",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "nuitee",
+            "supplierOfferId": "a",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "accommodation-competitive",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "nuitee",
+            "supplierOfferId": "b",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "nuitee",
+            "supplierOfferId": "a",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic non-refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "clarification",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "accommodation-ineligible",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "nuitee",
+            "supplierOfferId": "b",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "ineligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "nuitee",
+            "supplierOfferId": "a",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "b"
+      }
+    },
+    {
+      "id": "accommodation-unknown",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [
+            {
+              "id": "b0000000-b000-4000-8000-b00000000003",
+              "category": "accessibility",
+              "priority": "required",
+              "statement": "Step-free access is required",
+              "status": "active"
+            }
+          ],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "unverified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "nuitee",
+            "supplierOfferId": "b",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "unverified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "nuitee",
+            "supplierOfferId": "a",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "clarification",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "accommodation-constraint",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [
+            {
+              "id": "b0000000-b000-4000-8000-b00000000003",
+              "category": "accessibility",
+              "priority": "required",
+              "statement": "Step-free access is required",
+              "status": "active"
+            }
+          ],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "nuitee",
+            "supplierOfferId": "b",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "accommodation",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "unsupported",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "nuitee",
+            "supplierOfferId": "a",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "b"
+      }
+    },
+    {
+      "id": "activity-dominant",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "viator",
+            "supplierOfferId": "b",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "viator",
+            "supplierOfferId": "a",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "activity-equivalent",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "viator",
+            "supplierOfferId": "b",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "viator",
+            "supplierOfferId": "a",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "activity-competitive",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "viator",
+            "supplierOfferId": "b",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "viator",
+            "supplierOfferId": "a",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic non-refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "clarification",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "activity-ineligible",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "viator",
+            "supplierOfferId": "b",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "ineligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "viator",
+            "supplierOfferId": "a",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "b"
+      }
+    },
+    {
+      "id": "activity-unknown",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [
+            {
+              "id": "b0000000-b000-4000-8000-b00000000003",
+              "category": "accessibility",
+              "priority": "required",
+              "statement": "Step-free access is required",
+              "status": "active"
+            }
+          ],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "unverified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "viator",
+            "supplierOfferId": "b",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "unverified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "viator",
+            "supplierOfferId": "a",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "clarification",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "activity-constraint",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [
+            {
+              "id": "b0000000-b000-4000-8000-b00000000003",
+              "category": "accessibility",
+              "priority": "required",
+              "statement": "Step-free access is required",
+              "status": "active"
+            }
+          ],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "viator",
+            "supplierOfferId": "b",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "activity",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "unsupported",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "viator",
+            "supplierOfferId": "a",
+            "type": "activity",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "b"
+      }
+    },
+    {
+      "id": "budget",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [
+            {
+              "category": "budget",
+              "priority": "required",
+              "status": "active",
+              "statement": "Maximum EUR 150.00 total"
+            }
+          ],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "budget-unknown",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [
+            {
+              "category": "budget",
+              "priority": "required",
+              "status": "active",
+              "statement": "Keep within my budget"
+            }
+          ],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "clarification",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "wrong-currency",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "USD",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "b"
+      }
+    },
+    {
+      "id": "wrong-dates",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2029-01-01T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "b"
+      }
+    },
+    {
+      "id": "occupancy",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 1,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "accommodation",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "b"
+      }
+    },
+    {
+      "id": "commitment",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [
+            {
+              "id": "b0000000-b000-4000-8000-b00000000004",
+              "type": "activity",
+              "bookingStatus": "confirmed",
+              "serviceStart": "2030-05-10T12:00:00Z",
+              "serviceEnd": "2030-05-10T13:00:00Z"
+            }
+          ],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-11T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "b"
+      }
+    },
+    {
+      "id": "rail-optional",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "selection",
+        "supplierOfferId": "a"
+      }
+    },
+    {
+      "id": "rail-required",
+      "input": {
+        "version": 1,
+        "snapshot": {
+          "departureOrigin": {
+            "kind": "city",
+            "placeId": "synthetic-manchester",
+            "name": "Manchester",
+            "countryCode": "GB",
+            "timezone": "Europe/London",
+            "airportCode": null,
+            "confirmedByUser": true
+          },
+          "availabilityWindows": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000011",
+              "startDate": "2030-05-10",
+              "endDate": "2030-05-30",
+              "preference": "preferred",
+              "timezone": "Europe/London"
+            },
+            {
+              "id": "a0000000-a000-4000-8000-a00000000012",
+              "startDate": "2030-06-10",
+              "endDate": "2030-06-30",
+              "preference": "flexible",
+              "timezone": "Europe/London"
+            }
+          ],
+          "duration": {
+            "minimumDays": 5,
+            "idealDays": 6,
+            "maximumDays": 10
+          },
+          "travellerParty": {
+            "adults": 2,
+            "children": []
+          },
+          "preferences": {
+            "pace": 21,
+            "spend": 95,
+            "discovery": 41,
+            "independence": 50,
+            "setting": 60
+          },
+          "constraints": [
+            {
+              "category": "transport",
+              "priority": "required",
+              "status": "active",
+              "statement": "Use rail between destinations"
+            }
+          ],
+          "destinations": [
+            {
+              "id": "a0000000-a000-4000-8000-a00000000015",
+              "kind": "city",
+              "name": "Lisbon",
+              "countryCode": "PT",
+              "providerPlaceIds": {
+                "synthetic": "synthetic-lisbon"
+              },
+              "location": null,
+              "routePosition": 0,
+              "arrivalDate": null,
+              "departureDate": null,
+              "plannedNights": 0
+            }
+          ],
+          "itineraryDays": [],
+          "components": [],
+          "warnings": [],
+          "price": {
+            "currency": "EUR",
+            "supplierTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "platformMarginTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableTaxesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "customerPayableFeesTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "finalCustomerTotal": {
+              "currency": "EUR",
+              "minorUnits": 0
+            },
+            "status": "estimated",
+            "checkedAt": "2029-01-01T00:00:00Z",
+            "conversionDisclosures": []
+          }
+        }
+      },
+      "offers": [
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000002",
+            "provider": "duffel",
+            "supplierOfferId": "b",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 20000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        },
+        {
+          "selectionGroup": "flight",
+          "eligibility": {
+            "status": "eligible",
+            "minimumAge": null,
+            "maximumAge": null
+          },
+          "occupancy": {
+            "maximumAdults": 4,
+            "maximumChildren": 2
+          },
+          "accessibility": "verified",
+          "evidence": {
+            "status": "quoted",
+            "availability": "available"
+          },
+          "component": {
+            "id": "b0000000-b000-4000-8000-b00000000001",
+            "provider": "duffel",
+            "supplierOfferId": "a",
+            "type": "flight",
+            "serviceStart": "2030-05-10T12:00:00Z",
+            "serviceEnd": "2030-05-15T12:00:00Z",
+            "details": {
+              "description": "Synthetic equivalent source facts"
+            },
+            "cancellationTerms": "Synthetic refundable terms",
+            "bookingStatus": "unbooked",
+            "price": {
+              "currency": "EUR",
+              "finalCustomerMinor": 10000,
+              "taxesMinor": 0,
+              "feesMinor": 0
+            }
+          }
+        }
+      ],
+      "query": {
+        "startDate": "2030-05-10",
+        "endDate": "2030-05-15"
+      },
+      "expected": {
+        "kind": "clarification",
+        "supplierOfferId": "a"
+      }
     }
   ]
 }

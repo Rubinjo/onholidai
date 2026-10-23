@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { itemEvidenceFields, segmentGuidanceFields, planningDetailsSchema } from "./itinerary.ts";
+import {
+  bookingDispositionFields,
+  itemEvidenceFields,
+  segmentGuidanceFields,
+  planningDetailsSchema,
+} from "./itinerary.ts";
 
 export const CURRENT_TRIP_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 export const LEGACY_TRIP_SNAPSHOT_SCHEMA_VERSION = 0 as const;
@@ -358,6 +363,7 @@ export const componentServiceFields = {
 };
 
 export const componentBaseFields = {
+  ...bookingDispositionFields,
   planningDetails: planningDetailsSchema.optional(),
   id: UUID,
   itineraryItemIds: z.array(UUID).max(64),

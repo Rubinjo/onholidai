@@ -33,6 +33,7 @@ const requiredOperations = new Map([
   ["/trips/{tripId}/proposals/{proposalId}/reject", "post"],
   ["/trips/{tripId}/commands/edit-preview", "post"],
   ["/booking/revalidations/{workflowId}", "get"],
+  ["/trips/{tripId}/bookings", "get"],
   ["/bookings/{bookingId}/components/{componentId}/recovery", "post"],
   ["/bookings/{bookingId}/components/{componentId}/cancellations", "post"],
   ["/bookings/{bookingId}/components/{componentId}/reschedule-authorizations", "post"],
@@ -202,7 +203,12 @@ checkClosedComposition(offersSchema, "planning offer schema");
 const [sourceWebText, promotedWebText] = await Promise.all([read(sourceWeb), read(promotedWeb)]);
 assert.equal(
   promotedWebText,
-  sourceWebText.replaceAll("./agent-api.openapi.yaml", "../agent-api/openapi.yaml"),
+  sourceWebText
+    .replaceAll("./agent-api.openapi.yaml", "../agent-api/openapi.yaml")
+    .replaceAll(
+      "../../../contracts/trip-domain/booking-review-v2.schema.json",
+      "./booking-review-v2.schema.json",
+    ),
   "promoted web OpenAPI has drifted or has incorrect agent references",
 );
 

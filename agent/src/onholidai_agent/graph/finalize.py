@@ -8,7 +8,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import langsmith
 from langgraph.graph import END, START, StateGraph  # pyright: ignore[reportMissingTypeStubs]
 
-from onholidai_agent.graph.estimate import EstimateGraph, EstimateState
+from onholidai_agent.graph.estimate import (
+    EstimateGraph,
+    EstimateState,
+    rail_deferred,
+    required_rail_question,
+)
 from onholidai_agent.graph.refine import question
 from onholidai_agent.models.api import AgentResult, CreateAgentRunRequest
 from onholidai_agent.tools.get_trip import TripReader, get_trip
@@ -36,6 +41,9 @@ async def finalize(request: CreateAgentRunRequest, sources: TripReader) -> Agent
 async def compose_itinerary(request: CreateAgentRunRequest, sources: TripReader) -> AgentResult:
     trip = await get_trip(sources, request)
     snapshot = cast(dict[str, object], trip["snapshot"])
+    rail = required_rail_question(snapshot, deferred=rail_deferred(request))
+    if rail:
+        return question(rail, "feasibility")
     destinations = cast(list[dict[str, object]], snapshot["destinations"])
     preferences = cast(dict[str, int], snapshot["preferences"])
     components = cast(list[dict[str, object]], snapshot.get("components", []))
@@ -75,6 +83,11 @@ async def compose_itinerary(request: CreateAgentRunRequest, sources: TripReader)
         "Web checks feasibility policy v1 before finalization; "
         "accepting this proposal does not finalize or book.",
     ]
+    if required_rail_question(snapshot):
+        warnings.append(
+            "Required rail remains unresolved; supported itinerary timing "
+            "does not satisfy or replace that requirement."
+        )
     for offset in range((end_date - start_date).days + 1):
         local_date = (start_date + timedelta(days=offset)).isoformat()
         stops = [

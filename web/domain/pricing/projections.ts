@@ -30,6 +30,15 @@ export type CustomerSnapshot = Omit<TripSnapshot, "components" | "price" | "depa
 
 export function projectPublicComponent(component: Component, now = new Date()): PublicComponent {
   return {
+    ...(component.bookingDisposition ? { bookingDisposition: component.bookingDisposition } : {}),
+    ...(component.bookingDispositionEvidence
+      ? {
+          bookingDispositionEvidence: {
+            ...component.bookingDispositionEvidence,
+            source: publicSupplierText(component.bookingDispositionEvidence.source),
+          },
+        }
+      : {}),
     id: component.id,
     itineraryItemIds: component.itineraryItemIds,
     provider: publicSupplierText(component.provider),
@@ -144,7 +153,20 @@ function projectValidatedSnapshot(
     preferences: snapshot.preferences,
     constraints: snapshot.constraints,
     destinations: snapshot.destinations,
-    itineraryDays: snapshot.itineraryDays,
+    itineraryDays: snapshot.itineraryDays.map((day) => ({
+      ...day,
+      items: day.items.map((item) => ({
+        ...item,
+        ...(item.bookingDispositionEvidence
+          ? {
+              bookingDispositionEvidence: {
+                ...item.bookingDispositionEvidence,
+                source: publicSupplierText(item.bookingDispositionEvidence.source),
+              },
+            }
+          : {}),
+      })),
+    })),
     components,
     warnings: [
       ...snapshot.warnings.map((warning) => ({

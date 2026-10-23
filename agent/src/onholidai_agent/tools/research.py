@@ -1,7 +1,7 @@
 import asyncio
 import re
 from datetime import datetime
-from typing import Protocol, cast
+from typing import Protocol, cast, runtime_checkable
 
 from onholidai_agent.models.api import CreateAgentRunRequest
 
@@ -10,6 +10,11 @@ class ResearchReader(Protocol):
     async def search(
         self, request: CreateAgentRunRequest, query: dict[str, object]
     ) -> dict[str, object]: ...
+
+
+@runtime_checkable
+class SelectedResearchReader(Protocol):
+    async def selected_offers(self, request: CreateAgentRunRequest) -> list[dict[str, object]]: ...
 
 
 def complete_planning_component(value: object) -> bool:

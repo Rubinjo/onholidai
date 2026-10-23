@@ -3,7 +3,7 @@ import "server-only";
 import { Pool } from "pg";
 
 import { createAuth } from "@/server/auth/auth";
-import { deriveProviderReadiness, loadServerConfig, type ProductReadiness } from "@/server/config";
+import { deriveProviderReadiness, loadServerConfig } from "@/server/config";
 import { createDatabase } from "@/server/db/database";
 import { configureSpanSink, createOtlpHttpSink } from "@/server/telemetry-exporter";
 import { createPlaceLookupProvider } from "@/server/supply/places";
@@ -11,9 +11,14 @@ import {
   createConfiguredPlanningProviders,
   type PlanningProviderMappings,
 } from "@/server/supply/providers";
+import {
+  currentProviderByType,
+  productReadiness,
+  type SupplyReadProvider,
+} from "@/server/supply/read";
 
-import type { SupplyReadProvider } from "@/server/supply/read";
 import type { PlaceLookupProvider } from "@/domain/trip/destination";
+import type { TrustedBookingPrerequisiteReader } from "@/server/supply/payment";
 
 // This is the process composition root. Domain services receive its dependencies
 // explicitly; only Next.js entry points read the registered application.
@@ -24,6 +29,7 @@ export function createApplication(
     places?: PlaceLookupProvider;
     audience?: "web" | "worker";
     supplierMappings?: PlanningProviderMappings;
+    bookingPrerequisites?: TrustedBookingPrerequisiteReader;
   } = {},
 ) {
   const config = loadServerConfig(environment);
@@ -33,33 +39,23 @@ export function createApplication(
     audience === "worker"
       ? []
       : (dependencies.planningProviders ??
-        createConfiguredPlanningProviders(
-          config,
-          environment,
-          providerReadiness,
-          dependencies.supplierMappings,
-        ))
+        createConfiguredPlanningProviders(config, environment, dependencies.supplierMappings))
   ).filter((provider) => {
+    if (
+      !provider.capabilities.readOnly ||
+      provider.capabilities.search.length === 0 ||
+      !provider.capabilities.search.every(
+        (type) => provider.capabilities.provider === currentProviderByType[type],
+      )
+    )
+      return false;
     if (config.PROVIDER_MODE === "deterministic") return true;
-    return (
-      provider.capabilities.readOnly &&
-      provider.capabilities.search.length > 0 &&
-      provider.capabilities.search.every((type) => {
-        let product: ProductReadiness | undefined;
-        if (
-          provider.capabilities.provider === "duffel" &&
-          (type === "flight" || type === "accommodation")
-        ) {
-          product = providerReadiness.duffel.products[type];
-        } else if (provider.capabilities.provider === "viator" && type === "activity") {
-          product = providerReadiness.viator.products.activity;
-        }
-        return (
-          product?.operations.search.support === "supported" &&
-          product.operations.search.access === "verified"
-        );
-      })
-    );
+    return provider.capabilities.search.every((type) => {
+      const readiness = productReadiness(providerReadiness, type, "search");
+      return (
+        readiness?.operation.support === "supported" && readiness.operation.access === "verified"
+      );
+    });
   });
   const database = createDatabase({ connectionString: config.DATABASE_URL });
   const authPool = new Pool({
@@ -75,6 +71,7 @@ export function createApplication(
       database,
       auth,
       providerReadiness,
+      bookingPrerequisites: dependencies.bookingPrerequisites,
       places: dependencies.places ?? createPlaceLookupProvider(config.PROVIDER_MODE),
       planningProviders,
       shutdown(): Promise<void> {

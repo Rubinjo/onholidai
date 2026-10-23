@@ -8,7 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTrip } from "../../domain/trip/create";
 import { readAgentTrip, readTrip } from "../../domain/trip/read";
 import { researchDraftImpact } from "../../domain/trip/edit";
-import { projectCustomerSnapshot } from "../../domain/pricing/projections";
+import { assertSelectedOfferRequirements, priceEstimate } from "../../domain/trip/apply-estimate";
+import {
+  isCompletePlanningOffer,
+  materializePlanningOffer,
+  planningOfferSchema,
+} from "../../server/supply/offers";
+import { searchPlanningOffers } from "../../server/supply/read";
+import { projectCustomerSnapshot, projectPublicComponent } from "../../domain/pricing/projections";
 import { readPricingDiagnostic } from "../../domain/pricing/diagnostics";
 import { ProposalRepository } from "../../server/db/proposal-repository";
 import { createPlanningProviders } from "../../server/supply/providers";
@@ -22,6 +29,183 @@ import {
 vi.mock("server-only", () => ({}));
 if (process.env.CI && !hasIsolatedDatabaseConfiguration())
   throw new Error("CI must provision PostgreSQL test credentials");
+
+describe("selected-source candidate safety", () => {
+  it("does not spend more on equivalent research merely because spend preference is higher", async () => {
+    const base = createSyntheticTripSnapshot();
+    base.constraints = [];
+    const providers = createPlanningProviders("deterministic").map((provider) => ({
+      ...provider,
+      async search(...args: Parameters<typeof provider.search>) {
+        return (await provider.search(...args)).flatMap((raw) => {
+          const offer = planningOfferSchema.parse(raw);
+          if (!isCompletePlanningOffer(offer))
+            throw new Error("Expected complete synthetic evidence");
+          const expensive = structuredClone(offer);
+          expensive.component.id = randomUUID();
+          expensive.component.supplierOfferId += "-expensive";
+          for (const field of [
+            "supplierAmount",
+            "platformMargin",
+            "customerPayableTaxes",
+            "customerPayableFees",
+            "finalCustomerAmount",
+          ] as const)
+            expensive.component.price[field].minorUnits *= 2;
+          return [offer, expensive];
+        });
+      },
+    }));
+    const inexpensive = await researchDraftImpact(
+      base,
+      1,
+      [
+        {
+          operation: "replace",
+          target: "/preferences/spend",
+          value: 0,
+        },
+      ],
+      providers,
+    );
+    const willingToSpend = await researchDraftImpact(
+      base,
+      1,
+      [
+        {
+          operation: "replace",
+          target: "/preferences/spend",
+          value: 100,
+        },
+      ],
+      providers,
+    );
+    expect(willingToSpend.snapshot.price.finalCustomerTotal).toEqual(
+      inexpensive.snapshot.price.finalCustomerTotal,
+    );
+  });
+  it("revalidates dates, age, occupancy, requirements, budgets and unrelated removals independently of the agent", async () => {
+    const base = createSyntheticTripSnapshot();
+    base.constraints = [];
+    base.itineraryDays = [];
+    const found = await searchPlanningOffers(createPlanningProviders("deterministic"), {
+      startDate: "2030-05-01",
+      endDate: "2030-05-08",
+      componentTypes: ["flight", "accommodation", "activity"],
+      currency: base.price.currency,
+      departureOrigin: base.departureOrigin,
+      travellerParty: base.travellerParty,
+      destinationIds: base.destinations.map((entry) => entry.id),
+    });
+    const offers = found.offers.map((value) => planningOfferSchema.parse(value));
+    for (const offer of offers) {
+      offer.eligibility.status = "eligible";
+      offer.occupancy = { maximumAdults: 2, maximumChildren: 0 };
+    }
+    const candidate = priceEstimate(
+      base,
+      [
+        {
+          operation: "replace",
+          target: "/components",
+          value: offers.map((offer) =>
+            projectPublicComponent(materializePlanningOffer(offer).component),
+          ),
+        },
+      ],
+      offers,
+      new Date(),
+    );
+    expect(() => assertSelectedOfferRequirements(base, candidate, offers)).not.toThrow();
+    const stay = offers.find((offer) => offer.component.type === "accommodation")!;
+    const invalidCases = [
+      () => {
+        stay.occupancy.maximumAdults = 1;
+      },
+      () => {
+        stay.occupancy.maximumAdults = null;
+      },
+      () => {
+        stay.eligibility.status = "ineligible";
+      },
+      () => {
+        stay.component.serviceStart = "2029-01-01T00:00:00Z";
+      },
+      () => {
+        base.travellerParty.children = [{ id: randomUUID(), ageAtTripStart: 12 }];
+        stay.eligibility = { status: "eligible", minimumAge: 13, maximumAge: null };
+      },
+      () => {
+        base.constraints = [
+          {
+            id: randomUUID(),
+            category: "accessibility",
+            statement: "Step-free required",
+            priority: "required",
+            status: "active",
+            confirmedByUser: true,
+            source: { kind: "setup_text", referenceId: null },
+          },
+        ];
+      },
+      () => {
+        base.constraints = [
+          {
+            id: randomUUID(),
+            category: "budget",
+            statement: "Maximum GBP 1.00 total",
+            priority: "required",
+            status: "active",
+            confirmedByUser: true,
+            source: { kind: "setup_text", referenceId: null },
+          },
+        ];
+      },
+      () => {
+        base.components = [
+          {
+            ...candidate.components.find((component) => component.type === "activity")!,
+            id: randomUUID(),
+          },
+        ];
+      },
+    ];
+    for (const mutate of invalidCases) {
+      const previous = structuredClone({ base, offers });
+      mutate();
+      expect(() => assertSelectedOfferRequirements(base, candidate, offers)).toThrow();
+      Object.assign(base, previous.base);
+      offers.splice(0, offers.length, ...previous.offers);
+      Object.assign(
+        stay,
+        offers.find((offer) => offer.component.id === stay.component.id)!,
+      );
+      offers[offers.findIndex((offer) => offer.component.id === stay.component.id)] = stay;
+    }
+    const existingStay = candidate.components.find(
+      (component) => component.type === "accommodation",
+    )!;
+    const first = { ...existingStay, id: randomUUID() };
+    const second = { ...existingStay, id: randomUUID() };
+    base.components = [first, second];
+    const ambiguous = priceEstimate(
+      base,
+      [
+        {
+          operation: "replace",
+          target: "/components",
+          value: [...candidate.components, second].map((component) =>
+            projectPublicComponent(component),
+          ),
+        },
+      ],
+      offers,
+      new Date(),
+      true,
+    );
+    expect(() => assertSelectedOfferRequirements(base, ambiguous, offers)).toThrow();
+  });
+});
 
 describe.skipIf(!hasIsolatedDatabaseConfiguration())("initial trip persistence", () => {
   let fixture: IsolatedTestDatabase;

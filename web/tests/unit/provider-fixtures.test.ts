@@ -39,7 +39,7 @@ describe("deterministic provider fixtures", () => {
       vi.useFakeTimers();
       vi.setSystemTime("2030-01-01T00:00:00Z");
       const source = createReadAdapter(
-        "duffel",
+        "nuitee",
         "accommodation",
         syntheticReadClient("accommodation", { accommodationType }),
       );
@@ -82,7 +82,7 @@ describe("deterministic provider fixtures", () => {
       ],
     });
     const first = normalizePlanningOffer((await activity.search(query, signal))[0]);
-    const stay = createReadAdapter("duffel", "accommodation", syntheticReadClient("accommodation"));
+    const stay = createReadAdapter("nuitee", "accommodation", syntheticReadClient("accommodation"));
     const nextQuery = { ...query, startDate: "2030-05-02", endDate: "2030-05-09" };
     const second = normalizePlanningOffer((await stay.search(nextQuery, signal))[0]);
     expect(first.component.travellerIds).toEqual(second.component.travellerIds);

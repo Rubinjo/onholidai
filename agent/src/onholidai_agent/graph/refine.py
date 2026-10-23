@@ -6,11 +6,24 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from onholidai_agent.api.store import WebRunStore
 from onholidai_agent.context.build import build_context
-from onholidai_agent.graph.estimate import EstimateGraph, EstimateState, Sources, estimate
+from onholidai_agent.graph.estimate import (
+    EstimateGraph,
+    EstimateState,
+    MaterialChoice,
+    Sources,
+    decision_clarification,
+    estimate,
+    facts,
+    rail_deferred,
+    required_budget,
+    required_rail_question,
+    select_quotes,
+)
 from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import AgentResult, CreateAgentRunRequest
 from onholidai_agent.tools.get_trip import TripReader, get_trip
 from onholidai_agent.tools.propose_trip_changes import propose_trip_changes
+from onholidai_agent.tools.research import SelectedResearchReader
 from onholidai_agent.tools.retrieve_relevant_context import retrieve_relevant_context
 
 
@@ -119,14 +132,118 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
                 "kind": "answer",
                 "message": (
                     "Use the separate transactional review UI for booking, payment, "
-                    "cancellation or rescheduling. These actions are unavailable in the "
-                    "planning release; this conversation cannot authorize them."
+                    "cancellation or rescheduling. Open the trip booking page to review exact "
+                    "current terms and eligibility; unresolved facts may block the action. "
+                    "This conversation cannot authorize any transaction."
                 ),
             }
         )
     trip = await get_trip(sources, request)
     context = build_context(request, trip)
     snapshot = cast(dict[str, object], trip["snapshot"])
+    if request.selected_offers:
+        if not isinstance(sources, SelectedResearchReader):
+            raise ValueError("selected_research_reader_unavailable")
+        found = await sources.selected_offers(request)
+        windows = cast(list[dict[str, object]], snapshot.get("availabilityWindows", []))
+        destinations = cast(list[dict[str, object]], snapshot.get("destinations", []))
+        query: dict[str, object] = {}
+        if destinations and all(
+            entry.get("arrivalDate") and entry.get("departureDate") for entry in destinations
+        ):
+            query = {
+                "startDate": min(str(entry["arrivalDate"]) for entry in destinations),
+                "endDate": max(str(entry["departureDate"]) for entry in destinations),
+            }
+        elif windows:
+            query = {
+                "startDate": min(str(window["startDate"]) for window in windows),
+                "endDate": max(str(window["endDate"]) for window in windows),
+            }
+        try:
+            selected = select_quotes(
+                found,
+                cast(int, facts(snapshot.get("preferences")).get("spend", 50)),
+                snapshot=snapshot,
+                query=query,
+                allow_unresolved_rail=rail_deferred(request),
+            )
+        except MaterialChoice as choice:
+            return decision_clarification(choice)
+        if len(selected) != len(found) or not selected:
+            return question(
+                "Which complete current option meets the trip dates, party and known requirements? "
+                "Incomplete, expired or unsupported research cannot update the draft.",
+                "feasibility",
+            )
+        existing = cast(list[dict[str, object]], snapshot.get("components", []))
+        if any(component.get("bookingStatus") != "unbooked" for component in existing):
+            return question(
+                "Which separate review should resolve the existing booking commitment "
+                "before changing inventory?",
+                "transaction",
+            )
+        components = [facts(offer["component"]) for offer in selected]
+        if any(
+            sum(
+                1
+                for component in existing
+                if (
+                    component.get("type") == choice.get("type")
+                    and choice.get("type") != "activity"
+                    and component.get("serviceStart") == choice.get("serviceStart")
+                    and component.get("serviceEnd") == choice.get("serviceEnd")
+                )
+            )
+            > 1
+            for choice in components
+        ):
+            return question(
+                "Which existing draft component should this selection replace?", "scope"
+            )
+        retained = [
+            component
+            for component in existing
+            if not any(
+                component.get("id") == choice.get("id")
+                or (
+                    component.get("type") == choice.get("type")
+                    and choice.get("type") != "activity"
+                    and component.get("serviceStart") == choice.get("serviceStart")
+                    and component.get("serviceEnd") == choice.get("serviceEnd")
+                )
+                for choice in components
+            )
+        ]
+        budget = required_budget(snapshot)
+        if budget is not None:
+            totals = [
+                facts(component.get("price")).get("finalCustomerMinor")
+                for component in [*retained, *components]
+            ]
+            if not all(isinstance(total, int) for total in totals):
+                return question(
+                    "What current source total should the retained draft components use?", "price"
+                )
+            if sum(cast(list[int], totals)) > budget:
+                return question(
+                    "The selected and retained components exceed the recorded budget. "
+                    "Should we change the route or revise that budget?",
+                    "price",
+                )
+        return propose_trip_changes(
+            request,
+            [{"operation": "replace", "target": "/components", "value": [*retained, *components]}],
+            "Use selected current source facts within the recorded dates, party and constraints. "
+            "Web recomputes prices from granted research; unknown facts remain unverified.",
+            [
+                "No inventory was reserved. The existing application policy, "
+                "version checks and change history still apply."
+            ],
+        )
+    rail = required_rail_question(snapshot, deferred=rail_deferred(request))
+    if rail and re.search(r"\b(?:rail|train|recommend|supplier)\b", message):
+        return question(rail, "feasibility")
     scheduled_edit = re.search(
         r"\b(remove|move) activity ([0-9a-f-]{36})(?: to (\d{4}-\d{2}-\d{2}) at (\d{2}:\d{2}))?",
         message,
@@ -486,8 +603,8 @@ async def dispatch(request: CreateAgentRunRequest, sources: Sources) -> AgentRes
             route = ", ".join(str(place.get("name", "")) for place in places)
             answer = (
                 f"Your saved route includes {route}. You could keep the current route and "
-                "explore its daily plans, or ask me to propose a change to the pace, dates or "
-                "stays. Tell me which option you prefer; requested draft changes are validated. "
+                "explore its daily plans. Requested changes to the pace, dates or "
+                "stays go through validated draft proposals. "
                 "Transport, activities and prices remain subject to verification."
             )
         return AgentResult.model_validate({"kind": "answer", "message": answer[:12000]})

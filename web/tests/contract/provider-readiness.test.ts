@@ -11,7 +11,7 @@ import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
 describe("supplier product readiness contract", () => {
   it.each(["flight", "accommodation"] as const)(
-    "retains other products when Duffel %s access is blocked and publishes no upstream secrets",
+    "retains other products when %s access is blocked and publishes no upstream secrets",
     (blockedProduct) => {
       const otherProduct = blockedProduct === "flight" ? "accommodation" : "flight";
       const verified = {
@@ -28,10 +28,28 @@ describe("supplier product readiness contract", () => {
           duffel: {
             readSecretRef: "DUFFEL_READ_SECRET",
             products: {
-              [blockedProduct]: {
-                operations: { search: { support: "supported", access: "blocked" } },
+              flight: {
+                operations: {
+                  search:
+                    blockedProduct === "flight"
+                      ? { support: "supported", access: "blocked" }
+                      : verified,
+                },
               },
-              [otherProduct]: { operations: { search: verified } },
+            },
+          },
+          nuitee: {
+            readSecretRef: "NUITEE_SECRET",
+            transactionSecretRef: "NUITEE_SECRET",
+            products: {
+              accommodation: {
+                operations: {
+                  search:
+                    blockedProduct === "accommodation"
+                      ? { support: "supported", access: "blocked" }
+                      : { ...verified, environment: "sandbox" },
+                },
+              },
             },
           },
           viator: {
@@ -41,12 +59,17 @@ describe("supplier product readiness contract", () => {
           },
         }),
       };
-      const readiness = deriveProviderReadiness(loadServerConfig(environment), environment);
-      expect(readiness.duffel.products[blockedProduct].operations.search.access).toBe("blocked");
-      expect(readiness.duffel.products[otherProduct].operations.search.access).toBe("verified");
+      const configured = { ...environment, NUITEE_SECRET: "synthetic-hotel-canary" };
+      const readiness = deriveProviderReadiness(loadServerConfig(configured), configured);
+      const products = {
+        flight: readiness.duffel.products.flight,
+        accommodation: readiness.nuitee.products.accommodation,
+      };
+      expect(products[blockedProduct].operations.search.access).toBe("blocked");
+      expect(products[otherProduct].operations.search.access).toBe("verified");
       expect(readiness.viator.products.activity.operations.search.access).toBe("verified");
       expect(readiness.viator.products.activity.operations.book.access).toBe("unconfigured");
-      expect(Object.keys(readiness)).toEqual(["duffel", "viator"]);
+      expect(Object.keys(readiness)).toEqual(["duffel", "nuitee", "viator"]);
       expect(JSON.stringify(readiness)).not.toMatch(
         /canary|SecretRef|DUFFEL_READ_SECRET|VIATOR_SECRET|synthetic-approved-read/,
       );

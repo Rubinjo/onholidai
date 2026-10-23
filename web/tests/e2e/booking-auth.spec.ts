@@ -22,7 +22,10 @@ test("Book trip continues from a draft through free sign-up and same-trip linkin
 }) => {
   test.setTimeout(120000);
   await completeSetup(page, { title: "Same-trip account continuation" });
-  await expect(savedVersion(page, 2)).toBeVisible({ timeout: 35000 });
+  await expect(page.getByRole("group", { name: /Clarification needed/ })).toBeVisible({
+    timeout: 35000,
+  });
+  await expect(savedVersion(page, 1)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Finalization review" })).toHaveCount(0);
   const tripId = new URL(page.url()).pathname.split("/")[2],
     before = await (await page.request.get(`/api/v1/trips/${tripId}`)).json();
@@ -48,6 +51,10 @@ test("Book trip continues from a draft through free sign-up and same-trip linkin
   expect(after.snapshot).toEqual(before.snapshot);
   await page.goto(`/trips/${tripId}/booking`);
   await expect(page.getByRole("heading", { name: "Review booking" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your whole trip" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Authorize and start whole-trip booking" }),
+  ).toHaveCount(0);
   expect((await (await page.request.get(`/api/v1/trips/${tripId}`)).json()).version).toBe(
     before.version,
   );

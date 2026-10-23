@@ -96,6 +96,13 @@ class CreateAgentRunRequest(ContractModel):
             "allOf": [
                 {
                     "if": {
+                        "required": ["selectedOffers"],
+                        "properties": {"selectedOffers": {"type": "array"}},
+                    },
+                    "then": {"properties": {"purpose": {"const": "refinement"}}},
+                },
+                {
+                    "if": {
                         "properties": {
                             "purpose": {
                                 "enum": [
@@ -132,6 +139,17 @@ class CreateAgentRunRequest(ContractModel):
     message: Text12000
     context: PromptContext
     purpose: RunPurpose
+    selected_offers: list["SelectedOffer"] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=32,
+        json_schema_extra={"x-unique-by": "offerRef"},
+    )
+
+
+class SelectedOffer(ContractModel):
+    offer_ref: UUIDString
+    revision: PositiveInt
 
 
 class Clarification(ContractModel):

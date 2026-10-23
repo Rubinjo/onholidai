@@ -1,11 +1,26 @@
 import { z } from "zod";
 
+export const feasibilityIssueSchema = z
+  .object({ code: z.string(), message: z.string(), relatedIds: z.array(z.uuid()) })
+  .strict();
+
 const text = (max: number) => z.string().trim().min(1).max(max);
 const timestamp = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/)
   .refine((value) => Number.isFinite(Date.parse(value)), "Expected a UTC timestamp");
 export const verificationSchema = z.enum(["verified", "unverified", "failed"]);
+export const bookingDispositionFields = {
+  bookingDisposition: z.enum(["required", "not_required", "unknown"]).optional(),
+  bookingDispositionEvidence: z
+    .object({
+      source: text(500),
+      verificationStatus: verificationSchema,
+      checkedAt: timestamp,
+    })
+    .strict()
+    .optional(),
+};
 export const constraintEvidenceSchema = z
   .object({
     constraintId: z.uuid(),
@@ -15,6 +30,7 @@ export const constraintEvidenceSchema = z
   })
   .strict();
 export const itemEvidenceFields = {
+  ...bookingDispositionFields,
   title: text(200).optional(),
   practicalNotes: z.array(text(1000)).max(16).optional(),
   startOffset: z
