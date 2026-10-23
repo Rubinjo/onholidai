@@ -47,9 +47,13 @@ test("@accessibility @us1 setup remains labelled and usable without map", async 
   await enterValue(page.getByLabel("Adults", { exact: true }), "2");
   await continueStep(page);
 
-  await expect(page.getByLabel("Pace", { exact: false })).toBeVisible();
-  await expect(page.getByLabel("Spend", { exact: false })).toBeVisible();
-  await expect(page.getByLabel("Discovery", { exact: false })).toBeVisible();
-  await expect(page.getByLabel("Independence", { exact: false })).toBeVisible();
-  await expect(page.getByLabel("Setting", { exact: false })).toBeVisible();
+  for (const name of [
+    "Pace: relaxed to full days",
+    "Spend: budget to premium",
+    "Discovery: familiar to adventurous",
+    "Independence: guided to self-directed",
+    "Setting: nature to city",
+  ]) {
+    await expect(page.getByRole("slider", { name, exact: true })).toBeVisible();
+  }
 });
