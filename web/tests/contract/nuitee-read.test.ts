@@ -1,11 +1,14 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { bookingTermsV2Schema } from "../../domain/booking/authorization";
+import { tripSnapshotSchema } from "../../domain/trip/schema";
 import { createNuiteeHttpClient } from "../../server/supply/providers/nuitee-http";
 import { createNuiteeReadProvider } from "../../server/supply/providers/nuitee-read";
-import { projectPublicPlanningOffer } from "../../server/supply/offers";
+import { normalizePlanningOffer, projectPublicPlanningOffer } from "../../server/supply/offers";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { nuiteeRatesResponse as rates } from "../fixtures/providers";
+import { wholeTripReviewFixture, wholeTripTermsFixture } from "../fixtures/whole-trip-review";
 
 import type { SupplyReadQuery } from "../../server/supply/read";
 
@@ -23,7 +26,7 @@ const selection = {
   guestNationality: "GB",
   occupancies: [{ adults: 2, children: [] }],
 };
-function setup(response = rates()) {
+function setup(response: unknown = rates()) {
   const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json(response));
   const client = createNuiteeHttpClient({
     apiKey: "synthetic-nuitee-secret",
@@ -37,6 +40,208 @@ function setup(response = rates()) {
 afterEach(() => vi.useRealTimers());
 
 describe("Nuitee safe hotel wire mappings", () => {
+  it.each([
+    ["object", "object"],
+    ["object", "array"],
+    ["array", "object"],
+  ])(
+    "maps %s retail and %s selling totals without assuming net price is public",
+    async (retail, selling) => {
+      const wire = rates();
+      const hotel = wire.data[0];
+      const original = hotel.roomTypes[0];
+      const { provider } = setup({
+        data: [
+          {
+            ...hotel,
+            roomTypes: [
+              {
+                ...original,
+                offerId: `${"Q".repeat(1152)}+/==`,
+                offerRetailRate:
+                  retail === "object" ? original.offerRetailRate[0] : original.offerRetailRate,
+                suggestedSellingPrice:
+                  selling === "object"
+                    ? original.suggestedSellingPrice[0]
+                    : original.suggestedSellingPrice,
+              },
+            ],
+          },
+        ],
+      });
+      const [offer] = await provider.search(query, new AbortController().signal);
+      const projected = projectPublicPlanningOffer(offer);
+      expect(projected.component.price.finalCustomerMinor).toBe(11520);
+      expect(JSON.stringify(projected)).not.toMatch(
+        /supplierAmount|offerRetailRate|platformMargin/,
+      );
+    },
+  );
+
+  it.each(["object", "array"])(
+    "keeps ambiguous property charges out of an enriched %s public total",
+    async (form) => {
+      const wire = rates();
+      const hotel = wire.data[0];
+      const original = hotel.roomTypes[0];
+      const price = { ...original.suggestedSellingPrice[0], source: "synthetic-public-source" };
+      const { provider } = setup({
+        data: [
+          {
+            ...hotel,
+            roomTypes: [
+              {
+                ...original,
+                offerRetailRate: original.offerRetailRate[0],
+                suggestedSellingPrice: form === "object" ? price : [price],
+              },
+            ],
+          },
+        ],
+      });
+      const [offer] = await provider.search(query, new AbortController().signal);
+      const projected = projectPublicPlanningOffer(offer);
+      expect(projected.component.price.finalCustomerMinor).toBeNull();
+      expect(projected.unverifiedFacts).toContain("price");
+    },
+  );
+
+  it("retains an enriched public total when there are no additional property charges to infer", async () => {
+    const wire = rates();
+    const hotel = wire.data[0];
+    const original = hotel.roomTypes[0];
+    for (const charge of original.rates[0].retailRate.taxesAndFees) charge.included = true;
+    const { provider } = setup({
+      data: [
+        {
+          ...hotel,
+          roomTypes: [
+            {
+              ...original,
+              offerRetailRate: original.offerRetailRate[0],
+              suggestedSellingPrice: {
+                ...original.suggestedSellingPrice[0],
+                source: "synthetic-public-source",
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const [offer] = await provider.search(query, new AbortController().signal);
+    expect(projectPublicPlanningOffer(offer).component.price.finalCustomerMinor).toBe(11020);
+  });
+
+  it.each(["currency", "precision", "total", "missing", "multiple"])(
+    "rejects %s errors in object-form offer totals instead of inventing a price",
+    async (fault) => {
+      const wire = rates();
+      const hotel = wire.data[0];
+      const original = hotel.roomTypes[0];
+      const retail = { ...original.offerRetailRate[0] };
+      if (fault === "currency") retail.currency = "USD";
+      if (fault === "precision") retail.amount = "100.101";
+      if (fault === "total") retail.amount = "100.11";
+      const { provider } = setup({
+        data: [
+          {
+            ...hotel,
+            roomTypes: [
+              {
+                ...original,
+                offerRetailRate:
+                  fault === "missing" ? {} : fault === "multiple" ? [retail, retail] : retail,
+                suggestedSellingPrice: original.suggestedSellingPrice[0],
+              },
+            ],
+          },
+        ],
+      });
+      await expect(provider.search(query, new AbortController().signal)).rejects.toHaveProperty(
+        "status",
+      );
+    },
+  );
+
+  it("preserves realistic encoded offer/rate IDs across the adapter and public canonical schema", async () => {
+    const wire = rates();
+    const offerId = `${"Q".repeat(1152)}+/==`;
+    const rateId = "r".repeat(549);
+    wire.data[0].roomTypes[0].offerId = offerId;
+    wire.data[0].roomTypes[0].rates[0].rateId = rateId;
+    const { provider } = setup(wire);
+    const offers = await provider.search(query, new AbortController().signal);
+    const projected = projectPublicPlanningOffer(offers[0]);
+    expect(projected.component.supplierOfferId).toBe(offerId);
+    expect(projected.supplierReferences?.rateIds).toEqual([rateId]);
+    expect(normalizePlanningOffer(offers[0]).component.supplierOfferId).toBe(offerId);
+  });
+
+  it("keeps long supplier IDs intact in accepted snapshots and whole-trip evidence/consent", () => {
+    const fixture = wholeTripReviewFixture();
+    const stay = fixture.snapshot.components.find((entry) => entry.provider === "nuitee")!;
+    const proof = fixture.evidence.find((entry) => entry.componentId === stay.id)!;
+    const offerId = `${"Q".repeat(1152)}+/==`;
+    stay.supplierOfferId = offerId;
+    proof.supplierOfferId = offerId;
+    const snapshot = tripSnapshotSchema.parse(fixture.snapshot);
+    const terms = bookingTermsV2Schema.parse(wholeTripTermsFixture(fixture));
+    expect(snapshot.components.find((entry) => entry.id === stay.id)?.supplierOfferId).toBe(
+      offerId,
+    );
+    expect(
+      terms.components.find((entry) => entry.componentId === stay.id)?.evidence.supplierOfferId,
+    ).toBe(offerId);
+  });
+
+  it("keeps 32 representative long-ID public offers inside the existing MCP output budget", async () => {
+    const wire = rates();
+    const template = structuredClone(wire.data[0].roomTypes[0]);
+    wire.data[0].roomTypes = Array.from({ length: 32 }, (_, index) => ({
+      ...structuredClone(template),
+      offerId: `${"Q".repeat(1150)}${String(index).padStart(2, "0")}+/==`,
+      rates: [{ ...structuredClone(template.rates[0]), rateId: "r".repeat(549) }],
+    }));
+    const { provider } = setup(wire);
+    const offers = (await provider.search(query, new AbortController().signal)).map((offer) =>
+      projectPublicPlanningOffer(offer),
+    );
+    expect(offers).toHaveLength(32);
+    expect(Buffer.byteLength(JSON.stringify({ offers }))).toBeLessThanOrEqual(262144);
+  });
+
+  it.each(["offer", "rate"])("accepts a bounded 4096-character opaque %s ID", async (field) => {
+    const wire = rates();
+    const value = `${"Q".repeat(4092)}+/==`;
+    if (field === "offer") wire.data[0].roomTypes[0].offerId = value;
+    else wire.data[0].roomTypes[0].rates[0].rateId = value;
+    const { provider } = setup(wire);
+    const [offer] = await provider.search(query, new AbortController().signal);
+    const projected = projectPublicPlanningOffer(offer);
+    expect(
+      field === "offer"
+        ? projected.component.supplierOfferId
+        : projected.supplierReferences?.rateIds?.[0],
+    ).toBe(value);
+  });
+
+  it.each([
+    ["offer", "Q".repeat(4097)],
+    ["rate", "r".repeat(4097)],
+    ["offer", "https://example.invalid/token"],
+    ["rate", "rate\nvalue"],
+    ["offer", "offer value"],
+  ])("rejects oversized or unsafe opaque %s IDs (%#)", async (field, value) => {
+    const wire = rates();
+    if (field === "offer") wire.data[0].roomTypes[0].offerId = value;
+    else wire.data[0].roomTypes[0].rates[0].rateId = value;
+    const { provider } = setup(wire);
+    await expect(provider.search(query, new AbortController().signal)).rejects.toHaveProperty(
+      "status",
+      "unsupported",
+    );
+  });
+
   it("maps selected public pricing without double-counting included fees or exposing supplier economics", async () => {
     const { fetch, provider } = setup();
     const offers = await provider.search(query, new AbortController().signal);

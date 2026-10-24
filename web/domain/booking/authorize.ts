@@ -195,12 +195,7 @@ export async function authorizeBooking(
           detail:
             "Resolve all missing or unverified requirements and refresh the whole-trip review.",
         });
-      if (terms.continuationOf !== null || terms.rootAttemptId !== null)
-        throw new ProblemError({
-          title: "Booking continuation is not activated",
-          status: 409,
-          code: "booking_continuation_unavailable",
-        });
+      await new BookingRepository(transaction).assertWholeTripLineage(tripId, userId, terms, now);
       await new BookingRepository(transaction).assertConfirmedBasis(tripId, terms);
       await assertTrustedBookingPrerequisites(prerequisites, userId, tripId, terms);
     }

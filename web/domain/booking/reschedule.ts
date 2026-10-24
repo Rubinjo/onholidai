@@ -9,6 +9,7 @@ import { ProblemError } from "@/server/errors";
 import { startWorkflow } from "@/server/workflows/client";
 import { inTransaction } from "@/server/db/transaction";
 import { canonicalBookingJson } from "@/domain/booking/authorization";
+import { MAX_SUPPLIER_ID_LENGTH } from "@/domain/trip/schema";
 
 import type { Database } from "@/server/db/database";
 import type { BookingActor } from "@/server/auth/planning-actor";
@@ -20,7 +21,7 @@ const rescheduleSchema = z
       .object({
         serviceStart: z.iso.datetime({ offset: true }).optional(),
         serviceEnd: z.iso.datetime({ offset: true }).optional(),
-        supplierOfferId: z.string().min(1).max(256).optional(),
+        supplierOfferId: z.string().min(1).max(MAX_SUPPLIER_ID_LENGTH).optional(),
         travellerIds: z.array(z.uuid()).min(1).max(10).optional(),
         note: z.string().max(500).optional(),
       })

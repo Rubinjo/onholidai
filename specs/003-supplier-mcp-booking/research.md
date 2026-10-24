@@ -2,6 +2,113 @@
 
 Date: 2026-10-17; current supplier-scope revision: 2026-10-23. Current scope is Duffel Flights, Nuitee stays and Viator activities. The dated 2026-10-19/21 research below remains historical where it concerns Duffel Stays or prior implementation state; the following revision supersedes those decisions. No provider credentials were inspected or exercised in this revision. Live approvals are external prerequisites.
 
+## 2026-10-24 authorized Duffel discovery test and demo-only reassignment
+
+The user explicitly authorized testing `DUFFEL_TRANSACTION_SECRET`, then chose
+to use that tested sandbox token for **discovery only** and remove its configured
+booking role. This supersedes the earlier dedicated-token provisioning requirement
+for the current no-booking demo, not the separation requirement when both roles exist.
+The variable's name is not an upstream scope or an implicit worker grant.
+
+Bounded tests on the unmodified read client reached Duffel shopping with HTTP 201.
+The initial GBP query was rejected by normalization because the source returned
+EUR, not because permission failed. A bounded shape inspection confirmed 16 EUR
+offers; in-memory replay with matching EUR normalized without a mapper change.
+The final matching-EUR provider probe returned 16 normalized offers, then fetched
+the exact granted offer with HTTP 200 and safely projected 2,523 public bytes.
+Source service times were known; final customer price/checkout terms remained
+unknown. No raw payloads, native IDs, prices, credentials or real traveller data
+were recorded; no booking, hold, payment, cancellation or reschedule was called.
+
+The local Duffel entry now explicitly references the tested variable for reads
+and omits `transactionSecretRef`. Secret values, other supplier mappings,
+`BOOKING_DEMO_ENABLED=true` and `PROVIDER_MODE=deterministic` were preserved.
+The old read-key value is unreferenced, not silently retried. Existing isolation,
+operation evidence and matching-currency guards need no runtime relaxation.
+An EUR-scoped query is required for the observed EUR source evidence; existing
+GBP trips are not rewritten and unsupported conversion remains blocked.
+This does not enable live providers globally, verify commercial/production
+access, establish final terms/funding or activate booking. The protected
+environment example remains untouched.
+
+Primary contracts: [Duffel authentication](https://duffel.com/docs/api/overview/making-requests)
+documents read-only/read-write token choices; [offer requests](https://duffel.com/docs/api/v2/offer-requests/create-offer-request)
+documents shopping. Do not infer an undocumented currency override, narrower
+scope or transaction entitlement from these successful sandbox reads.
+
+## 2026-10-24 supplier sufficiency and single-customer-payment direction
+
+The user confirms **Viator Affiliate Basic Access (sandbox)** and wants the
+customer to pay OnHolidai once, with OnHolidai settling through approved supplier
+merchant/API arrangements. This is a merchant/reseller settlement direction,
+not approval to charge a customer, create a booking, activate a payment
+processor or bypass commercial/regulatory onboarding.
+
+| Lane | Sufficiency for the requested model | Required action |
+| --- | --- | --- |
+| Duffel Flights | Suitable in principle. The tested discovery token is insufficient for flight search: HTTP 403 `insufficient_permissions`, despite authenticated reference GET success. | User approved a separate discovery token with offer-request permission (read-write when no narrower upstream permission is available); never reuse the worker booking token. Production, funding and exact-term gates still apply. |
+| Nuitee stays | Suitable in principle; sandbox rates normalize. Current rates are not an approved final checkout/payment path. A subsequent detail refresh did not contain the original selected token. | Establish an approved private prebook/final-terms flow, supported mandatory charges, funding method and production access. Never silently select a replacement token, call prebook from research, or label rates as final terms. |
+| Viator activities | **The current Basic affiliate tier is insufficient for OnHolidai API booking/supplier settlement.** | Obtain merchant onboarding/booking approval to retain Viator for this model. Basic affiliate discovery/redirect checkout is not a substitute for unified checkout; if merchant approval is unavailable, explicitly reconsider the supplier rather than silently activating Nuitee Experiences. |
+
+The official [Viator OpenAPI](https://docs.viator.com/partner-api/technical/)
+states `/bookings/book` is merchant-only. `/bookings/status` permits merchant
+or affiliate **Full Access + Booking** access; this does not make affiliate
+Basic a booking tier, nor does status access alone grant merchant booking.
+Content search/detail HTTP 200 is not transaction entitlement or production
+certification. The local readiness model now records an explicit access tier,
+blocks merchant-lane actions for Basic/unknown tiers, and requires matching
+operation/environment evidence even for merchant declarations.
+
+### Recommended funding architecture
+
+Separate **customer collection** from **supplier settlement**:
+
+- Use one OnHolidai-branded payment through an approved PSP merchant account
+  for the exact customer total, including only approved markup/mandatory fees.
+  Stripe is a possible PSP, not an installed or selected dependency. A separate
+  Nuitee/Duffel customer payment checkout would not implement the requested
+  single-payment model.
+- Prefer Nuitee **`CREDIT` under a signed enterprise agreement** as the target
+  B2B settlement path, subject to approved limits, billing, refund and funding
+  terms. The [hotel integration guide](https://docs.liteapi.travel/docs/hotel-integration-guide.md)
+  explicitly distinguishes enterprise `CREDIT` with a signed contract from
+  `ACC_CREDIT_CARD`. Do not infer an approved revolving credit facility,
+  contract, account balance or eligibility from API key access.
+- If enterprise CREDIT is not available at launch, obtain an explicitly
+  approved funded wallet/account arrangement or confirm that
+  `ACC_CREDIT_CARD` settles against **OnHolidai's approved account card**, not
+  the customer's card. Compare funding limits, fees, declines and refunds.
+  These are alternatives requiring approval, not automatic fallback methods.
+  A successful sandbox account-card simulation is not live funding evidence.
+- Duffel [documents](https://help.duffel.com/hc/en-gb/articles/360019685619-How-do-I-pay-for-flights)
+  collecting customer payment separately and using a topped-up **Duffel
+  Balance** for non-IATA settlement; refunds return to that balance and do not
+  automatically refund the customer. Do not assume IATA/ARC/BSP accreditation.
+- Viator requires approved **merchant settlement terms** for the same model;
+  no billing/credit entitlement is inferred from this Basic affiliate account.
+
+For a strict single-payment promise, select inventory whose mandatory charges
+can actually be prepaid/settled through the approved arrangements. Mandatory
+city/resort taxes or deposits payable directly at the property cannot silently
+become an OnHolidai-settled amount. Such offers need a supported settlement path
+or an explicitly agreed exception before being described as fully prepaid.
+
+Keep working capital or approved credit available **before supplier dispatch**:
+an authorized/captured customer payment is not an immediate PSP payout or a
+supplier-wallet top-up. Consider authorization followed by one bounded capture
+with a PSP that supports it; the [PSP authorization window](https://docs.stripe.com/payments/place-a-hold-on-a-payment-method)
+is finite and payment-method-specific. This is a recommendation, not a new
+implemented capture policy. Before payment implementation, approve partial
+success, uncertain outcomes, capture/void/refund timing and any subsequent
+continuation charges; one happy-path payment does not make independent
+supplier bookings atomic. Retain exact consent, durable payment/attempt
+correlation, reconciliation and no automatic supplier cancellation.
+
+Commercial/legal review must confirm the merchant/reseller arrangement,
+travel/package obligations, PSP acceptance, chargeback/refund responsibilities
+and safeguarding where applicable. No new payment frontend, processor account,
+credit contract or production activation was created by this assessment.
+
 ## 2026-10-23 provider selection revision
 
 ### Decision and comparison

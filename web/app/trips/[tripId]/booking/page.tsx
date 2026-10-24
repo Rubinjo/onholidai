@@ -46,11 +46,13 @@ export default async function BookingPage({ params }: { params: Promise<{ tripId
     );
   }
   if (data.trip.lifecycleState === "cancelled") redirect(`/trips/${tripId}`);
-  if (data.actor.kind === "guest")
+  if (data.actor.kind === "guest" && !application.config.BOOKING_DEMO_ENABLED)
     return (
       <main className="auth-page">
         <BookingBoundary tripId={tripId} />
       </main>
     );
-  return <BookingReview initialTrip={data.trip} />;
+  return (
+    <BookingReview initialTrip={data.trip} demoMode={application.config.BOOKING_DEMO_ENABLED} />
+  );
 }

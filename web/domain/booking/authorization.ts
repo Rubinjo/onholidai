@@ -9,10 +9,10 @@ import {
   verifiedBookingDispositionSchema,
 } from "@/domain/trip/booking-coverage";
 import { publicSupplierText } from "@/lib/privacy";
+import { MAX_SUPPLIER_ID_LENGTH, type TripSnapshot } from "@/domain/trip/schema";
 
 import { bookingServiceSchema, publicBookingTermsSchema } from "./public";
 
-import type { TripSnapshot } from "@/domain/trip/schema";
 import type { PublicBookingTerms } from "./public";
 
 export { bookingServiceSchema, type PublicBookingTerms } from "./public";
@@ -47,7 +47,7 @@ export const bookingTermsV1Schema = z
         z
           .object({
             componentId: uuid,
-            supplierOfferId: z.string().min(1).max(256),
+            supplierOfferId: z.string().min(1).max(MAX_SUPPLIER_ID_LENGTH),
             inventoryId: z.string().min(1).max(256),
             serviceStart: utcDateTime,
             serviceEnd: utcDateTime,

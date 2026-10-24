@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { sql, type Kysely } from "kysely";
 
-import { bookingActor, lockBookingTrip } from "@/server/auth/booking-access";
+import { lockBookingEvidenceTrip } from "@/server/auth/booking-access";
 import { ProblemError } from "@/server/errors";
 import { commitTripMutation } from "@/domain/trip/commit";
 import { readOwnedTripVersion } from "@/domain/trip/read";
@@ -52,8 +52,7 @@ export async function applyBookingOutcome(
         status: 404,
         code: "booking_not_found",
       });
-    const actor = await bookingActor(transaction, bookingRow.ownerUserId, bookingRow.tripId);
-    const trip = await lockBookingTrip(transaction, actor, bookingRow.tripId);
+    const { trip, principal } = await lockBookingEvidenceTrip(transaction, bookingRow.tripId);
     const lockedBookingRow = await transaction
       .selectFrom("bookingTransactions")
       .selectAll()
@@ -63,30 +62,122 @@ export async function applyBookingOutcome(
     if (!trip || !lockedBookingRow)
       throw new ProblemError({ title: "Trip not found", status: 404, code: "trip_not_found" });
     const booking = projectBookingTransactionRow(lockedBookingRow);
-    if (actor.accountUserId !== booking.executionBasis.ownerUserId)
-      throw new ProblemError({ title: "Trip not found", status: 404, code: "trip_not_found" });
-    if (trip.currentVersion !== booking.lastObservedTripVersion) {
-      await transaction
-        .updateTable("bookingTransactions")
-        .set({ executionStatus: "invalidated", status: "action_required" })
-        .where("id", "=", transactionId)
-        .execute();
-      throw new ProblemError({
-        title: "Trip changed during booking",
-        status: 409,
-        code: "booking_execution_invalidated",
-      });
-    }
-    const current = await readOwnedTripVersion(transaction, actor.planningOwnerId, booking.tripId);
-    const snapshot = tripSnapshotSchema.parse(current.snapshot);
-    const component = snapshot.components.find((item) => item.id === outcome.componentId);
-    if (!component)
+    const previous = booking.components.find((item) => item.componentId === outcome.componentId);
+    if (!previous)
       throw new ProblemError({
         title: "Booking component not found",
         status: 404,
         code: "booking_component_not_found",
       });
-    component.bookingStatus = tripStatus(outcome.status);
+    if (previous.providerReference && outcome.providerReference !== previous.providerReference) {
+      outcome = {
+        ...outcome,
+        status: "action_required",
+        providerReference: previous.providerReference,
+        safeReason:
+          "Contradictory provider evidence requires support. The prior reference is preserved.",
+      };
+    }
+    const updatedComponents = booking.components.map((item) =>
+      item.componentId === outcome.componentId ? outcome : item,
+    );
+    const unresolved = updatedComponents.some((item) =>
+      ["unknown", "action_required"].includes(item.status),
+    );
+    const confirmedCount = updatedComponents.filter((item) => item.status === "confirmed").length;
+    const complete = updatedComponents.every((item) =>
+      ["confirmed", "failed", "cancelled"].includes(item.status),
+    );
+    async function saveState(version: number, projectionConflict: boolean) {
+      await transaction
+        .updateTable("bookingTransactions")
+        .set({
+          components: sql<unknown[]>`${JSON.stringify(updatedComponents)}::jsonb`,
+          lastObservedTripVersion: version,
+          status:
+            unresolved || projectionConflict
+              ? "action_required"
+              : complete && updatedComponents.every((item) => item.status === "confirmed")
+                ? "confirmed"
+                : complete && updatedComponents.every((item) => item.status === "cancelled")
+                  ? "cancelled"
+                  : complete && confirmedCount === 0
+                    ? "failed"
+                    : confirmedCount > 0
+                      ? "partially_confirmed"
+                      : "running",
+          executionStatus:
+            unresolved || projectionConflict
+              ? booking.executionStatus === "expired"
+                ? "expired"
+                : "invalidated"
+              : complete && booking.executionStatus === "active"
+                ? "completed"
+                : booking.executionStatus,
+          completedAt: complete ? now : null,
+        })
+        .where("id", "=", transactionId)
+        .execute();
+    }
+    const competingClaim = await transaction
+      .selectFrom("bookingWriteClaims")
+      .select("attemptId")
+      .where("tripId", "=", booking.tripId)
+      .where("transactionId", "!=", booking.id)
+      .executeTakeFirst();
+    const projectionConflict =
+      Boolean(competingClaim) ||
+      trip.currentVersion !== booking.lastObservedTripVersion ||
+      principal.accountUserId !== booking.executionBasis.ownerUserId;
+    if (projectionConflict || canonicalBookingJson(previous) === canonicalBookingJson(outcome)) {
+      await saveState(booking.lastObservedTripVersion, projectionConflict);
+      return {
+        tripId: booking.tripId,
+        version: trip.currentVersion,
+        componentId: outcome.componentId,
+        status: outcome.status,
+      };
+    }
+    const current = await readOwnedTripVersion(transaction, principal.id, booking.tripId);
+    const snapshot = tripSnapshotSchema.parse(current.snapshot);
+    const component = snapshot.components.find((item) => item.id === outcome.componentId);
+    if (!component) {
+      await saveState(booking.lastObservedTripVersion, true);
+      return {
+        tripId: booking.tripId,
+        version: trip.currentVersion,
+        componentId: outcome.componentId,
+        status: outcome.status,
+      };
+    }
+    let stoppedBeforeDispatch = false;
+    if (
+      booking.operation === "book_trip" &&
+      outcome.status === "action_required" &&
+      !outcome.providerReference
+    ) {
+      const [dispatched, confirmation] = await Promise.all([
+        transaction
+          .selectFrom("bookingComponentAttempts")
+          .select("id")
+          .where("transactionId", "=", transactionId)
+          .where("componentId", "=", outcome.componentId)
+          .where("status", "!=", "claimed")
+          .executeTakeFirst(),
+        transaction
+          .selectFrom("bookingConfirmations")
+          .select("id")
+          .where("tripId", "=", booking.tripId)
+          .where("componentId", "=", outcome.componentId)
+          .executeTakeFirst(),
+      ]);
+      stoppedBeforeDispatch = !dispatched && !confirmation;
+    }
+    // Attempt history retains the failure/local stop; neither is a pending supplier commitment.
+    component.bookingStatus =
+      (booking.operation === "book_trip" && outcome.status === "failed") || stoppedBeforeDispatch
+        ? "unbooked"
+        : tripStatus(outcome.status);
     const confirmedTerms = booking.executionBasis.terms.components.find(
       (item) => item.componentId === outcome.componentId,
     );
@@ -126,7 +217,7 @@ export async function applyBookingOutcome(
       .digest("hex");
     const receipt = await commitTripMutation(transaction, {
       tripId: booking.tripId,
-      ownerUserId: actor.planningOwnerId,
+      ownerUserId: principal.id,
       expectedVersion: trip.currentVersion,
       ...(lifecycleState ? { lifecycleState } : {}),
       requestId,
@@ -156,42 +247,7 @@ export async function applyBookingOutcome(
       })
       .onConflict((conflict) => conflict.columns(["tripId", "tripVersion"]).doNothing())
       .execute();
-    const updatedComponents = booking.components.map((item) =>
-      item.componentId === outcome.componentId ? outcome : item,
-    );
-    const unresolved = updatedComponents.some((item) =>
-      ["unknown", "action_required"].includes(item.status),
-    );
-    const confirmedCount = updatedComponents.filter((item) => item.status === "confirmed").length;
-    const complete = updatedComponents.every((item) =>
-      ["confirmed", "failed", "cancelled"].includes(item.status),
-    );
-    await transaction
-      .updateTable("bookingTransactions")
-      .set({
-        components: sql<unknown[]>`${JSON.stringify(updatedComponents)}::jsonb`,
-        lastObservedTripVersion: receipt.version,
-        status: unresolved
-          ? "action_required"
-          : complete && updatedComponents.every((item) => item.status === "confirmed")
-            ? "confirmed"
-            : complete && updatedComponents.every((item) => item.status === "cancelled")
-              ? "cancelled"
-              : complete && confirmedCount === 0
-                ? "failed"
-                : confirmedCount > 0
-                  ? "partially_confirmed"
-                  : "running",
-        executionStatus:
-          outcome.status === "action_required"
-            ? "invalidated"
-            : complete
-              ? "completed"
-              : booking.executionStatus,
-        completedAt: complete ? now : null,
-      })
-      .where("id", "=", transactionId)
-      .execute();
+    await saveState(receipt.version, false);
     return {
       tripId: booking.tripId,
       version: receipt.version,

@@ -86,7 +86,7 @@ export async function seedAuthorizedBooking(
   const components = planned.map((entry) => ({
     id: randomUUID(),
     itineraryItemIds: [],
-    provider: "synthetic",
+    provider: entry.type === "flight" ? "duffel" : entry.type === "rail" ? "trainline" : "booking",
     supplierOfferId: `synthetic-offer-${entry.type}`,
     type: entry.type,
     offerStatus: "available",

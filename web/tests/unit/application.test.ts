@@ -4,6 +4,52 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 describe("explicit application composition", () => {
+  it("composes a reassigned discovery-only credential in web but no planning or booking authority in worker", async () => {
+    const { createApplication } = await import("../../server/application");
+    const environment = {
+      PROVIDER_MODE: "live",
+      BOOKING_DEMO_ENABLED: "true",
+      DUFFEL_TRANSACTION_SECRET: "synthetic-reassigned-read-role-canary",
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        duffel: {
+          readSecretRef: "DUFFEL_TRANSACTION_SECRET",
+          products: {
+            flight: {
+              operations: {
+                search: {
+                  support: "supported",
+                  access: "verified",
+                  evidenceRef: "synthetic-discovery-only-approval",
+                  verifiedAt: "2030-01-01T00:00:00Z",
+                },
+              },
+            },
+          },
+        },
+      }),
+    };
+    const transport = vi.fn<typeof fetch>();
+    const web = createApplication(environment, { supplierMappings: { fetch: transport } });
+    const worker = createApplication(environment, { audience: "worker" });
+    try {
+      expect(web.planningProviders).toHaveLength(1);
+      expect(web.planningProviders[0].capabilities).toMatchObject({
+        provider: "duffel",
+        mode: "live",
+        search: ["flight"],
+        readOnly: true,
+      });
+      expect(worker.planningProviders).toEqual([]);
+      for (const operation of ["book", "status", "idempotency", "cancel", "reschedule"] as const)
+        expect(worker.providerReadiness.duffel.products.flight.operations[operation].access).toBe(
+          "unconfigured",
+        );
+      expect(transport).not.toHaveBeenCalled();
+    } finally {
+      await Promise.all([web.shutdown(), worker.shutdown()]);
+    }
+  });
+
   it.each(["deterministic", "live"] as const)(
     "keeps only the current product matrix in %s roots even when legacy access was declared verified",
     async (mode) => {
@@ -212,9 +258,14 @@ describe("explicit application composition", () => {
         VIATOR_SECRET: "synthetic-shared-canary",
         SUPPLIER_PROVIDERS: JSON.stringify({
           viator: {
+            accessTier: "merchant",
             readSecretRef: "VIATOR_SECRET",
             transactionSecretRef: "VIATOR_SECRET",
-            products: { activity: { operations: { search: verified, book: verified } } },
+            products: {
+              activity: {
+                operations: { search: verified, book: { ...verified, environment: "sandbox" } },
+              },
+            },
           },
         }),
       },

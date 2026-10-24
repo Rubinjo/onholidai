@@ -9,6 +9,8 @@ import {
 
 export const CURRENT_TRIP_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 export const LEGACY_TRIP_SNAPSHOT_SCHEMA_VERSION = 0 as const;
+// Nuitee offer/rate tokens exceed 256 characters; preserve them verbatim but bounded.
+export const MAX_SUPPLIER_ID_LENGTH = 4096;
 
 const UUID = z.uuid();
 const nonBlank = (maximum: number) => z.string().trim().min(1).max(maximum);
@@ -368,7 +370,7 @@ export const componentBaseFields = {
   id: UUID,
   itineraryItemIds: z.array(UUID).max(64),
   provider: nonBlank(120),
-  supplierOfferId: nonBlank(256),
+  supplierOfferId: nonBlank(MAX_SUPPLIER_ID_LENGTH),
   offerStatus: z.enum(["available", "changed", "unavailable", "expired"]),
   ...componentServiceFields,
   travellerIds: z.array(UUID).min(1).max(10),

@@ -4,17 +4,126 @@ This guide is for implementation validation. Planning did not install dependenci
 
 Revised 2026-10-23: current acceptance covers Duffel Flights, Nuitee stays and Viator activities with no active rail provider. Duffel Stays is historical-read/approved-status-only; Nuitee Flights/Experiences are inactive, not fallback lanes. Booking.com/Trainline remain deferred and GetYourGuide replaced. Existing completed task evidence predates this scope. Start at T094 -> T095 -> revised T017 -> T096 -> T097 -> T098, including the non-skipped foundation gate, before remaining browser/latency acceptance. This guide does not imply Nuitee configuration or code is already supported.
 
+## Immediate demo path (2026-10-24)
+
+The latest user request prioritizes frontend-only simulated booking, not production
+execution. Follow [demo activation](../../docs/operations.md#browser-only-booking-demo):
+set `BOOKING_DEMO_ENABLED=true` in the web process and restart, or supply the root
+environment file to Compose and rebuild/recreate web. No supplier transaction key,
+merchant onboarding, final-terms reader, account linking or payment setup is needed
+for this preview. Existing saved-trip access/storage is still needed to load the page;
+discovery remains independently configured.
+
+The booking page must show the demo notice, illustrative saved estimate and explicit
+acknowledgement, then simulate processing/confirmation locally. No real reservation,
+charge, email, backend request or booking-state write occurs. Reset/reload clears the
+preview. Set the flag false/absent and restart to restore genuine review behavior.
+Do not use this demo as evidence for the still-open production US4/US5 gates below.
+
+Focused component/config/access and preserved live-review checks:
+
+```powershell
+corepack.cmd pnpm --dir web exec vitest run tests\unit\booking-demo.test.tsx tests\unit\booking-demo-route.test.tsx tests\unit\config.test.ts tests\integration\booking-review.test.tsx tests\unit\booking-continuation.test.tsx tests\unit\auth-hydration.test.tsx tests\unit\application.test.ts tests\contract\provider-readiness.test.ts
+```
+
+With the existing isolated HTTPS whole-trip browser fixture database, seeded-role
+setup and demo-enabled web server, run `tests/e2e/booking-demo.spec.ts` in Playwright.
+Set the flag in the Playwright process too: the test is deliberately excluded by an
+explicit opt-in skip outside demo mode, not accepted as passing. The executing case
+blocks/counts all `/api/v1/` requests, compares persisted review/booking records before
+and after, exercises keyboard/focus/reset/reload at 320px and 1280px, and must run
+without skips in the demo acceptance selection. No live suppliers or worker are needed.
+
+**Executed demo acceptance (2026-10-24):** 81 affected tests across eight files
+passed without skips, including the preserved real review/recovery/access paths.
+The production build's demo case passed 5/5 browser/device projects without skips
+using an owned isolated PostGIS database and no worker/agent/supplier process.
+All intercepted `/api/v1/` requests stayed at zero and persisted review/booking/
+attempt/outbox state matched before/after. Keyboard focus, reset/reload, 320px
+overflow and 1280px layout were checked; screenshots were reviewed. Standalone
+TypeScript, production build/typecheck, zero-warning lint, scoped formatting and
+Compose default-off/web-only wiring also passed. This does not certify live
+booking, screen-reader acceptance or the remaining participant-study gates.
+
 ## Prerequisites
+
+**Latest Duffel demo decision (2026-10-24):** the authorized sandbox token test
+returned 16 matching-EUR offers (HTTP 201), exact selected-offer detail (HTTP 200)
+and successful public projection. The user chose discovery-only reassignment:
+local Duffel `readSecretRef` now names `DUFFEL_TRANSACTION_SECRET` and the
+`transactionSecretRef` is omitted. No secret value, other supplier mapping,
+`PROVIDER_MODE=deterministic` or enabled client-only demo setting changed.
+This does not activate live discovery globally or provide a worker credential.
+The observed account returns EUR; GBP remains unsupported without sourced FX.
+Do not rewrite saved trip currencies or treat missing final customer costs as zero.
+See [current proof and limitations](evidence/provider-readiness.md#authorized-duffel-discovery-only-token-reassignment-2026-10-24)
+and [operation guidance](../../docs/operations.md#browser-only-booking-demo).
+
+The follow-up passed 164 affected tests across 10 files with zero skips, followed
+by the final typed Duffel read file's 21/21 rerun (overlapping, not additive).
+Standalone TypeScript, affected lint, scoped formatting and whitespace checks
+passed. Existing runtime role support was reused without new code paths, secret
+sharing, dependency changes, UI changes or another database/browser acceptance run.
+Restart an already-running web process to load the updated local references;
+this does not change the preserved deterministic provider mode.
 
 - Node.js 24, pnpm 12, Python 3.13/uv, Docker Compose v2 and installed Playwright browsers.
 - Synthetic local configuration from `.env.example` and existing [operations guide](../../docs/operations.md). Keep auth, service and diagnostic keys distinct and do not print secrets. Use no production traveller/payment data.
 - Isolated database test roles/URLs: `TEST_DATABASE_ADMIN_URL`, `TEST_DATABASE_MIGRATION_URL`, `TEST_DATABASE_APP_URL`, `TEST_DATABASE_WORKER_URL`, provisioned with `infra/postgres/test-roles.sql`. Missing variables skip database tests and do not establish acceptance.
 - Supplier research adds migration 014 and whole-trip review adds migration 015 without editing migrations 001-013 or rewriting historical terms/hashes. Use an isolated migrated database and prove both a fresh database and upgrade from existing saved trips/bookings.
 - Implementation pins FastMCP in `agent/pyproject.toml`/`agent/uv.lock`, extends canonical generated contracts and injects deterministic read/transaction providers in existing roots. No separate MCP server process is started; the agent constructs an in-memory server/client per run.
-- Current live setup needs Duffel/Nuitee/Viator prerequisites: distinct Duffel read/write keys in web/worker respectively and each provider's shared Nuitee/Viator key in trusted processes only, never agent/browser. Set Nuitee sandbox/production explicitly; do not infer any product or booking/payment approval from key presence. Trusted nationality, room occupancy/child ages and an approved payment path must be established without guessed or exposed sensitive data. Verify fixed read allowlists and per-operation access before enabling live calls. No Duffel Stays/Nuitee Flights/Experiences or deferred-provider accounts are required.
+- Current live setup needs Duffel/Nuitee/Viator prerequisites: distinct Duffel discovery/booking keys in web/worker respectively and each provider's shared Nuitee/Viator key in trusted processes only, never agent/browser. Duffel's discovery token needs POST offer-request permission (read-write if no narrower upstream permission is available); `DUFFEL_READ_SECRET` names its local role, not a promised upstream read-only scope. Never reuse the booking token. Set Nuitee sandbox/production explicitly; do not infer any product or booking/payment approval from key presence. Trusted nationality, room occupancy/child ages and an approved payment path must be established without guessed or exposed sensitive data. Verify fixed read allowlists and per-operation access before enabling live calls. No Duffel Stays/Nuitee Flights/Experiences or deferred-provider accounts are required.
 - Nuitee hotel prebook is documented checkout-session creation. Until explicit approved semantics establish a no-hold/no-reservation/no-payment variant, exclude it from discovery/revalidation, return unsupported live revalidation and block exact stay authorization. `usePaymentSdk=false` is not a safety waiver. Deterministic eligible booking cases use explicit safe evidence, not a claim that live prebook is approved.
 
 Run from the repository root. Do not run concurrent migration jobs. Use either host apps or container apps, not two conflicting copies.
+
+### Current stopping point before PC restart (2026-10-24)
+
+**Post-restart update:** the isolated database/Temporal verification below has
+now passed 576 cases with zero skips. The subsequent supplier-tier regression
+selection passed 491 with zero skips. See
+[the newer sufficiency verdict](evidence/provider-readiness.md#post-restart-sufficiency-and-account-gates-2026-10-24):
+the confirmed Viator Basic affiliate account is not sufficient for unified
+OnHolidai API checkout. Obtain merchant approval to retain it for booking;
+until then set its `accessTier` to `affiliate_basic` when updating supplier
+JSON, keep transaction declarations unverified/blocked, and do not redirect or
+activate a fallback. Missing tier defaults to unknown and cannot enable booking.
+Provision a **separate** Duffel discovery token with required offer-request
+permission in `DUFFEL_READ_SECRET`; do not replace/reuse the worker booking key.
+No environment file was automatically changed. The recommended Nuitee funding
+target is approved enterprise CREDIT, separate from customer collection; final
+terms/prebook and funding approvals remain required. The paragraphs below
+retain the earlier pre-restart checkpoint.
+
+Authorized read-only supplier results and implementation scope are recorded in
+[the provider ledger](evidence/provider-readiness.md#authorized-supplier-checks-and-wire-compatibility-follow-up-2026-10-24).
+Real Nuitee hotel/rates normalization and public projection now succeed after
+long-ID and offer-money-shape fixes; its final customer price can remain unknown.
+Duffel search is denied with the configured read key despite successful
+reference reads. Viator sandbox transport remains unverified. None of these
+checks authorizes bookings, payments, final-term prebook calls or activation.
+
+The focused wire command passes 205 cases without a database:
+
+```powershell
+corepack.cmd pnpm --dir web test tests/contract/nuitee-read.test.ts tests/contract/nuitee-transactions.test.ts tests/contract/duffel-transactions.test.ts tests/contract/supply-transactions.test.ts tests/contract/deferred-suppliers.test.ts --maxWorkers=1
+```
+
+After restarting the PC/Docker, first recreate an **isolated** PostgreSQL test
+database and provision all four test URLs/roles from the prerequisites above.
+Rerun the changed long-ID/object-total research persistence case alongside
+supplier research HTTP, authorization, workflow, callback, privacy and migration
+coverage, plus the coupled contract/coverage suite. Do not treat missing-URL
+skips, prior database results or a healthy `docker info` alone as acceptance:
+container creation and actual database readiness must work. No application
+database was migrated for this increment. Keep v2 dispatch disabled; finish
+remaining US4 execution/composition before proceeding to US5.
+
+With those isolated database URLs set, resume the coupled verification:
+
+```powershell
+corepack.cmd pnpm --dir web test tests/contract tests/unit/config.test.ts tests/unit/booking-coverage.test.ts tests/unit/booking-continuation.test.tsx tests/unit/trip-schema.test.ts tests/unit/supply-read.test.ts tests/integration/supplier-research-access.test.ts tests/integration/offer-research.test.tsx tests/integration/booking-authorization.test.ts tests/integration/booking-workflows.test.ts tests/integration/provider-callbacks.test.ts tests/integration/booking-privacy.test.ts tests/integration/migration-compatibility.test.ts --maxWorkers=1
+```
 
 ## Setup and checks
 
@@ -157,6 +266,55 @@ needs clarification; it does not require an automatically accepted estimate.
 See [whole-trip review evidence](evidence/whole-trip-review.md) for current
 results and the independent US4, live and participant gates.
 
+## US4 transaction-safety increment (execution still gated)
+
+Migration 016 and the transaction activities add single-winner dispatch, durable
+cross-attempt component/requirement guards, atomic supplier evidence/outcomes and
+status/callback reconciliation independent of execution expiry. Existing saved
+confirmations can reconcile with status-only clients. Recovery status distinguishes
+confirmed, uncertain and not-attempted services without claiming that partial
+success never happened.
+
+Run with all four isolated test database URLs; do not use an application database:
+
+```powershell
+corepack.cmd pnpm --dir web test tests/contract tests/integration/booking-workflows.test.ts tests/integration/provider-callbacks.test.ts tests/integration/booking-authorization.test.ts tests/integration/booking-planning-identity.test.ts tests/integration/migration-compatibility.test.ts tests/integration/booking-privacy.test.ts tests/integration/booking-review.test.tsx tests/unit/booking-continuation.test.tsx --maxWorkers=1
+corepack.cmd pnpm --dir web typecheck
+corepack.cmd pnpm --dir web lint
+corepack.cmd pnpm --dir web agent:contracts:check
+corepack.cmd pnpm --dir web build
+```
+
+The workflow suite uses real PostgreSQL and Temporal with synthetic injected
+providers, including an injected database crash after provider confirmation and
+before local projection. The v2 requirement tests exercise the repository directly;
+they do not enable activity dispatch. The 100 concurrent deliveries belong to one
+regression, not the required 100-distinct-case US4 certification matrix.
+
+The recovery-review increment adds server-derived parent/root, confirmed-commitment
+preservation, exact remaining consent and a review-only child start. Migration 017
+allows separate booking workflow intents at one accepted trip version, retaining
+duplicate protection. Authenticated definitive non-commit projects as unbooked while
+the durable attempt remains failed; uncertainty still blocks another review.
+
+The new `tests/e2e/whole-trip-recovery.spec.ts` follows the same isolated HTTPS/browser
+fixture convention above:
+
+```powershell
+corepack.cmd pnpm --dir web exec playwright test whole-trip-recovery.spec.ts --workers=1
+```
+
+It seeds safe synthetic authenticated outcomes through the real repository and uses
+real owner-scoped reads, review/authorization/start domain functions and reload.
+The fixture-only trusted reader is never installed in the application. No v2 provider
+dispatch, live payment or supplier booking is performed. See
+[recovery evidence](evidence/recovery.md) for exact results and limitations.
+
+Supplier HTTP mappings, trusted worker composition, the distinct execution matrix
+and full executing recovery browser certification remain pending. No live entitlement,
+payment, Nuitee prebook/final-terms approval or production activation is established
+by these checks. See [transaction safety evidence](evidence/transaction-safety.md).
+
 ## Deterministic acceptance scenarios
 
 Fixtures extend existing provider doubles and test helpers; fault selection is test injection or test-only fixture configuration, never a production browser-controlled provider endpoint. Use a controlled clock and synthetic identities. Keep model decisions reproducible through current evaluation doubles/fixed offer sets. See [data model](data-model.md) and [contracts](contracts/supplier-discovery.md) for invariants rather than duplicating schemas here.
@@ -188,6 +346,27 @@ Fixtures extend existing provider doubles and test helpers; fault selection is t
 Measure 95% usable searches <=10s and all bounded results/failures <=12s under controlled responsive doubles. Record endpoint/UI timing separately from provider calls; do not infer provider service levels. Include zero-write counters for every read and blocked authorization, and durable provider action counts in safety cases.
 
 ## Human and live activation gates
+
+### Restricted Nuitee wire regression
+
+Run the new synthetic HTTP boundary independently:
+
+```powershell
+corepack.cmd pnpm --dir web test tests/contract/nuitee-transactions.test.ts --maxWorkers=1
+```
+
+The 69 cases cover approved environment/operation/payment gates, private
+prerequisite binding, immutable source isolation, exact original-decimal
+prices, changed/relocated/incomplete confirmations, lost responses and
+independent authenticated status. Transport is mocked; this command makes no
+supplier requests and does not activate the worker or v2 execution. Its
+private source requires existing approved prebook/final-terms evidence; it
+cannot obtain that evidence by creating a checkout session under stale consent.
+See the [provider ledger](evidence/provider-readiness.md#restricted-nuitee-transaction-wire-increment-2026-10-24)
+for the broader 435-case non-skipped database/Temporal verification and remaining
+activation/execution gates.
+
+### Human and provider evidence
 
 Run the specified ten-person evaluation for comparison within 2 minutes, complete review/authorization within 3 minutes, and partial/uncertain understanding within 1 minute; require at least 9/10 per relevant outcome. Run manual keyboard/screen-reader and automated accessibility checks with zero critical/serious findings. Existing Playwright presence alone does not establish accessibility acceptance; record exact checks and browser/assistive technology used.
 

@@ -9,6 +9,7 @@ import { planningError, planningJson } from "@/components/trip-setup/http";
 import { Button } from "@/components/ui/button";
 
 import { BookingConsole } from "./booking-console";
+import { BookingDemo } from "./booking-demo";
 import { bookingComponentLabel } from "./terms-review";
 
 const readinessSchema = z.object({
@@ -74,7 +75,23 @@ function WholeTripOverview({ trip }: { trip: TripEnvelope }) {
     </section>
   );
 }
-export function BookingReview({ initialTrip }: { initialTrip: TripEnvelope }) {
+export function BookingReview({
+  initialTrip,
+  demoMode = false,
+}: {
+  initialTrip: TripEnvelope;
+  demoMode?: boolean;
+}) {
+  if (demoMode)
+    return (
+      <BookingDemo key={`${initialTrip.tripId}:${initialTrip.version}`} trip={initialTrip}>
+        <WholeTripOverview trip={initialTrip} />
+      </BookingDemo>
+    );
+  return <LiveBookingReview initialTrip={initialTrip} />;
+}
+
+function LiveBookingReview({ initialTrip }: { initialTrip: TripEnvelope }) {
   const [trip, setTrip] = useState(initialTrip),
     [readiness, setReadiness] = useState<z.infer<typeof readinessSchema> | null>(null);
   const [acknowledged, setAcknowledged] = useState(false),

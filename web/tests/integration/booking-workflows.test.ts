@@ -1,12 +1,24 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
 import { describe, expect, it, vi } from "vitest";
 import { NativeConnection, Worker } from "@temporalio/worker";
+import { Pool } from "pg";
+import { sql } from "kysely";
 
 import { commitTripMutation } from "../../domain/trip/commit";
+import { inTransaction } from "../../server/db/transaction";
+import { BookingRepository } from "../../server/db/booking-repository";
 import { startComponentRescheduleRevalidation } from "../../domain/booking/reschedule";
+import { authorizeBooking } from "../../domain/booking/authorize";
+import { startBooking } from "../../domain/booking/start";
+import {
+  bookingTermsV2Schema,
+  canonicalBookingJson,
+  hashBookingTerms,
+} from "../../domain/booking/authorization";
 import { tripSnapshotSchema, type TripSnapshot } from "../../domain/trip/schema";
 import {
   TransactionProviderRegistry,
@@ -17,7 +29,12 @@ import {
 import { createBookingActivities } from "../../server/workflows/activities";
 import { hasIsolatedDatabaseConfiguration, withIsolatedTestDatabase } from "../helpers/database";
 import { withTemporalTestEnvironment } from "../helpers/temporal";
-import { seedAuthorizedBooking, type SeededBooking } from "../helpers/booking";
+import {
+  seedAuthorizedBooking,
+  seedReviewedWholeTrip,
+  type SeededBooking,
+} from "../helpers/booking";
+import { lockBookingEvidenceTrip } from "../../server/auth/booking-access";
 
 import type { Database } from "../../server/db/database";
 import type { Kysely } from "kysely";
@@ -134,7 +151,686 @@ async function readTransaction(database: Kysely<Database>, transactionId: string
   return row;
 }
 
+async function freshAttemptForSameTrip(database: Kysely<Database>, seeded: SeededBooking) {
+  const original = seeded.transaction!;
+  const authorizationId = randomUUID(),
+    transactionId = randomUUID();
+  const candidate = {
+    ...original,
+    id: transactionId,
+    authorizationId,
+    requestId: randomUUID(),
+    workflowId: `booking-${transactionId}`,
+    executionBasis: { ...original.executionBasis, authorizationId },
+  };
+  await inTransaction(database, async (transaction) => {
+    const repository = new BookingRepository(transaction);
+    await repository.insertAuthorization({
+      id: authorizationId,
+      tripId: seeded.tripId,
+      userId: seeded.userId,
+      tripVersion: seeded.tripVersion,
+      operation: "book_trip",
+      componentId: null,
+      terms: seeded.terms,
+      termsHash: original.executionBasis.termsHash,
+      acknowledgedNonReversibleActions: [],
+      status: "authorized",
+      reason: null,
+      authorizedAt: new Date().toISOString(),
+      expiresAt: original.executionBasis.expiresAt,
+    });
+    expect(
+      await repository.startTransaction({ transaction: candidate, ownerUserId: seeded.userId }),
+    ).toBe(true);
+  });
+  return candidate;
+}
+
 describeWithDatabase("booking workflow durability", () => {
+  it.each(["claimed", "unknown", "confirmed"] as const)(
+    "guards the same v2 requirement under a different component and authorization when %s",
+    async (priorStatus) => {
+      await withIsolatedTestDatabase(async ({ database }) => {
+        const now = new Date();
+        const seed = await seedReviewedWholeTrip(database, undefined, "completed", undefined, now);
+        const authorization = await authorizeBooking(
+          database,
+          seed.userId,
+          seed.tripId,
+          seed.request,
+          now,
+          seed.prerequisites,
+        );
+        const original = await startBooking(
+          database,
+          seed.userId,
+          seed.tripId,
+          {
+            requestId: randomUUID(),
+            authorizationId: authorization.id,
+          },
+          { now, prerequisites: seed.prerequisites },
+        );
+        const originalTerms = bookingTermsV2Schema.parse(original.executionBasis.terms);
+        const first = originalTerms.components.find(
+          (entry) => entry.service.type === "accommodation",
+        )!;
+        const componentId = randomUUID(),
+          authorizationId = randomUUID(),
+          transactionId = randomUUID();
+        const terms = bookingTermsV2Schema.parse({
+          ...originalTerms,
+          continuationOf: original.id,
+          rootAttemptId: original.id,
+          components: originalTerms.components.map((entry) =>
+            entry.componentId === first.componentId
+              ? { ...entry, componentId, evidence: { ...entry.evidence, componentId } }
+              : entry,
+          ),
+          coverage: {
+            ...originalTerms.coverage,
+            toBookComponentIds: originalTerms.coverage.toBookComponentIds.map((id) =>
+              id === first.componentId ? componentId : id,
+            ),
+            entries: originalTerms.coverage.entries.map((entry) => ({
+              ...entry,
+              componentIds: entry.componentIds.map((id) =>
+                id === first.componentId ? componentId : id,
+              ),
+            })),
+          },
+        });
+        const candidate = {
+          ...original,
+          id: transactionId,
+          authorizationId,
+          requestId: randomUUID(),
+          workflowId: `booking-${transactionId}`,
+          executionBasis: {
+            ...original.executionBasis,
+            authorizationId,
+            terms,
+            termsHash: hashBookingTerms(terms),
+          },
+          components: original.components.map((entry) =>
+            entry.componentId === first.componentId ? { ...entry, componentId } : entry,
+          ),
+        };
+        await inTransaction(database, async (transaction) => {
+          const repository = new BookingRepository(transaction);
+          await repository.insertAuthorization(
+            {
+              id: authorizationId,
+              tripId: seed.tripId,
+              userId: seed.userId,
+              tripVersion: seed.tripVersion,
+              operation: "book_trip",
+              componentId: null,
+              terms,
+              termsHash: hashBookingTerms(terms),
+              acknowledgedNonReversibleActions: [],
+              status: "authorized",
+              reason: null,
+              authorizedAt: now.toISOString(),
+              expiresAt: original.executionBasis.expiresAt,
+            },
+            { requestId: randomUUID(), requestFingerprint: "d".repeat(64) },
+          );
+          await repository.startTransaction({ transaction: candidate, ownerUserId: seed.userId });
+          // Repository-only fixtures exercise guards; stock activities still refuse all v2 dispatch.
+          await transaction
+            .updateTable("bookingTransactions")
+            .set({ executionStatus: "active" })
+            .where("id", "in", [original.id, candidate.id])
+            .execute();
+        });
+        const identity = (booking: typeof original, entry: typeof first) => ({
+          idempotencyKey: `${booking.id}:${entry.componentId}:book_trip:${booking.executionBasis.termsHash}`,
+          requestFingerprint: createHash("sha256")
+            .update(canonicalBookingJson({ operation: "book_trip", terms: entry }))
+            .digest("hex"),
+        });
+        const firstIdentity = identity(original, first);
+        const claim = (booking: typeof original, entry: typeof first, expectedVersion: number) =>
+          inTransaction(database, async (transaction) => {
+            await lockBookingEvidenceTrip(transaction, seed.tripId);
+            return new BookingRepository(transaction).claimComponentWrite({
+              tripId: seed.tripId,
+              transactionId: booking.id,
+              componentId: entry.componentId,
+              attemptId: randomUUID(),
+              expectedVersion,
+              operation: "book_trip",
+              ...identity(booking, entry),
+              requirementIds: entry.evidence.requirementIds,
+              expiresAt: new Date(booking.executionBasis.expiresAt),
+              now,
+            });
+          });
+        expect(await claim(original, first, seed.tripVersion)).toBe(true);
+        if (priorStatus === "unknown") {
+          await database
+            .updateTable("bookingWriteClaims")
+            .set({ state: "unknown" })
+            .where("transactionId", "=", original.id)
+            .execute();
+          await database
+            .updateTable("bookingComponentAttempts")
+            .set({ status: "unknown" })
+            .where("transactionId", "=", original.id)
+            .execute();
+        }
+        if (priorStatus === "confirmed") {
+          await database
+            .updateTable("bookingComponentAttempts")
+            .set({ status: "dispatched" })
+            .where("transactionId", "=", original.id)
+            .execute();
+          await inTransaction(database, (transaction) =>
+            new BookingRepository(transaction).recordProviderEvidence({
+              transactionId: original.id,
+              componentId: first.componentId,
+              ...firstIdentity,
+              result: {
+                status: "confirmed",
+                providerReference: "guarded-stay",
+                evidenceId: "recorded-stay-evidence",
+                confirmedTerms: first,
+              },
+              reconciled: false,
+              now,
+            }),
+          );
+        }
+        const current = await database
+          .selectFrom("trips")
+          .select("currentVersion")
+          .where("id", "=", seed.tripId)
+          .executeTakeFirstOrThrow();
+        await database
+          .updateTable("bookingTransactions")
+          .set({ lastObservedTripVersion: current.currentVersion })
+          .where("id", "=", candidate.id)
+          .execute();
+        expect(
+          await claim(
+            candidate,
+            terms.components.find((entry) => entry.componentId === componentId)!,
+            current.currentVersion,
+          ),
+        ).toBe(false);
+        expect(
+          await database
+            .selectFrom("bookingComponentAttempts")
+            .select("id")
+            .where("transactionId", "=", candidate.id)
+            .execute(),
+        ).toEqual([]);
+      });
+    },
+    120_000,
+  );
+
+  it("keeps an expired uncertain action blocked when status support is unavailable", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedAuthorizedBooking(database);
+      const flightId = componentIdFor(seeded, "flight");
+      const calls: Record<string, number> = {};
+      const providers = createProviders(
+        {
+          duffel: {
+            execute: () => {
+              throw new Error("timeout after possible commit");
+            },
+            status: () => {
+              throw new Error("This status method must not run");
+            },
+          },
+        },
+        calls,
+      );
+      const activities = createBookingActivities(database, providers);
+      const claim = await activities.claimProviderWrite(seeded.transaction!.id, flightId);
+      await activities.executeProviderWrite(
+        seeded.transaction!.id,
+        flightId,
+        claim.idempotencyKey,
+        claim.requestFingerprint,
+      );
+      providers.get("duffel")!.capabilities.status = false;
+      providers.get("duffel")!.capabilities.book = false;
+      await database
+        .updateTable("bookingTransactions")
+        .set({ executionStatus: "expired" })
+        .where("id", "=", seeded.transaction!.id)
+        .execute();
+      expect(
+        await activities.reconcileProviderStatus(seeded.transaction!.id, flightId),
+      ).toMatchObject({
+        status: "action_required",
+        safeReason: expect.stringContaining("manual status confirmation"),
+      });
+      expect(calls[`execute:${flightId}`]).toBe(1);
+      expect(calls.status).toBeUndefined();
+      expect(
+        await database
+          .selectFrom("bookingWriteClaims")
+          .select("state")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([{ state: "unknown" }]);
+      expect((await readTransaction(database, seeded.transaction!.id)).executionStatus).toBe(
+        "expired",
+      );
+    });
+  }, 120_000);
+
+  it("checks expiry again after claiming and before dispatching a provider action", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedAuthorizedBooking(database);
+      const flightId = componentIdFor(seeded, "flight");
+      const calls: Record<string, number> = {};
+      const activities = createBookingActivities(
+        database,
+        createProviders({ duffel: { execute: confirmedWith("must-not-be-booked") } }, calls),
+      );
+      const claim = await activities.claimProviderWrite(seeded.transaction!.id, flightId);
+      const clock = vi
+        .spyOn(Date, "now")
+        .mockReturnValue(Date.parse(seeded.transaction!.executionBasis.expiresAt) + 1);
+      try {
+        await expect(
+          activities.executeProviderWrite(
+            seeded.transaction!.id,
+            flightId,
+            claim.idempotencyKey,
+            claim.requestFingerprint,
+          ),
+        ).rejects.toThrow("expired");
+      } finally {
+        clock.mockRestore();
+      }
+      expect(calls).toEqual({});
+      expect((await readTransaction(database, seeded.transaction!.id)).executionStatus).toBe(
+        "expired",
+      );
+      expect(
+        await database
+          .selectFrom("bookingComponentAttempts")
+          .select("status")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([{ status: "claimed" }]);
+      expect(
+        await database
+          .selectFrom("bookingWriteClaims")
+          .select("attemptId")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([]);
+    });
+  }, 120_000);
+
+  it("keeps conflicting provider evidence append-only and never resets a dispatched attempt", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedAuthorizedBooking(database);
+      const flightId = componentIdFor(seeded, "flight");
+      const terms = seeded.terms.components.find((entry) => entry.componentId === flightId)!;
+      let checks = 0;
+      const activities = createBookingActivities(
+        database,
+        createProviders(
+          {
+            duffel: {
+              execute: () => ({ status: "unknown", safeReason: "Possible commit" }),
+              status: () => ({
+                status: "confirmed",
+                providerReference: ++checks === 1 ? "original-flight" : "conflicting-flight",
+                evidenceId: "authenticated-evidence",
+                confirmedTerms: terms,
+              }),
+            },
+          },
+          {},
+        ),
+      );
+      const claim = await activities.claimProviderWrite(seeded.transaction!.id, flightId);
+      await activities.executeProviderWrite(
+        seeded.transaction!.id,
+        flightId,
+        claim.idempotencyKey,
+        claim.requestFingerprint,
+      );
+      await activities.reconcileProviderStatus(seeded.transaction!.id, flightId);
+      expect(
+        await activities.reconcileProviderStatus(seeded.transaction!.id, flightId),
+      ).toMatchObject({
+        status: "action_required",
+        providerReference: "original-flight",
+      });
+      const attempt = await database
+        .selectFrom("bookingComponentAttempts")
+        .selectAll()
+        .where("transactionId", "=", seeded.transaction!.id)
+        .executeTakeFirstOrThrow();
+      expect(attempt.providerEvidence).toHaveLength(3);
+      expect(attempt.evidenceConflict).toBe(true);
+      await expect(
+        database
+          .updateTable("bookingComponentAttempts")
+          .set({ evidenceConflict: false })
+          .where("id", "=", attempt.id)
+          .execute(),
+      ).rejects.toThrow("append-only");
+      await expect(
+        database
+          .updateTable("bookingComponentAttempts")
+          .set({ providerEvidence: sql<unknown[]>`'[]'::jsonb` })
+          .where("id", "=", attempt.id)
+          .execute(),
+      ).rejects.toThrow("append-only");
+      await expect(
+        database
+          .updateTable("bookingComponentAttempts")
+          .set({ requirementIds: ["different-requirement"] })
+          .where("id", "=", attempt.id)
+          .execute(),
+      ).rejects.toThrow("append-only");
+      await expect(
+        database
+          .updateTable("bookingComponentAttempts")
+          .set({ status: "claimed" })
+          .where("id", "=", attempt.id)
+          .execute(),
+      ).rejects.toThrow("cannot be reclaimed");
+      await activities.reconcileProviderStatus(seeded.transaction!.id, flightId);
+      expect(
+        (
+          await database
+            .selectFrom("bookingComponentAttempts")
+            .select("providerEvidence")
+            .where("id", "=", attempt.id)
+            .executeTakeFirstOrThrow()
+        ).providerEvidence,
+      ).toHaveLength(3);
+    });
+  }, 120_000);
+
+  it.each(["dispatched", "unknown", "confirmed"] as const)(
+    "blocks a fresh authorization/key while a prior component is %s",
+    async (priorStatus) => {
+      await withIsolatedTestDatabase(async ({ database }) => {
+        const seeded = await seedAuthorizedBooking(database);
+        const flightId = componentIdFor(seeded, "flight");
+        const calls: Record<string, number> = {};
+        const providers = createProviders(
+          {
+            duffel: {
+              execute:
+                priorStatus === "confirmed"
+                  ? confirmedWith("prior-flight")
+                  : () => ({ status: "unknown", safeReason: "Possible supplier commit" }),
+            },
+          },
+          calls,
+        );
+        const activities = createBookingActivities(database, providers);
+        const first = await activities.claimProviderWrite(seeded.transaction!.id, flightId);
+        if (priorStatus === "dispatched")
+          await database
+            .updateTable("bookingComponentAttempts")
+            .set({ status: "dispatched" })
+            .where("transactionId", "=", seeded.transaction!.id)
+            .execute();
+        else
+          await activities.executeProviderWrite(
+            seeded.transaction!.id,
+            flightId,
+            first.idempotencyKey,
+            first.requestFingerprint,
+          );
+        const next = await freshAttemptForSameTrip(database, seeded);
+        const current = await database
+          .selectFrom("trips")
+          .select("currentVersion")
+          .where("id", "=", seeded.tripId)
+          .executeTakeFirstOrThrow();
+        await database
+          .updateTable("bookingTransactions")
+          .set({ lastObservedTripVersion: current.currentVersion })
+          .where("id", "=", next.id)
+          .execute();
+        const repeated = await activities.claimProviderWrite(next.id, flightId);
+        expect(repeated.allowed).toBe(false);
+        expect(repeated.idempotencyKey).not.toBe(first.idempotencyKey);
+        expect(
+          await database
+            .selectFrom("bookingComponentAttempts")
+            .select("id")
+            .where("transactionId", "=", next.id)
+            .execute(),
+        ).toEqual([]);
+        expect(calls[`execute:${flightId}`] ?? 0).toBe(priorStatus === "dispatched" ? 0 : 1);
+      });
+    },
+    120_000,
+  );
+
+  it("allows at most one provider dispatch across 100 concurrent deliveries of a durable claim", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const calls: Record<string, number> = {};
+      const seeded = await seedAuthorizedBooking(database);
+      const flightId = componentIdFor(seeded, "flight");
+      const providers = createProviders(
+        { duffel: { execute: confirmedWith("one-flight") } },
+        calls,
+      );
+      const activities = createBookingActivities(database, providers);
+      const claim = await activities.claimProviderWrite(seeded.transaction!.id, flightId);
+      expect(claim.allowed).toBe(true);
+      await Promise.allSettled(
+        Array.from({ length: 100 }, () =>
+          activities.executeProviderWrite(
+            seeded.transaction!.id,
+            flightId,
+            claim.idempotencyKey,
+            claim.requestFingerprint,
+          ),
+        ),
+      );
+      expect(calls[`execute:${flightId}`]).toBe(1);
+      const confirmations = await database
+        .selectFrom("bookingConfirmations")
+        .select("providerReference")
+        .where("transactionId", "=", seeded.transaction!.id)
+        .execute();
+      expect(confirmations).toEqual([{ providerReference: "one-flight" }]);
+    });
+  }, 120_000);
+
+  it("records a late confirmation after expiry without overwriting an unrelated trip version", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedAuthorizedBooking(database);
+      const flightId = componentIdFor(seeded, "flight");
+      const activities = createBookingActivities(
+        database,
+        createProviders(
+          {
+            duffel: {
+              execute: async (request) => {
+                await database
+                  .updateTable("bookingTransactions")
+                  .set({ executionStatus: "expired", status: "action_required" })
+                  .where("id", "=", seeded.transaction!.id)
+                  .execute();
+                return confirmedWith("late-flight")(request);
+              },
+            },
+          },
+          {},
+        ),
+      );
+      const claim = await activities.claimProviderWrite(seeded.transaction!.id, flightId);
+      const outcome = await activities.executeProviderWrite(
+        seeded.transaction!.id,
+        flightId,
+        claim.idempotencyKey,
+        claim.requestFingerprint,
+      );
+      await activities.recordBookingOutcome(seeded.transaction!.id, outcome);
+      const saved = await readTransaction(database, seeded.transaction!.id);
+      expect(saved.components).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            componentId: flightId,
+            status: "confirmed",
+            providerReference: "late-flight",
+          }),
+        ]),
+      );
+      expect(saved.executionStatus).not.toBe("active");
+    });
+  }, 120_000);
+
+  it("retains the dispatched guard across a database crash before outcome projection and recovers without another write", async () => {
+    await withIsolatedTestDatabase(async ({ database, adminConnectionString }) => {
+      const seeded = await seedAuthorizedBooking(database);
+      const flightId = componentIdFor(seeded, "flight");
+      const terms = seeded.terms.components.find((entry) => entry.componentId === flightId)!;
+      const calls: Record<string, number> = {};
+      const providers = createProviders(
+        {
+          duffel: {
+            execute: confirmedWith("crash-window-flight"),
+            status: () => ({
+              status: "confirmed",
+              providerReference: "crash-window-flight",
+              evidenceId: "recovered-evidence",
+              confirmedTerms: terms,
+            }),
+          },
+        },
+        calls,
+      );
+      const activities = createBookingActivities(database, providers);
+      const claim = await activities.claimProviderWrite(seeded.transaction!.id, flightId);
+      const admin = new Pool({ connectionString: adminConnectionString, max: 1 });
+      try {
+        await admin.query(`
+          CREATE FUNCTION app.us4_crash_before_projection() RETURNS trigger LANGUAGE plpgsql AS $$
+          BEGIN RAISE EXCEPTION 'synthetic crash before projection'; END $$;
+          CREATE TRIGGER us4_crash_before_projection BEFORE UPDATE ON app.booking_transactions
+          FOR EACH ROW EXECUTE FUNCTION app.us4_crash_before_projection();
+        `);
+        await expect(
+          activities.executeProviderWrite(
+            seeded.transaction!.id,
+            flightId,
+            claim.idempotencyKey,
+            claim.requestFingerprint,
+          ),
+        ).rejects.toThrow("synthetic crash before projection");
+        expect(calls[`execute:${flightId}`]).toBe(1);
+        expect(
+          await database
+            .selectFrom("bookingConfirmations")
+            .select("id")
+            .where("tripId", "=", seeded.tripId)
+            .execute(),
+        ).toEqual([]);
+        expect(
+          await database
+            .selectFrom("bookingComponentAttempts")
+            .select("status")
+            .where("tripId", "=", seeded.tripId)
+            .execute(),
+        ).toEqual([{ status: "dispatched" }]);
+        expect(
+          await database
+            .selectFrom("bookingWriteClaims")
+            .select("componentId")
+            .where("tripId", "=", seeded.tripId)
+            .execute(),
+        ).toEqual([{ componentId: flightId }]);
+        await admin.query(
+          "DROP TRIGGER us4_crash_before_projection ON app.booking_transactions; DROP FUNCTION app.us4_crash_before_projection()",
+        );
+        const restarted = createBookingActivities(database, providers);
+        expect(
+          await restarted.reconcileProviderStatus(seeded.transaction!.id, flightId),
+        ).toMatchObject({ status: "confirmed", providerReference: "crash-window-flight" });
+        await restarted.executeProviderWrite(
+          seeded.transaction!.id,
+          flightId,
+          claim.idempotencyKey,
+          claim.requestFingerprint,
+        );
+        expect(calls[`execute:${flightId}`]).toBe(1);
+        expect(
+          await database
+            .selectFrom("bookingConfirmations")
+            .select("providerReference")
+            .where("tripId", "=", seeded.tripId)
+            .execute(),
+        ).toEqual([{ providerReference: "crash-window-flight" }]);
+      } finally {
+        await admin.end();
+      }
+    });
+  }, 120_000);
+
+  it("persists confirmed-but-changed provider terms and retains the duplicate guard", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedAuthorizedBooking(database);
+      const flightId = componentIdFor(seeded, "flight");
+      const activities = createBookingActivities(
+        database,
+        createProviders(
+          {
+            duffel: {
+              execute: (request) => ({
+                status: "confirmed",
+                providerReference: "changed-flight",
+                evidenceId: "changed-evidence",
+                confirmedTerms: {
+                  ...request.terms,
+                  finalCustomerMinor: request.terms.finalCustomerMinor + 500,
+                },
+              }),
+            },
+          },
+          {},
+        ),
+      );
+      const claim = await activities.claimProviderWrite(seeded.transaction!.id, flightId);
+      const outcome = await activities.executeProviderWrite(
+        seeded.transaction!.id,
+        flightId,
+        claim.idempotencyKey,
+        claim.requestFingerprint,
+      );
+      expect(outcome).toMatchObject({
+        status: "action_required",
+        providerReference: "changed-flight",
+      });
+      expect(
+        await database
+          .selectFrom("bookingConfirmations")
+          .select(["providerReference", "terms"])
+          .where("transactionId", "=", seeded.transaction!.id)
+          .execute(),
+      ).toEqual([expect.objectContaining({ providerReference: "changed-flight" })]);
+      expect(
+        await database
+          .selectFrom("bookingWriteClaims")
+          .select("state")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([{ state: "unknown" }]);
+    });
+  }, 120_000);
+
   it("performs one provider action per durable key and keeps a post-commit timeout unknown", async () => {
     await withIsolatedTestDatabase(async ({ database }) => {
       const calls: Record<string, number> = {};
@@ -433,7 +1129,7 @@ describeWithDatabase("booking workflow durability", () => {
           .where("transactionId", "=", seeded.transaction!.id)
           .where("componentId", "=", stayId)
           .execute(),
-      ).toEqual([]);
+      ).toEqual([{ componentId: stayId }]);
     });
   }, 120_000);
 

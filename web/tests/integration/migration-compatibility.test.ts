@@ -23,6 +23,8 @@ import { startBooking } from "../../domain/booking/start";
 import { readBookingReview } from "../../domain/booking/revalidate";
 import { createBookingActivities } from "../../server/workflows/book-activities";
 import { TransactionProviderRegistry } from "../../server/supply/transactions";
+import { BookingRepository } from "../../server/db/booking-repository";
+import { inTransaction } from "../../server/db/transaction";
 import {
   createIsolatedTestDatabase,
   hasIsolatedDatabaseConfiguration,
@@ -72,6 +74,10 @@ describe("migration discovery", () => {
     expect(migrations.find((entry) => entry.version === 13)?.sql).toContain(
       "run application policy is immutable",
     );
+    expect(migrations.find((entry) => entry.version === 16)?.sql).toContain("provider_evidence");
+    expect(migrations.find((entry) => entry.version === 17)?.sql).toContain(
+      "outbox_booking_workflow_identity",
+    );
   });
 });
 
@@ -114,6 +120,58 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
       await pool.end();
     }
   }
+
+  it.each([
+    "booking.revalidation.requested",
+    "booking.reschedule.revalidation.requested",
+    "booking.transaction.requested",
+  ])(
+    "persists separate %s workflows at one trip version without permitting duplicate intents",
+    async (eventType) => {
+      const insert = (workflowId: string, type = eventType) =>
+        fixture.database
+          .insertInto("outboxEvents")
+          .values({
+            id: randomUUID(),
+            eventType: type,
+            eventVersion: 1,
+            aggregateType: "trip",
+            aggregateId: tripId,
+            aggregateVersion: 1,
+            payload: { workflowId },
+            leaseExpiresAt: null,
+            deliveredAt: null,
+            lastErrorCategory: null,
+          })
+          .execute();
+      await insert("recorded-workflow-one");
+      await insert("recorded-workflow-two");
+      await expect(insert("recorded-workflow-one")).rejects.toMatchObject({ code: "23505" });
+      await insert("recorded-trip-one", "trip.version.committed");
+      await expect(insert("recorded-trip-two", "trip.version.committed")).rejects.toMatchObject({
+        code: "23505",
+      });
+      for (const workflowId of [null, 123, "", "   ", "x".repeat(257), undefined]) {
+        await expect(
+          fixture.database
+            .insertInto("outboxEvents")
+            .values({
+              id: randomUUID(),
+              eventType,
+              eventVersion: 1,
+              aggregateType: "trip",
+              aggregateId: tripId,
+              aggregateVersion: 1,
+              payload: workflowId === undefined ? {} : { workflowId },
+              leaseExpiresAt: null,
+              deliveredAt: null,
+              lastErrorCategory: null,
+            })
+            .execute(),
+        ).rejects.toMatchObject({ code: "23514" });
+      }
+    },
+  );
 
   async function insertVersion(inverse: unknown, reason: string | null, version = 1) {
     return query(fixture.connectionString, (client) =>
@@ -242,6 +300,72 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
     ).rejects.toThrow("booking execution basis is immutable");
   }, 30_000);
 
+  it("binds immutable continuation lineage to a parent and root belonging to the same account and trip", async () => {
+    const seed = await seedReviewedWholeTrip(fixture.database);
+    const authorization = await authorizeBooking(
+      fixture.database,
+      seed.userId,
+      seed.tripId,
+      seed.request,
+      reviewNow,
+      seed.prerequisites,
+    );
+    const started = await startBooking(
+      fixture.database,
+      seed.userId,
+      seed.tripId,
+      {
+        requestId: randomUUID(),
+        authorizationId: authorization.id,
+      },
+      { prerequisites: seed.prerequisites, now: reviewNow },
+    );
+    const other = await seedReviewedWholeTrip(fixture.database);
+    const otherAuthorization = await authorizeBooking(
+      fixture.database,
+      other.userId,
+      other.tripId,
+      other.request,
+      reviewNow,
+      other.prerequisites,
+    );
+    const otherAttempt = await startBooking(
+      fixture.database,
+      other.userId,
+      other.tripId,
+      {
+        requestId: randomUUID(),
+        authorizationId: otherAuthorization.id,
+      },
+      { prerequisites: other.prerequisites, now: reviewNow },
+    );
+    const save = (parentId: string, rootId: string) =>
+      inTransaction(fixture.database, async (transaction) => {
+        const terms = { ...seed.terms, continuationOf: parentId, rootAttemptId: rootId };
+        await new BookingRepository(transaction).insertAuthorization(
+          {
+            id: randomUUID(),
+            tripId: seed.tripId,
+            userId: seed.userId,
+            tripVersion: seed.tripVersion,
+            operation: "book_trip",
+            componentId: null,
+            terms,
+            termsHash: hashBookingTerms(terms),
+            acknowledgedNonReversibleActions: [],
+            status: "authorized",
+            reason: null,
+            authorizedAt: reviewNow.toISOString(),
+            expiresAt: started.executionBasis.expiresAt,
+          },
+          { requestId: randomUUID(), requestFingerprint: "e".repeat(64) },
+        );
+      });
+    await expect(save(otherAttempt.id, otherAttempt.id)).rejects.toThrow("lineage is invalid");
+    await expect(save(started.id, otherAttempt.id)).rejects.toThrow("lineage is invalid");
+    await expect(save(started.id, started.id)).resolves.toBeUndefined();
+  }, 30_000);
+
   it("upgrades migration 014 v1 authorization, confirmation and reconciliation evidence without rehashing it", async () => {
     const directory = await mkdtemp(join(tmpdir(), "onholidai-pre-whole-trip-"));
     let prior: IsolatedTestDatabase | undefined;
@@ -272,6 +396,7 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
         totalPrice: raw.totalPrice,
         nonReversibleActions: [],
       });
+
       const hash = hashBookingTerms(terms),
         authorizationId = randomUUID(),
         transactionId = randomUUID();
@@ -348,6 +473,8 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
       });
       await expect(migrate(prior.migrationConnectionString)).resolves.toEqual([
         "015_whole_trip_terms.sql",
+        "016_booking_attempt_guards.sql",
+        "017_booking_outbox_intents.sql",
       ]);
       const saved = await prior.database
         .selectFrom("bookingAuthorizations")
@@ -373,7 +500,7 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
       providers.register({
         provider: "duffel",
         capabilities: {
-          book: true,
+          book: false,
           status: true,
           cancel: false,
           reschedule: false,

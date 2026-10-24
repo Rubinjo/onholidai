@@ -12,6 +12,37 @@
 
 **Provider decision**: Current inventory is Duffel Flights, Nuitee stays and Viator activities. Retain Duffel rather than replace it or add a second active flight source without demonstrated benefit. Nuitee Flights is a possible future complement, not a current integration or automatic fallback. Retain Viator because its documented activity discovery and merchant-booking model fits the existing boundaries; actual booking-tier entitlement remains a gate. Nuitee Experiences is evaluated but not activated. See [research](research.md#2026-10-23-provider-selection-revision) for evidence and reconsideration criteria. Booking.com/Trainline remain deferred, rail has no replacement, and GetYourGuide remains replaced.
 
+## Demo-only presentation override (2026-10-24)
+
+The user prioritizes a convincing booking presentation without working bookings.
+With the explicit, default-off `BOOKING_DEMO_ENABLED=true` setting, the existing
+booking page shows a separately mounted browser-only review, simulated processing
+and clearly labelled demo confirmation. Saved planning estimates are illustrative,
+not final checkout terms. A current itinerary can be previewed without supplier
+booking access, finalization, account linking, traveller details or payment data.
+Trip ownership checks and cancelled-trip restrictions still apply.
+
+Demo actions must make zero API/SSE requests, never mount real review/authorization/
+status effects, and never change trip snapshots, booking/confirmation records,
+outbox, Temporal or payment state. No email is sent or supplier reference invented.
+Existing bookings remain unchanged. Reset, reload, leaving the page or a changed
+trip/version clears this local simulation and consent. Keyboard operation, completion
+focus, narrow-screen layout and duplicate-click/timer cleanup are acceptance criteria.
+An itinerary-only preview must explicitly say no supplier services are selected.
+
+This independent presentation increment does not complete US4/US5, certify suppliers,
+enable real dispatch or change credential isolation. Discovery continues under its
+existing provider configuration. When the flag is absent/false, existing genuine
+review, authentication, finalization and consequential-action gates remain unchanged.
+
+**Subsequent approved credential reassignment (2026-10-24):** after explicitly
+authorizing a sandbox test, the user selected discovery-only use of the tested
+variable and removal of its configured booking role. Its legacy environment-variable
+name does not make it a worker credential. Use the existing optional read/transaction
+roles; no shared-key exception or fallback is permitted. Preserve deterministic
+provider mode, client-only checkout, source EUR money and existing trip currencies.
+Read success does not establish final checkout terms, FX, production or payments.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Find and compare relevant offers (Priority: P1)
@@ -174,6 +205,7 @@ As a traveller using a keyboard, screen reader, or small screen, I can compare o
 #### Privacy, operations, and accessibility
 
 - **FR-027**: Supplier credentials MUST be scoped to the minimum available upstream permissions and stored only in trusted server boundaries; no supplier credential may reach the conversational agent, MCP facade, or browser. Duffel MUST use separate read and write keys, with the read key in trusted discovery clients and the write key only in the restricted booking worker. Nuitee and Viator shared upstream keys MAY each be provisioned to trusted web-read and worker boundaries; distinct secret names MUST NOT be represented as distinct upstream scopes. Their trusted read clients MUST enforce closed allowlists of established side-effect-free operations and MUST NOT invoke transactional operations or expose arbitrary forwarding, even when their keys permit writes. Only the explicitly authorized workflow may invoke writes. Nuitee prebook MUST remain excluded from research/revalidation until documented semantics establish a no-hold, no-reservation, no-payment variant; disabling a payment SDK alone is insufficient. Missing, expired, revoked, or insufficient credentials MUST fail safely without revealing secrets or implying successful access; read access alone MUST NOT establish booking entitlement.
+  - **2026-10-24 approved clarification**: Duffel's local "read" role means a dedicated discovery credential, not a guaranteed upstream read-only scope. POST offer-request creation needs search permission; provision a separate read-write-capable discovery token where no narrower upstream permission is offered. The booking token stays worker-only, values/references remain distinct, and the discovery allowlist permits only flight offer-request creation and granted offer reads. An insufficient-permissions response must not trigger key escalation or automatic fallback.
 - **FR-028**: Agent and browser responses MUST use the existing customer-safe projections. Supplier costs, platform margin, credentials, payment details, and sensitive traveller data MUST NOT reach the agent, browser, logs, or general telemetry. Research MUST use only necessary non-sensitive party/eligibility facts; required sensitive booking data MUST flow through trusted server-side handling or opaque references. Supplier payloads and error text MUST be validated and filtered rather than forwarded unrestricted.
 - **FR-029**: Audit evidence MUST correlate research, proposals, authorization, attempt, component writes, status evidence, and recovery using safe identifiers, timestamps, actor, version, decision, and outcome categories. It MUST support establishing what was authorized and whether a consequential action may have happened without exposing protected data in ordinary logs. Existing retention/access rules MUST apply to restricted evidence; safe errors MUST identify an actionable next step without raw provider payloads.
 - **FR-030**: Search, comparison, booking review, authorization, outcome, and recovery MUST support keyboard operation, visible focus, logical reading/focus order, accessible labels, screen-reader status/error announcements, and sufficient contrast. At widths from 320 pixels upward, essential information and actions MUST remain usable without clipped content or page-level horizontal scrolling.

@@ -21,6 +21,64 @@ const productionEnvironment = {
 } as const;
 
 describe("deployment configuration validation", () => {
+  it("requires explicit opt-in to a booking-only demo without changing provider readiness", () => {
+    expect(loadServerConfig({}).BOOKING_DEMO_ENABLED).toBe(false);
+    expect(loadServerConfig({ BOOKING_DEMO_ENABLED: "false" }).BOOKING_DEMO_ENABLED).toBe(false);
+    const normal = loadServerConfig({});
+    const demo = loadServerConfig({ BOOKING_DEMO_ENABLED: "true" });
+    expect(demo.BOOKING_DEMO_ENABLED).toBe(true);
+    expect(deriveProviderReadiness(demo, {})).toEqual(deriveProviderReadiness(normal, {}));
+    expect(() => loadServerConfig({ BOOKING_DEMO_ENABLED: "yes" })).toThrow();
+  });
+
+  it.each(["true", "false"])(
+    "allows explicit discovery-only reassignment without worker authority when demo is %s",
+    (demo) => {
+      const verified = {
+        support: "supported",
+        access: "verified",
+        evidenceRef: "synthetic-discovery-role-regression",
+        verifiedAt: "2030-01-01T00:00:00Z",
+      };
+      const environment = {
+        PROVIDER_MODE: "live",
+        BOOKING_DEMO_ENABLED: demo,
+        DUFFEL_READ_SECRET: "synthetic-unused-discovery-canary",
+        DUFFEL_TRANSACTION_SECRET: "synthetic-reassigned-discovery-canary",
+        SUPPLIER_PROVIDERS: JSON.stringify({
+          duffel: {
+            readSecretRef: "DUFFEL_TRANSACTION_SECRET",
+            products: {
+              flight: {
+                operations: {
+                  search: verified,
+                  detail: verified,
+                  book: verified,
+                  status: verified,
+                  idempotency: verified,
+                  cancel: verified,
+                  reschedule: verified,
+                },
+              },
+            },
+          },
+        }),
+      };
+      const config = loadServerConfig(environment);
+      expect(config.SUPPLIER_PROVIDERS.duffel?.readSecretRef).toBe("DUFFEL_TRANSACTION_SECRET");
+      expect(config.SUPPLIER_PROVIDERS.duffel?.transactionSecretRef).toBeUndefined();
+      const web = deriveProviderReadiness(config, environment);
+      const worker = deriveProviderReadiness(config, environment, "worker");
+      expect(web.duffel.products.flight.operations.search.access).toBe("verified");
+      expect(worker.duffel.products.flight.operations.search.access).toBe("unconfigured");
+      for (const operation of ["book", "status", "idempotency", "cancel", "reschedule"] as const) {
+        expect(worker.duffel.products.flight.operations[operation].access).toBe("unconfigured");
+        expect(web.duffel.products.flight.operations[operation].access).toBe("unconfigured");
+      }
+      expect(JSON.stringify([web, worker])).not.toMatch(/canary|DUFFEL_|SecretRef/);
+    },
+  );
+
   it("accepts the confirmed single-line supplier configuration without activating live access", () => {
     const environment = {
       PROVIDER_MODE: "deterministic",
@@ -295,6 +353,7 @@ describe("deployment configuration validation", () => {
       VIATOR_SECRET: "synthetic-shared-canary",
       SUPPLIER_PROVIDERS: JSON.stringify({
         viator: {
+          accessTier: "merchant",
           readSecretRef: "VIATOR_SECRET",
           transactionSecretRef: "VIATOR_SECRET",
           products: {
@@ -311,6 +370,7 @@ describe("deployment configuration validation", () => {
                   access: "verified",
                   evidenceRef: "synthetic-booking-approval",
                   verifiedAt: "2026-10-19T00:00:00Z",
+                  environment: "sandbox",
                 },
               },
             },
@@ -429,6 +489,35 @@ describe("deployment configuration validation", () => {
         }),
       }),
     ).toThrow("separate");
+  });
+
+  it("keeps a dedicated search-permitted Duffel token separate from worker authority", () => {
+    const environment = {
+      PROVIDER_MODE: "live",
+      DUFFEL_READ_SECRET: "duffel_test_synthetic_dedicated_discovery_rw",
+      DUFFEL_TRANSACTION_SECRET: "duffel_test_synthetic_worker_rw",
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        duffel: {
+          readSecretRef: "DUFFEL_READ_SECRET",
+          transactionSecretRef: "DUFFEL_TRANSACTION_SECRET",
+          products: {
+            flight: {
+              operations: {
+                search: { support: "supported", access: "configured_unverified" },
+              },
+            },
+          },
+        },
+      }),
+    };
+    const config = loadServerConfig(environment);
+    const web = deriveProviderReadiness(config, environment, "web").duffel.products.flight;
+    const worker = deriveProviderReadiness(config, environment, "worker").duffel.products.flight;
+    expect(web.operations.search.access).toBe("configured_unverified");
+    expect(web.operations.book.access).toBe("unconfigured");
+    expect(worker.operations.search.access).toBe("unconfigured");
+    expect(worker.operations.book.access).not.toBe("verified");
+    expect(JSON.stringify([web, worker])).not.toMatch(/dedicated_discovery_rw|worker_rw/);
   });
 
   it("keeps only current providers in readiness and rejects invalid product declarations", () => {

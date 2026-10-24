@@ -60,6 +60,9 @@ const duffelConfigSchema = z
 const viatorConfigSchema = z
   .object({
     ...providerConfigFields,
+    accessTier: z
+      .enum(["unknown", "affiliate_basic", "affiliate_full", "affiliate_full_booking", "merchant"])
+      .default("unknown"),
     products: z.object({ activity: productConfigSchema.optional() }).strict().default({}),
   })
   .strict();
@@ -92,6 +95,10 @@ const providersConfigSchema = z
 const serverConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PROVIDER_MODE: z.enum(["deterministic", "live"]).default("deterministic"),
+  BOOKING_DEMO_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   VIATOR_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
   NUITEE_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
   GUEST_MAX_ACTIVE_RUNS: z.coerce.number().int().min(1).max(20).default(2),
@@ -214,6 +221,30 @@ export function deriveProviderReadiness(
     return { operations };
   }
   const { duffel, nuitee, viator } = config.SUPPLIER_PROVIDERS;
+  const viatorDeclarations = viator?.products.activity?.operations ?? viator?.operations;
+  const viatorActivity = productReadiness(viator, viatorDeclarations);
+  for (const operation of ["book", "status", "idempotency", "cancel", "reschedule"] as const) {
+    const readiness = viatorActivity.operations[operation];
+    if (readiness.access === "unconfigured") continue;
+    const entitled =
+      viator?.accessTier === "merchant" ||
+      (operation === "status" && viator?.accessTier === "affiliate_full_booking");
+    if (!entitled) {
+      readiness.access = "blocked";
+      readiness.verifiedAt = null;
+      readiness.safeReason =
+        operation === "status"
+          ? "Viator merchant or Full Access + Booking status access is required."
+          : "Viator merchant access is required for this in-app booking operation.";
+    } else if (
+      readiness.access === "verified" &&
+      viatorDeclarations?.[operation]?.environment !== config.VIATOR_ENVIRONMENT
+    ) {
+      readiness.access = "configured_unverified";
+      readiness.verifiedAt = null;
+      readiness.safeReason = "Viator operation access requires verification for this environment.";
+    }
+  }
   return {
     duffel: {
       provider: "duffel",
@@ -244,10 +275,7 @@ export function deriveProviderReadiness(
       provider: "viator",
       mode: config.PROVIDER_MODE,
       products: {
-        activity: productReadiness(
-          viator,
-          viator?.products.activity?.operations ?? viator?.operations,
-        ),
+        activity: viatorActivity,
       },
     },
   };

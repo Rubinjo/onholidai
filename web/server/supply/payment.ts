@@ -29,7 +29,10 @@ export interface TrustedBookingPrerequisiteReader {
   }): Promise<z.infer<typeof verifiedBookingDispositionSchema>[]>;
 }
 
-async function boundedTrustedRead<T>(read: () => Promise<T>, signal: AbortSignal): Promise<T> {
+export async function boundedTrustedRead<T>(
+  read: () => Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
   const unavailable = () =>
     new ProblemError({
       title: "Trusted booking evidence is unavailable",

@@ -37,7 +37,7 @@ vi.mock("server-only", () => ({}));
 describe.skipIf(!hasIsolatedDatabaseConfiguration())(
   "supplier evidence access and immutable revisions",
   () => {
-    it("persists selected Nuitee multi-room rates and changed detail without inventing checkout or expiry", async () => {
+    it("persists long selected Nuitee multi-room IDs and changed detail without inventing checkout or expiry", async () => {
       await withIsolatedTestDatabase(async ({ database }) => {
         const owner = randomUUID();
         await sql`INSERT INTO app."user" (id,name,email) VALUES (${owner},'Synthetic',${owner + "@example.invalid"})`.execute(
@@ -67,6 +67,10 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())(
         const context = { ...actor, requestId: run.requestId };
         const wire = nuiteeRatesResponse();
         const selected = wire.data[0].roomTypes[0];
+        const offerId = `${"Q".repeat(1152)}+/==`;
+        const rateId = "r".repeat(549);
+        selected.offerId = offerId;
+        selected.rates[0].rateId = rateId;
         selected.offerRetailRate[0].amount = "200.20";
         selected.suggestedSellingPrice[0].amount = "220.40";
         selected.rates[0].childCount = 1;
@@ -83,7 +87,21 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())(
           Response.json(
             String(url).includes("/data/hotel")
               ? { data: { id: "synthetic_hotel", name: "Synthetic hotel", hotelType: "hotel" } }
-              : wire,
+              : {
+                  ...wire,
+                  data: [
+                    {
+                      ...wire.data[0],
+                      roomTypes: [
+                        {
+                          ...selected,
+                          offerRetailRate: selected.offerRetailRate[0],
+                          suggestedSellingPrice: selected.suggestedSellingPrice[0],
+                        },
+                      ],
+                    },
+                  ],
+                },
           ),
         );
         const provider = createNuiteeReadProvider(
@@ -111,9 +129,13 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())(
         expect(result.offers).toHaveLength(1);
         const original = result.offers[0];
         expect(original).toMatchObject({
-          component: { provider: "nuitee", price: { finalCustomerMinor: 23040 } },
+          component: {
+            provider: "nuitee",
+            supplierOfferId: offerId,
+            price: { finalCustomerMinor: 23040 },
+          },
           supplierReferences: {
-            rateIds: ["synthetic_rate", "second_rate"],
+            rateIds: [rateId, "second_rate"],
             roomIds: ["synthetic_room", "second_room"],
             sessionId: "sourced_session",
           },
@@ -180,6 +202,8 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())(
           .where("revision", "=", 2)
           .executeTakeFirstOrThrow();
         const expired = normalizePlanningOffer(saved.offer);
+        expect(expired.component.supplierOfferId).toBe(offerId);
+        expect(expired.supplierReferences?.rateIds).toEqual([rateId, "second_rate"]);
         expired.offerRef = randomUUID();
         expired.component.id = randomUUID();
         expired.revision = 1;

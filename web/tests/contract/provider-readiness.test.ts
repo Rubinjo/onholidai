@@ -10,6 +10,168 @@ import { searchPlanningOffers, type SupplyReadQuery } from "../../server/supply/
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
 describe("supplier product readiness contract", () => {
+  it.each(["unknown", "affiliate_basic", "affiliate_full", "affiliate_full_booking"] as const)(
+    "blocks Viator merchant actions for %s access despite asserted operation verification",
+    (accessTier) => {
+      const verified = {
+        support: "supported",
+        access: "verified",
+        evidenceRef: "synthetic-operation-approval",
+        verifiedAt: "2026-10-24T10:00:00Z",
+        environment: "sandbox",
+      };
+      const environment = {
+        PROVIDER_MODE: "live",
+        VIATOR_ENVIRONMENT: "sandbox",
+        VIATOR_SECRET: "synthetic-private-key-canary",
+        SUPPLIER_PROVIDERS: JSON.stringify({
+          viator: {
+            accessTier,
+            readSecretRef: "VIATOR_SECRET",
+            transactionSecretRef: "VIATOR_SECRET",
+            products: {
+              activity: {
+                operations: Object.fromEntries(
+                  ["search", "book", "status", "cancel", "reschedule", "idempotency"].map(
+                    (operation) => [operation, verified],
+                  ),
+                ),
+              },
+            },
+          },
+        }),
+      };
+      const config = loadServerConfig(environment);
+      const web = deriveProviderReadiness(config, environment, "web").viator.products.activity;
+      const worker = deriveProviderReadiness(config, environment, "worker").viator.products
+        .activity;
+      expect(web.operations.search.access).toBe("verified");
+      for (const operation of ["book", "cancel", "reschedule", "idempotency"] as const) {
+        expect(worker.operations[operation]).toMatchObject({
+          support: "supported",
+          access: "blocked",
+          verifiedAt: null,
+        });
+        expect(worker.operations[operation].safeReason).toMatch(/merchant/i);
+      }
+      expect(worker.operations.status.access).toBe(
+        accessTier === "affiliate_full_booking" ? "verified" : "blocked",
+      );
+      expect(JSON.stringify([web, worker])).not.toMatch(
+        /private-key-canary|SecretRef|VIATOR_SECRET/,
+      );
+    },
+  );
+
+  it.each([
+    ["sandbox", "sandbox", "verified"],
+    ["production", "sandbox", "configured_unverified"],
+    ["sandbox", undefined, "configured_unverified"],
+  ] as const)(
+    "requires matching environment evidence for Viator merchant operations (%#)",
+    (configured, evidence, expected) => {
+      const verified = {
+        support: "supported",
+        access: "verified",
+        evidenceRef: "synthetic-operation-approval",
+        verifiedAt: "2026-10-24T10:00:00Z",
+        ...(evidence ? { environment: evidence } : {}),
+      };
+      const environment = {
+        PROVIDER_MODE: "live",
+        VIATOR_ENVIRONMENT: configured,
+        VIATOR_SECRET: "synthetic-private-key-canary",
+        SUPPLIER_PROVIDERS: JSON.stringify({
+          viator: {
+            accessTier: "merchant",
+            transactionSecretRef: "VIATOR_SECRET",
+            products: { activity: { operations: { book: verified, status: verified } } },
+          },
+        }),
+      };
+      const config = loadServerConfig(environment);
+      const worker = deriveProviderReadiness(config, environment, "worker").viator.products
+        .activity;
+      for (const operation of ["book", "status"] as const) {
+        expect(worker.operations[operation].access).toBe(expected);
+        expect(worker.operations[operation].verifiedAt).toBe(
+          expected === "verified" ? verified.verifiedAt : null,
+        );
+      }
+      expect(
+        deriveProviderReadiness(config, { ...environment, VIATOR_SECRET: undefined }, "worker")
+          .viator.products.activity.operations.book.access,
+      ).toBe("unconfigured");
+    },
+  );
+
+  it("treats an omitted Viator tier as unknown rather than merchant entitlement", () => {
+    const environment = {
+      PROVIDER_MODE: "live",
+      VIATOR_SECRET: "synthetic-key",
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        viator: {
+          transactionSecretRef: "VIATOR_SECRET",
+          operations: {
+            book: {
+              support: "supported",
+              access: "verified",
+              evidenceRef: "synthetic-operation-approval",
+              verifiedAt: "2026-10-24T10:00:00Z",
+              environment: "sandbox",
+            },
+          },
+        },
+      }),
+    };
+    const config = loadServerConfig(environment);
+    expect(config.SUPPLIER_PROVIDERS.viator?.accessTier).toBe("unknown");
+    expect(
+      deriveProviderReadiness(config, environment, "worker").viator.products.activity.operations
+        .book.access,
+    ).toBe("blocked");
+  });
+
+  it.each(["missing_evidence", "unsupported", "blocked", "deterministic"] as const)(
+    "does not let merchant tier bypass %s readiness",
+    (fault) => {
+      const environment = {
+        PROVIDER_MODE: fault === "deterministic" ? "deterministic" : "live",
+        VIATOR_SECRET: "synthetic-private-key",
+        SUPPLIER_PROVIDERS: JSON.stringify({
+          viator: {
+            accessTier: "merchant",
+            transactionSecretRef: "VIATOR_SECRET",
+            products: {
+              activity: {
+                operations: {
+                  book: {
+                    support: fault === "unsupported" ? "unsupported" : "supported",
+                    access: fault === "blocked" ? "blocked" : "verified",
+                    environment: "sandbox",
+                    ...(fault === "missing_evidence"
+                      ? {}
+                      : {
+                          evidenceRef: "synthetic-operation-approval",
+                          verifiedAt: "2026-10-24T10:00:00Z",
+                        }),
+                  },
+                },
+              },
+            },
+          },
+        }),
+      };
+      const readiness = deriveProviderReadiness(
+        loadServerConfig(environment),
+        environment,
+        "worker",
+      ).viator.products.activity.operations.book;
+      expect(readiness.access).not.toBe("verified");
+      expect(readiness.verifiedAt).toBeNull();
+    },
+  );
+
   it.each(["flight", "accommodation"] as const)(
     "retains other products when %s access is blocked and publishes no upstream secrets",
     (blockedProduct) => {

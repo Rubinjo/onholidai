@@ -31,3 +31,26 @@ export async function lockBookingTrip(
   });
   return lockPlanningTrip(transaction, actor.planningOwnerId, tripId);
 }
+
+// Restricted evidence ingestion follows the access/trip lock order without renewing write authority.
+export async function lockBookingEvidenceTrip(transaction: Transaction<Database>, tripId: string) {
+  const identity = await transaction
+    .selectFrom("trips")
+    .select("ownerUserId")
+    .where("id", "=", tripId)
+    .executeTakeFirstOrThrow();
+  const principal = await transaction
+    .selectFrom("planningPrincipals")
+    .selectAll()
+    .where("id", "=", identity.ownerUserId)
+    .forUpdate()
+    .executeTakeFirstOrThrow();
+  const trip = await transaction
+    .selectFrom("trips")
+    .selectAll()
+    .where("id", "=", tripId)
+    .forUpdate()
+    .executeTakeFirstOrThrow();
+  if (trip.ownerUserId !== principal.id) throw new Error("Booking evidence trip scope changed");
+  return { trip, principal };
+}

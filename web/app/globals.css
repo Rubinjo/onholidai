@@ -2055,6 +2055,81 @@ summary {
 .booking-readiness [data-slot="button"] {
   margin: 0.4rem 0.4rem 0.4rem 0;
 }
+.booking-demo {
+  max-width: 56rem;
+}
+.booking-demo > h1 {
+  margin-block-end: 1rem;
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  line-height: 1.2;
+}
+.booking-demo h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.booking-demo__notice {
+  max-width: 48rem;
+  padding: 1rem 1.25rem;
+  border-inline-start: 4px solid var(--accent);
+  background: var(--surface-muted);
+}
+.booking-demo__notice h2 {
+  margin-block: 0 0.5rem;
+}
+.booking-demo__notice p {
+  margin-block: 0.5rem 0;
+}
+.booking-demo__checkout {
+  max-width: 48rem;
+  padding-block: 1.5rem;
+}
+.booking-demo__total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  padding-block: 1rem;
+  border-block: 1px solid var(--border);
+}
+.booking-demo__total dd {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+.booking-demo label.booking-demo__consent {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding-block: 1rem;
+}
+.booking-demo__consent input {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-block-start: 0.25rem;
+  accent-color: var(--accent);
+}
+.booking-demo__progress {
+  font-weight: 700;
+}
+.booking-demo__confirmation {
+  padding: 1.25rem;
+  border: 2px solid var(--accent);
+  background: var(--surface);
+}
+.booking-demo__confirmation h3 {
+  margin-block-start: 0;
+  margin-block-end: 0.75rem;
+  color: var(--accent-strong);
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+.booking-demo__confirmation dd {
+  margin: 0;
+  font-weight: 700;
+}
 @media (forced-colors: active) {
   .trip-checkpoint {
     border-color: CanvasText;

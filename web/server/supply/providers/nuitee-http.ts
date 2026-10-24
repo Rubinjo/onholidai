@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { MAX_SUPPLIER_ID_LENGTH } from "@/domain/trip/schema";
+
 import { SupplyReadError, type SupplyReadQuery } from "../read";
 import {
   checkedAt,
@@ -21,6 +23,7 @@ import {
 import type { ReadOfferClient } from "./adapter";
 
 const idSchema = z.string().regex(/^[A-Za-z0-9_-]{1,256}$/);
+const opaqueIdPattern = new RegExp(`^[A-Za-z0-9_+/=-]{1,${MAX_SUPPLIER_ID_LENGTH}}$`);
 const searchSchema = z
   .object({
     guestNationality: z.string().regex(/^[A-Z]{2}$/),
@@ -83,6 +86,12 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
     if (values.length !== 1) throw new SupplyReadError("error");
     return amount(values[0], currency);
   }
+  function offerMoney(raw: unknown) {
+    if (!Array.isArray(raw)) return record(raw);
+    const values = list(raw, 1);
+    if (values.length !== 1) throw new SupplyReadError("error");
+    return record(values[0]);
+  }
   function selection(query: SupplyReadQuery) {
     const parsed = searchSchema.safeParse(options.resolveSearch(query));
     if (!parsed.success || query.destinationIds.length !== 1 || query.endDate <= query.startDate)
@@ -105,7 +114,7 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
     content?: Record<string, unknown>,
   ) {
     const offer = record(raw);
-    const offerId = identifier(offer.offerId, /^[A-Za-z0-9_-]{1,256}$/);
+    const offerId = identifier(offer.offerId, opaqueIdPattern);
     const hit = emptyHit(offerId, query.currency, checkedAt(options));
     const rates = list(offer.rates, 16);
     if (rates.length !== input.occupancies.length) throw new SupplyReadError("error");
@@ -131,7 +140,7 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
         )
           throw new SupplyReadError("error");
       }
-      rateIds.push(identifier(rate.rateId, /^[A-Za-z0-9_-]{1,256}$/));
+      rateIds.push(identifier(rate.rateId, opaqueIdPattern));
       if (rate.mappedRoomId != null) roomIds.push(identifier(String(rate.mappedRoomId)));
       const retail = record(rate.retailRate);
       retailTotal = add(retailTotal, total(retail.total, query.currency));
@@ -187,15 +196,20 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
         cancellation,
       };
     });
-    const declaredTotal = total(offer.offerRetailRate, query.currency);
+    const declaredTotal = amount(offerMoney(offer.offerRetailRate), query.currency);
     if (declaredTotal !== retailTotal) throw new SupplyReadError("error");
+    const sellingPrice =
+      offer.suggestedSellingPrice == null ? null : offerMoney(offer.suggestedSellingPrice);
+    // Enriched public totals can already include property charges; do not add them twice.
+    const sellingChargesUnknown = dueAtProperty > 0 && sellingPrice?.source != null;
     hit.customerMinor =
-      offer.suggestedSellingPrice == null ||
+      sellingPrice === null ||
+      sellingChargesUnknown ||
       !chargesKnown ||
       offer.rateType === "package" ||
       offer.loyaltyMembershipIdRequired === true
         ? null
-        : add(total(offer.suggestedSellingPrice, query.currency), dueAtProperty);
+        : add(amount(sellingPrice, query.currency), dueAtProperty);
     hit.availability = "available";
     const supplierReferences = {
       accommodationId: hotelId,

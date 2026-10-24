@@ -10,9 +10,25 @@ Each operation has separate support (`supported | unsupported | unknown`) and ac
 
 Readiness is keyed by provider, component type, operation and configured environment: Duffel flight, Nuitee accommodation and Viator activity evidence are independent. Missing Nuitee access must not block Flights/Viator, or vice versa. Nuitee hotel access/shared authentication never enables Flights/Experiences. Rail queries return explicit unsupported/deferred outcomes with no fabricated provider or inventory. Provider identity is not a substitute for product readiness.
 
-Credential references stay private. Duffel `readSecretRef` and `transactionSecretRef` must be distinct and resolve to separately scoped keys; the write key is worker-only. Nuitee and Viator may each use a shared secret reference/value across trusted web/worker processes under their documented authentication model, without pretending these are separately scoped upstream keys. Both web clients enforce fixed non-transactional allowlists; public capability summaries expose neither references nor values. Key presence does not prove booking/payment entitlement. Nuitee environment is explicit; prebook is excluded from read capabilities until no-hold/no-payment semantics are established.
+Credential references stay private. When both Duffel roles are configured, `readSecretRef` and `transactionSecretRef` must be distinct and resolve to separate discovery/booking keys; the booking key is worker-only. Either role may be unconfigured. The discovery key needs offer-request creation permission (upstream read-write when no narrower permission is available), so its local read role must not be described as a proven upstream read-only scope. A fixed search/offer-read allowlist, not the variable name, prevents consequential actions. Nuitee and Viator may each use a shared secret reference/value across trusted web/worker processes under their documented authentication model, without pretending these are separately scoped upstream keys. Web clients enforce fixed non-transactional allowlists; public capability summaries expose neither references nor values. Key presence does not prove booking/payment entitlement. Nuitee environment is explicit; prebook is excluded from read capabilities until no-hold/no-payment semantics are established.
+
+On 2026-10-24 the user chose to reassign the tested sandbox variable
+`DUFFEL_TRANSACTION_SECRET` to the **discovery role only**, with no configured
+`transactionSecretRef`. The variable label is not authority: worker readiness remains
+unconfigured despite the environment value existing. This uses the existing optional
+role model, not a shared-key exception, implicit credential escalation or a new mode.
+The current provider mode remains deterministic and simulated checkout stays client-only.
+Observed EUR source money must not be relabelled GBP or converted without sourced FX.
 
 Expose safe relevant capability summaries, never secrets, commercial account IDs or internal diagnostics. Extend the existing read capabilities and transaction adapter declarations, not another registry.
+
+Viator additionally records `accessTier` (`unknown`, `affiliate_basic`,
+`affiliate_full`, `affiliate_full_booking`, `merchant`; omitted means unknown).
+Tier cannot substitute for verified operation/environment evidence. Basic or
+unknown access cannot enable the current worker's merchant booking actions;
+Full Access + Booking may support approved saved status but does not imply
+merchant booking access. Public readiness publishes only safe operation
+support/access/reasons, not credential references or private commercial data.
 
 ## PlanningOffer and stored research
 

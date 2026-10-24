@@ -1,5 +1,10 @@
 import "server-only";
+import { createHash } from "node:crypto";
+
 import { z } from "zod";
+
+import { canonicalBookingJson } from "@/domain/booking/authorization";
+import { currentProviderByType } from "@/server/supply/read";
 
 import type { BookingOperation, BookingTerms } from "@/domain/booking/authorization";
 
@@ -20,6 +25,20 @@ export interface ProviderWriteRequest {
   paymentToken?: Uint8Array;
 }
 
+export interface ProviderStatusContext {
+  componentId: string;
+  providerReference: string | null;
+  terms: BookingTerms["components"][number];
+}
+
+export function providerRequestFingerprint(
+  request: Pick<ProviderWriteRequest, "operation" | "terms">,
+): string {
+  return createHash("sha256")
+    .update(canonicalBookingJson({ operation: request.operation, terms: request.terms }))
+    .digest("hex");
+}
+
 export interface ProviderTransactionAdapter {
   provider: "duffel" | "nuitee" | "viator" | "booking" | "getyourguide" | "trainline";
   capabilities: {
@@ -31,7 +50,7 @@ export interface ProviderTransactionAdapter {
     revalidation?: "read_only_final_terms" | "unsupported" | "unknown";
   };
   execute(request: ProviderWriteRequest): Promise<TransactionOutcome>;
-  getStatus?(idempotencyKey: string): Promise<TransactionOutcome>;
+  getStatus?(idempotencyKey: string, context?: ProviderStatusContext): Promise<TransactionOutcome>;
   cancel?(request: ProviderWriteRequest): Promise<TransactionOutcome>;
   reschedule?(request: ProviderWriteRequest): Promise<TransactionOutcome>;
   revalidate?(request: {
@@ -57,7 +76,7 @@ export interface ProviderTransactionAdapter {
 export interface ProviderTransactionClient {
   capabilities: ProviderTransactionAdapter["capabilities"];
   execute(request: ProviderWriteRequest): Promise<unknown>;
-  getStatus?(idempotencyKey: string): Promise<unknown>;
+  getStatus?(idempotencyKey: string, context?: ProviderStatusContext): Promise<unknown>;
   cancel?(request: ProviderWriteRequest): Promise<unknown>;
   reschedule?(request: ProviderWriteRequest): Promise<unknown>;
   revalidate?(
@@ -107,8 +126,10 @@ export function createProviderTransactionAdapter(
     execute: async (request) => normalizeTransactionOutcome(await client.execute(request)),
     ...(client.getStatus
       ? {
-          getStatus: async (key: string) =>
-            normalizeTransactionOutcome(await client.getStatus!(key)),
+          getStatus: async (key: string, context?: ProviderStatusContext) =>
+            normalizeTransactionOutcome(
+              await (context ? client.getStatus!(key, context) : client.getStatus!(key)),
+            ),
         }
       : {}),
     ...(client.cancel
@@ -141,6 +162,26 @@ export class TransactionProviderRegistry {
     return this.providers.get(provider);
   }
 
+  requireStatus(provider: ProviderTransactionAdapter["provider"]): ProviderTransactionAdapter {
+    const adapter = this.providers.get(provider);
+    if (!adapter?.capabilities.status || !adapter.getStatus)
+      throw new Error(`Transaction provider ${provider} requires manual status confirmation`);
+    return adapter;
+  }
+
+  requireCurrent(
+    component: { provider: string; type: string },
+    operation: BookingOperation,
+  ): ProviderTransactionAdapter {
+    const active = Object.entries(currentProviderByType).some(
+      ([type, provider]) =>
+        component.type === type && provider !== null && component.provider === provider,
+    );
+    if (!active)
+      throw new Error(`Transaction product ${component.provider}/${component.type} is not active`);
+    return this.require(providerForComponent(component.type, component.provider), operation);
+  }
+
   require(
     provider: ProviderTransactionAdapter["provider"],
     operation: BookingOperation,
@@ -163,19 +204,22 @@ export class TransactionProviderRegistry {
   }
 }
 
-export function providerForComponent(type: string): ProviderTransactionAdapter["provider"] {
-  switch (type) {
-    case "flight":
-      return "duffel";
-    case "accommodation":
-      return "booking";
-    case "activity":
-      return "getyourguide";
-    case "rail":
-      return "trainline";
-    case "transfer":
-      return "booking";
-    default:
-      throw new Error(`Unsupported transactional component type: ${type}`);
-  }
+export function providerForComponent(
+  type: string,
+  provenance: string,
+): ProviderTransactionAdapter["provider"] {
+  const provider = z
+    .enum(["duffel", "nuitee", "viator", "booking", "getyourguide", "trainline"])
+    .parse(provenance);
+  const products: Record<ProviderTransactionAdapter["provider"], readonly string[]> = {
+    duffel: ["flight", "accommodation"],
+    nuitee: ["accommodation", "flight", "activity"],
+    viator: ["activity"],
+    booking: ["accommodation"],
+    getyourguide: ["activity"],
+    trainline: ["rail"],
+  };
+  if (!products[provider].includes(type))
+    throw new Error(`Unsupported transactional product: ${provider}/${type}`);
+  return provider;
 }

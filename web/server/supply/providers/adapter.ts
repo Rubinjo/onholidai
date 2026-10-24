@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { canonicalJson } from "@/domain/canonical-json";
-import { currencySchema } from "@/domain/trip/schema";
+import { currencySchema, MAX_SUPPLIER_ID_LENGTH } from "@/domain/trip/schema";
 import { planningDetailsSchema } from "@/domain/trip/itinerary";
 
 import { normalizePlanningOffer } from "../offers";
@@ -22,7 +22,7 @@ const hitSchema = z
   .object({
     selectionGroup: z.string().min(1).max(120).optional(),
     currency: currencySchema,
-    offerId: z.string().min(1).max(256),
+    offerId: z.string().min(1).max(MAX_SUPPLIER_ID_LENGTH),
     supplierMinor: z.number().int().nonnegative().nullable(),
     customerMinor: z.number().int().nonnegative().safe().nullable().optional(),
     availability: z.enum(["available", "unavailable", "unknown"]).optional(),
@@ -39,13 +39,13 @@ const hitSchema = z
         accommodationId: z.string().max(256).optional(),
         searchResultId: z.string().max(256).optional(),
         roomId: z.string().max(256).optional(),
-        rateId: z.string().max(256).optional(),
+        rateId: z.string().max(MAX_SUPPLIER_ID_LENGTH).optional(),
         quoteId: z.string().max(256).optional(),
         productCode: z.string().max(256).optional(),
         optionCode: z.string().max(256).optional(),
         availabilityId: z.string().max(256).optional(),
         roomIds: z.array(z.string().max(256)).max(16).optional(),
-        rateIds: z.array(z.string().max(256)).max(16).optional(),
+        rateIds: z.array(z.string().max(MAX_SUPPLIER_ID_LENGTH)).max(16).optional(),
         sessionId: z.string().max(256).optional(),
       })
       .strict()

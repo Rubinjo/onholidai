@@ -116,7 +116,7 @@
         },
         "rateId": {
           "type": "string",
-          "maxLength": 256
+          "maxLength": 4096
         },
         "quoteId": {
           "type": "string",
@@ -147,7 +147,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "maxLength": 256
+            "maxLength": 4096
           }
         },
         "sessionId": {
@@ -444,7 +444,7 @@
             "supplierOfferId": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 256
+              "maxLength": 4096
             },
             "offerStatus": {
               "type": "string",
@@ -1058,7 +1058,7 @@
             "supplierOfferId": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 256
+              "maxLength": 4096
             },
             "offerStatus": {
               "type": "string",
@@ -1667,7 +1667,7 @@
             "supplierOfferId": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 256
+              "maxLength": 4096
             },
             "offerStatus": {
               "type": "string",
@@ -2272,7 +2272,7 @@
             "supplierOfferId": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 256
+              "maxLength": 4096
             },
             "offerStatus": {
               "type": "string",
@@ -2883,7 +2883,7 @@
             "supplierOfferId": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 256
+              "maxLength": 4096
             },
             "offerStatus": {
               "type": "string",

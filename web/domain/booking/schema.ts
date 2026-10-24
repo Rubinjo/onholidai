@@ -91,7 +91,8 @@ export function projectPublicBookingTransaction(
         dispatchedComponentIds &&
         !dispatchedComponentIds.has(component.componentId) &&
         transaction.executionStatus !== "active" &&
-        ["proposed", "authorized"].includes(component.status)
+        !component.providerReference &&
+        ["proposed", "authorized", "action_required"].includes(component.status)
           ? "not_attempted"
           : component.status,
       providerReference:

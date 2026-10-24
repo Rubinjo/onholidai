@@ -60,6 +60,9 @@ export async function readBookingReview(
         ),
       );
     const authorization = records.authorization;
+    const latestAttempt = records.history.find(
+      (candidate) => !records.history.some((child) => child.continuationOf === candidate.id),
+    );
     return bookingReviewStateSchema.parse({
       tripId,
       tripVersion: current.version,
@@ -96,7 +99,7 @@ export async function readBookingReview(
           }
         : null,
       activeAttempt: records.active ? projectAttempt(records.active) : null,
-      latestAttempt: records.history[0] ? projectAttempt(records.history[0]) : null,
+      latestAttempt: latestAttempt ? projectAttempt(latestAttempt) : null,
       history: records.history.map(projectAttempt),
       confirmedCommitments: records.confirmations.map((confirmation) => {
         const saved = bookingComponentTermsSchema.parse(confirmation.terms);
@@ -171,6 +174,7 @@ export async function startBookingRevalidation(
         });
       return prior;
     }
+    await new BookingRepository(transaction).wholeTripLineage(tripId, userId);
     const snapshot = tripSnapshotSchema.parse(
       (await readOwnedTripVersion(transaction, actor.planningOwnerId, tripId)).snapshot,
     );

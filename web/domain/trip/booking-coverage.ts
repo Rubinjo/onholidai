@@ -9,8 +9,7 @@ import {
 } from "../booking/public";
 import { evaluateFeasibility } from "./feasibility";
 import { constraintEvidenceSchema, verificationSchema } from "./itinerary";
-
-import type { TripSnapshot } from "./schema";
+import { MAX_SUPPLIER_ID_LENGTH, type TripSnapshot } from "./schema";
 
 export {
   BOOKING_COVERAGE_POLICY,
@@ -39,7 +38,7 @@ export const bookingCoverageEvidenceSchema = z
   .object({
     componentId: z.uuid(),
     provider: z.string().min(1).max(120),
-    supplierOfferId: z.string().min(1).max(256),
+    supplierOfferId: z.string().min(1).max(MAX_SUPPLIER_ID_LENGTH),
     inventoryId: z.string().min(1).max(256),
     serviceStart: z.iso.datetime({ offset: true }),
     serviceEnd: z.iso.datetime({ offset: true }),

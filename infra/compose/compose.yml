@@ -112,6 +112,7 @@ services:
     environment:
       NODE_ENV: production
       PROVIDER_MODE: deterministic
+      BOOKING_DEMO_ENABLED: "${BOOKING_DEMO_ENABLED:-false}"
       BETTER_AUTH_URL: http://localhost:3000
       AGENT_BASE_URL: http://agent:8000
       TEMPORAL_ADDRESS: temporal:7233

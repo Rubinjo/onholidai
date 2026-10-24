@@ -128,6 +128,26 @@ Continuation locks prior attempts/claims, resolves uncertainty, derives all unre
 
 ### Interface
 
+**Demo-only priority override (2026-10-24):** T099-T101 add an explicitly opted-in
+browser-only branch to the existing booking page, separate from the real review
+component and its effects. Reuse the trip overview, Georgia typography, green/white
+tokens and existing buttons; use one receipt-like estimate/confirmation panel rather
+than redesigning the workspace. Keep all simulated progress/consent in React state,
+clean up its timer on unmount and key it by trip/version. The server passes only the
+parsed non-secret `BOOKING_DEMO_ENABLED` flag after normal trip access checks.
+Guests may preview their own trips without account linking; cancelled trips still
+redirect. No API, SSE, storage, worker, provider or payment integration is added.
+Keep live discovery and real booking endpoints/gates unchanged. This supersedes
+production execution as the immediate delivery priority, not its safety requirements.
+
+**Authorized Duffel follow-up (2026-10-24):** reuse the existing optional
+credential-role schema after sandbox search/detail proof. The user selected
+`DUFFEL_TRANSACTION_SECRET` as the explicitly referenced discovery credential,
+with the worker reference omitted. No new flag, resolver, transport, shared-key
+exception or schema is needed. Keep provider/demo modes unchanged, prove web/worker
+isolation and exact source currency through synthetic regressions, and preserve
+unknown customer totals/terms. Do not invent EUR/GBP conversion or live readiness.
+
 Add bounded research/comparison within current details/conversation panes; retain the workspace/map layout. Reuse useTrip, React Query, ComponentDetails, buttons, clarification, summaries/checkpoints. Key results by trip/version, ignore late responses and preserve accepted state on failure. Show requirement groups, source/property type, customer amounts/currency, unknown facts, freshness, rationale and safe retry.
 
 Extend current booking route/auth/finalization shell with route/party/component overview, missing requirements, estimate changes, full material terms, commitments, remaining payable amount and partial/non-reversible disclosures. One explicit whole-trip action authorizes then starts with persistent request IDs. Use actual current-time expiry; invalidate on trip events/reload/submit. Restore durable attempts before offering authorization. Reuse status/recovery components with meaningful confirmed/failed/uncertain/not-attempted labels, status checking, support and one complete-trip continuation. No subset checkout.

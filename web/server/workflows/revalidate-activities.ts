@@ -6,6 +6,8 @@ import { sql, type Kysely } from "kysely";
 import { resolveBookingActor } from "@/server/auth/planning-actor";
 import { lockBookingTrip } from "@/server/auth/booking-access";
 import { inTransaction } from "@/server/db/transaction";
+import { BookingRepository } from "@/server/db/booking-repository";
+import { ProblemError } from "@/server/errors";
 import { invalidateChangedWholeTripReview } from "@/domain/booking/invalidate";
 import {
   readTrustedBookingDispositions,
@@ -451,6 +453,44 @@ export function createRevalidationActivities(
             ],
           };
         }
+        if (result.status === "completed" && result.terms && "schemaVersion" in result.terms) {
+          const repository = new BookingRepository(transaction);
+          try {
+            const lineage = await repository.wholeTripLineage(
+              input.tripId,
+              input.ownerUserId,
+              finishedAt,
+            );
+            const completeTerms = bookingTermsSchema.parse({ ...result.terms, ...lineage });
+            if (!("schemaVersion" in completeTerms))
+              throw new Error("Whole-trip review must retain version-two terms");
+            await repository.assertConfirmedBasis(input.tripId, completeTerms);
+            result.terms = completeTerms;
+            result.termsHash = hashBookingTerms(completeTerms);
+          } catch (error) {
+            if (
+              !(error instanceof ProblemError) ||
+              !["booking_continuation_blocked", "booking_commitment_mismatch"].includes(error.code)
+            )
+              throw error;
+            result.status = "failed";
+            result.terms = null;
+            result.termsHash = null;
+            result.expiresAt = null;
+            result.coverage = {
+              ...coverage,
+              eligible: false,
+              issues: [
+                ...coverage.issues,
+                {
+                  code: error.code,
+                  message: error.detail ?? error.message,
+                  relatedIds: [],
+                },
+              ],
+            };
+          }
+        }
         await transaction
           .updateTable("bookingRevalidations")
           .set({
@@ -553,14 +593,16 @@ export function createRevalidationActivities(
       const snapshot = tripSnapshotSchema.parse(version.snapshot);
       const component = snapshot.components.find((item) => item.id === input.componentId);
       if (!component) throw new Error("Confirmed component is absent from current trip");
-      const result = await providers.get(providerForComponent(component.type))?.revalidate?.({
-        componentId: component.id,
-        supplierOfferId: component.supplierOfferId,
-        serviceStart: component.serviceStart,
-        serviceEnd: component.serviceEnd,
-        travellerIds: component.travellerIds,
-        requestedChange: input.requestedChange,
-      });
+      const result = await providers
+        .get(providerForComponent(component.type, component.provider))
+        ?.revalidate?.({
+          componentId: component.id,
+          supplierOfferId: component.supplierOfferId,
+          serviceStart: component.serviceStart,
+          serviceEnd: component.serviceEnd,
+          travellerIds: component.travellerIds,
+          requestedChange: input.requestedChange,
+        });
       const checkedAt = new Date();
       const requestedTerms = result?.terms;
       let terms: BookingTerms | null = null,

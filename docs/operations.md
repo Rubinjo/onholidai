@@ -159,6 +159,17 @@ are synthetic fixtures, not evidence of live property coverage or age eligibilit
 The web composition root resolves only configured read-secret references.
 Duffel write keys are never used as a read fallback. Nuitee's and Viator's shared upstream
 keys are constrained by fixed read endpoint/method allowlists, not by their names.
+For Duffel, `readSecretRef` means the dedicated **discovery process** credential,
+not an upstream read-only permission guarantee. Flight search creates an offer
+request via POST. The tested read-only sandbox token returned HTTP 403 with
+`insufficient_permissions`, although airline reads succeeded. Provision a
+separate discovery token with the required offer-request permission (read-write
+where Duffel offers only read-only/read-write), distinct from the worker token.
+Its client remains confined to flight search and granted offer GETs: no Orders,
+holds, payments or cancellation. Keep the current blocked/unverified readiness
+until that dedicated token is independently tested; never substitute the
+booking token or infer search success from key presence. Tokens must remain
+server-only and test/live mode is still determined by the token.
 `VIATOR_ENVIRONMENT` accepts `sandbox` (the default) or `production`; change it
 only when deploying approved production access. Duffel test/live behavior is
 determined by the injected read token, using its fixed API host.
@@ -257,11 +268,86 @@ requesting source details. No credential, sandbox call or transaction is needed
 for the deterministic suite. See [discovery evidence](../specs/003-supplier-mcp-booking/evidence/discovery.md)
 for executed checks and the separate unverified gates.
 
+### Browser-only booking demo
+
+Set `BOOKING_DEMO_ENABLED=true` **in the web process**, then restart it. The flag
+defaults to false and is independent of `PROVIDER_MODE`; it does not activate live
+discovery or supplier booking access.
+
+For a host-run web app, from the repository root:
+
+```powershell
+$env:BOOKING_DEMO_ENABLED = 'true'
+corepack.cmd pnpm --dir web dev
+```
+
+For Compose, put `BOOKING_DEMO_ENABLED=true` in the root environment file and
+explicitly pass that file when recreating the web service:
+
+```powershell
+docker compose --env-file .env -f infra\compose\compose.yml --profile applications up -d --build web
+```
+
+Open an existing trip's booking review. The page displays a persistent demo notice,
+the saved trip and illustrative total, an acknowledgement, simulated processing and
+a demo confirmation/reference. Account linking, live finalization/terms, passport,
+card information and transaction credentials are not needed. A guest still needs
+access to their own saved trip; private and cancelled trips remain protected.
+An itinerary without selected services is explicitly an itinerary-only preview.
+
+Demo booking buttons make **no backend requests**: no revalidation, authorization,
+booking/status polling, SSE, supplier calls, payment, email, trip changes or durable
+confirmation. Simulation and consent exist only in browser memory; reset, reload or
+leaving the page clears them. Existing saved bookings are never changed. Initial
+page loading still authenticates/authorizes and reads the saved trip normally.
+This flag changes presentation only; it is not a new server transaction authority
+or a replacement for disabling real workers/maintaining existing dispatch gates.
+Set it to false/remove it and restart/recreate the web process to restore real
+review/authentication behavior. Production booking tasks remain incomplete.
+
+A Duffel read-write token can technically support flight discovery if it has the
+required offer-request permission; its environment-variable name is not an upstream
+scope. On 2026-10-24 the user explicitly authorized testing the sandbox token in
+`DUFFEL_TRANSACTION_SECRET`: shopping returned HTTP 201 and 16 EUR offers; the exact
+selected-offer GET returned HTTP 200 and normalized/publicly projected successfully.
+No order, hold, payment or other consequential endpoint was called.
+
+The user then selected **discovery-only reassignment**, not sharing: the local Duffel
+entry now has `readSecretRef: "DUFFEL_TRANSACTION_SECRET"` and **no**
+`transactionSecretRef`. The variable keeps its existing name/value but no longer
+supplies a configured worker role. The old `DUFFEL_READ_SECRET` value is untouched
+and unreferenced. Existing validation still rejects shared references/values when
+both roles are configured. Re-enabling booking later requires a distinct worker
+credential and the unchanged operation/exact-consent gates; there is no fallback.
+The protected environment example was not read or changed.
+
+`BOOKING_DEMO_ENABLED=true` and `PROVIDER_MODE=deterministic` were preserved. This
+role reassignment does **not** silently switch the app to real supplier discovery
+or promote operation declarations to verified. Live discovery remains independently
+gated for every supplier, destination/party prerequisite and query currency.
+The observed Duffel offers are **EUR**: a GBP query is correctly unsupported, not
+a permissions failure. An EUR-scoped trip/query can use those EUR results; existing
+trip currencies were not changed and no exchange rate was invented. Final customer
+costs remain unknown where surcharges/terms are missing, independently of the
+client-only booking demo.
+
 ### Supplier readiness configuration
 
 `SUPPLIER_PROVIDERS` is JSON containing only optional `duffel`, `nuitee` and `viator` entries. Remove old Booking.com/Trainline/GetYourGuide entries from current configuration; their presence is a validation error, not an activation request. This does not migrate or delete historical trip/booking data.
 
 Each entry has `readSecretRef`, `transactionSecretRef` and `products`. References name separately provisioned environment secrets, not literal API keys. Active products are Duffel `products.flight`, Nuitee `products.accommodation` and Viator `products.activity`. Duffel `products.accommodation` declarations remain accepted for legacy status compatibility, but cannot activate any new stay operation. Each product has an `operations` map for `search`, `detail`, `revalidation`, `book`, `status`, `idempotency`, `cancel` and `reschedule`. Each operation records `support` (`supported`, `unsupported`, `unknown`), `access` (`unconfigured`, `configured_unverified`, `verified`, `blocked`), and optional approved `evidenceRef` / ISO `verifiedAt`. Nuitee verified declarations additionally require `environment` matching `NUITEE_ENVIRONMENT` (`sandbox` by default, or `production`). Missing facts remain unknown; key presence alone never verifies an operation, payment access or Viator booking entitlement.
+
+Viator also accepts `accessTier`: `unknown` (default), `affiliate_basic`,
+`affiliate_full`, `affiliate_full_booking` or `merchant`. The user confirms
+Basic affiliate sandbox access, so record `accessTier: "affiliate_basic"` in
+the Viator JSON entry when updating local configuration. Do not set merchant
+without actual approval. Basic/unknown tiers cannot enable this worker's
+merchant booking actions even if an operation is declared verified.
+`affiliate_full_booking` can establish approved saved-status access, not
+merchant booking. Merchant/status verification must include `environment`
+matching `VIATOR_ENVIRONMENT`, in addition to existing evidence and credentials.
+Old JSON without a tier still parses but defaults to unknown and cannot assert
+merchant booking readiness. Discovery readiness remains independent.
 
 For example, this intentionally unverified configuration permits one shared upstream key for each of Nuitee and Viator, not fictional separately scoped keys:
 
@@ -297,6 +383,7 @@ For example, this intentionally unverified configuration permits one shared upst
     }
   },
   "viator": {
+    "accessTier": "unknown",
     "readSecretRef": "VIATOR_SECRET",
     "transactionSecretRef": "VIATOR_SECRET",
     "products": {
@@ -308,7 +395,17 @@ For example, this intentionally unverified configuration permits one shared upst
 }
 ```
 
-Provision Duffel's distinct read and write keys only in web and worker respectively. Identical references are rejected, as are identical nonempty key values when both are supplied to one process. Distinct references cannot prove upstream scope: verify actual Duffel permissions separately. The same Nuitee or Viator secret reference/value may be provisioned in trusted web-read and worker processes; this does not grant a read-only upstream scope or activate transactions. No supplier key belongs in Python, MCP, browser configuration, logs or workflow history.
+Provision Duffel's distinct discovery and booking keys only in web and worker respectively. `DUFFEL_READ_SECRET` can hold the separate search-permitted discovery token without renaming the variable or changing supplier JSON. Identical references are rejected, as are identical nonempty key values when both are supplied to one process. Distinct references cannot prove upstream scope: verify actual Duffel permissions separately. The same Nuitee or Viator secret reference/value may be provisioned in trusted web-read and worker processes; this does not grant a read-only upstream scope or activate transactions. No supplier key belongs in Python, MCP, browser configuration, logs or workflow history.
+
+The desired commercial model is one customer payment to OnHolidai, followed by
+separate approved supplier settlement. Prefer Nuitee enterprise `CREDIT` under
+contract, with an approved funded wallet/account-card arrangement only as an
+explicit interim alternative; use Duffel Balance and Viator merchant terms.
+Maintain working capital/credit independently of customer PSP payout timing.
+Basic Viator affiliate access is insufficient for this flow. Final terms,
+prebook effects, capture/refund/uncertainty policy and commercial/legal/PSP
+approval remain gates; no processor or live funding path is installed.
+See [the supplier/funding assessment](../specs/003-supplier-mcp-booking/research.md#2026-10-24-supplier-sufficiency-and-single-customer-payment-direction).
 
 The environment-example file is access-restricted in this implementation session.
 On 2026-10-23 the user confirmed completing the requested manual configuration

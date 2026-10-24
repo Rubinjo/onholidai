@@ -24,6 +24,8 @@ import { createRevalidationActivities } from "../../server/workflows/revalidate-
 import { hasIsolatedDatabaseConfiguration, withIsolatedTestDatabase } from "../helpers/database";
 import { readTrustedBookingPrerequisites } from "../../server/supply/payment";
 import { bookingTermsV2Schema } from "../../domain/booking/authorization";
+import { BookingRepository } from "../../server/db/booking-repository";
+import { inTransaction } from "../../server/db/transaction";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../../server/workflows/client", () => ({ startWorkflow: vi.fn(async () => undefined) }));
@@ -66,6 +68,425 @@ describe("booking execution boundary", () => {
     abort.abort();
     await expect(pending).rejects.toMatchObject({ code: "booking_prerequisites_unavailable" });
   });
+});
+
+describeWithDatabase("whole-trip continuation authority", () => {
+  it("allows fresh review after an expired undispatched claim without treating a local stop as a supplier commitment", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const seeded = await seedAuthorizedBooking(database);
+      const activities = createBookingActivities(database, new TransactionProviderRegistry());
+      const componentId = seeded.transaction!.components[0].componentId;
+      const claim = await activities.claimProviderWrite(seeded.transaction!.id, componentId);
+      expect(claim.allowed).toBe(true);
+      await database
+        .updateTable("bookingTransactions")
+        .set({
+          executionStatus: "expired",
+        })
+        .where("id", "=", seeded.transaction!.id)
+        .execute();
+      await activities.recordBookingOutcome(seeded.transaction!.id, {
+        componentId,
+        status: "action_required",
+        providerReference: null,
+        safeReason: "Authorization expired before dispatch.",
+      });
+      const trip = await database
+        .selectFrom("trips")
+        .select("currentVersion")
+        .where("id", "=", seeded.tripId)
+        .executeTakeFirstOrThrow();
+      const version = await database
+        .selectFrom("tripVersions")
+        .select("snapshot")
+        .where("tripId", "=", seeded.tripId)
+        .where("version", "=", trip.currentVersion)
+        .executeTakeFirstOrThrow();
+      expect(
+        version.snapshot.components.find((component) => component.id === componentId)
+          ?.bookingStatus,
+      ).toBe("unbooked");
+      expect(
+        await database
+          .selectFrom("bookingWriteClaims")
+          .select("attemptId")
+          .where("tripId", "=", seeded.tripId)
+          .execute(),
+      ).toEqual([]);
+      const request = { requestId: crypto.randomUUID(), expectedVersion: trip.currentVersion };
+      await expect(
+        startBookingRevalidation(database, seeded.userId, seeded.tripId, request),
+      ).resolves.toMatchObject({ status: "accepted" });
+      const attempt = await activities.loadBookingTransaction(seeded.transaction!.id);
+      expect(attempt.components[0].status).toBe("action_required");
+    });
+  }, 30_000);
+
+  it.each(["failed", "unknown"] as const)(
+    "projects an authenticated %s booking outcome without losing its durable recovery meaning",
+    async (status) => {
+      await withIsolatedTestDatabase(async ({ database }) => {
+        const seeded = await seedAuthorizedBooking(database);
+        const providers = new TransactionProviderRegistry();
+        providers.register({
+          provider: "duffel",
+          capabilities: {
+            book: true,
+            status: false,
+            cancel: false,
+            reschedule: false,
+            idempotency: false,
+          },
+          execute: async () => ({ status, safeReason: "Recorded provider outcome." }),
+        });
+        const activities = createBookingActivities(database, providers);
+        const componentId = seeded.transaction!.components[0].componentId;
+        const claim = await activities.claimProviderWrite(seeded.transaction!.id, componentId);
+        await activities.executeProviderWrite(
+          seeded.transaction!.id,
+          componentId,
+          claim.idempotencyKey,
+          claim.requestFingerprint,
+        );
+        const trip = await database
+          .selectFrom("trips")
+          .select("currentVersion")
+          .where("id", "=", seeded.tripId)
+          .executeTakeFirstOrThrow();
+        const version = await database
+          .selectFrom("tripVersions")
+          .select("snapshot")
+          .where("tripId", "=", seeded.tripId)
+          .where("version", "=", trip.currentVersion)
+          .executeTakeFirstOrThrow();
+        expect(
+          version.snapshot.components.find((component) => component.id === componentId)
+            ?.bookingStatus,
+        ).toBe(status === "failed" ? "unbooked" : "unknown");
+        const booking = await activities.loadBookingTransaction(seeded.transaction!.id);
+        expect(
+          booking.components.find((component) => component.componentId === componentId)?.status,
+        ).toBe(status);
+        const claims = await database
+          .selectFrom("bookingWriteClaims")
+          .select("attemptId")
+          .where("tripId", "=", seeded.tripId)
+          .execute();
+        expect(claims).toHaveLength(status === "failed" ? 0 : 1);
+      });
+    },
+    30_000,
+  );
+
+  it("derives parent/root from durable history and authorizes only the complete remainder", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const now = new Date();
+      const seeded = await seedReviewedWholeTrip(database, undefined, "completed", undefined, now);
+      const authorization = await authorizeBooking(
+        database,
+        seeded.userId,
+        seeded.tripId,
+        seeded.request,
+        now,
+        seeded.prerequisites,
+      );
+      const parent = await startBooking(
+        database,
+        seeded.userId,
+        seeded.tripId,
+        {
+          requestId: crypto.randomUUID(),
+          authorizationId: authorization.id,
+        },
+        { now, prerequisites: seeded.prerequisites },
+      );
+      const commitment = seeded.terms.components[0];
+      await database
+        .insertInto("bookingConfirmations")
+        .values({
+          id: crypto.randomUUID(),
+          transactionId: parent.id,
+          tripId: seeded.tripId,
+          componentId: commitment.componentId,
+          providerReference: "recorded-existing-flight",
+          terms: commitment,
+          confirmedAt: now,
+        })
+        .execute();
+      await applyBookingOutcome(
+        database,
+        parent.id,
+        {
+          componentId: commitment.componentId,
+          status: "confirmed",
+          providerReference: "recorded-existing-flight",
+          safeReason: null,
+        },
+        now,
+      );
+      const execute = vi.fn();
+      const revalidated: string[] = [];
+      const providers = new TransactionProviderRegistry();
+      for (const provider of ["duffel", "nuitee", "viator"] as const) {
+        providers.register({
+          provider,
+          capabilities: {
+            book: true,
+            status: true,
+            cancel: false,
+            reschedule: false,
+            idempotency: false,
+            revalidation: "read_only_final_terms",
+          },
+          execute,
+          revalidate: async ({ componentId }) => {
+            revalidated.push(componentId);
+            return {
+              outcome: "unchanged",
+              terms: structuredClone(
+                seeded.terms.components.find((component) => component.componentId === componentId)!,
+              ),
+            };
+          },
+        });
+      }
+      const review = await startBookingRevalidation(database, seeded.userId, seeded.tripId, {
+        requestId: crypto.randomUUID(),
+        expectedVersion: 3,
+      });
+      const result = await createRevalidationActivities(database, providers, {
+        prerequisites: seeded.prerequisites,
+        now: () => now,
+      }).revalidateBooking({
+        workflowId: review.workflowId,
+        tripId: seeded.tripId,
+        ownerUserId: seeded.userId,
+        tripVersion: 3,
+      });
+      expect(result.status).toBe("completed");
+      const terms = bookingTermsV2Schema.parse(result.terms);
+      expect(terms.continuationOf).toBe(parent.id);
+      expect(terms.rootAttemptId).toBe(parent.id);
+      expect(terms.totalPrice.minorUnits).toBe(30000);
+      expect(terms.coverage.toBookComponentIds).not.toContain(commitment.componentId);
+      expect(revalidated).not.toContain(commitment.componentId);
+      expect(revalidated).toHaveLength(3);
+      const input = {
+        ...seeded.request,
+        requestId: crypto.randomUUID(),
+        tripVersion: 3,
+        termsHash: result.termsHash,
+      };
+      const consents = await Promise.all(
+        [
+          input,
+          {
+            ...input,
+            requestId: crypto.randomUUID(),
+          },
+        ].map((request) =>
+          authorizeBooking(
+            database,
+            seeded.userId,
+            seeded.tripId,
+            request,
+            now,
+            seeded.prerequisites,
+          ),
+        ),
+      );
+      const starts = await Promise.allSettled(
+        consents.map((consent) =>
+          startBooking(
+            database,
+            seeded.userId,
+            seeded.tripId,
+            {
+              requestId: crypto.randomUUID(),
+              authorizationId: consent.id,
+            },
+            { now, prerequisites: seeded.prerequisites },
+          ),
+        ),
+      );
+      expect(starts.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const winner = starts.find((result) => result.status === "fulfilled");
+      if (winner?.status !== "fulfilled") throw new Error("A complete continuation must start");
+      const child = winner.value;
+      const loser = starts.find((result) => result.status === "rejected");
+      expect(loser?.status === "rejected" && loser.reason).toMatchObject({
+        code: "booking_continuation_changed",
+      });
+      expect(child.components.map((component) => component.componentId).sort()).toEqual(
+        terms.coverage.toBookComponentIds.toSorted(),
+      );
+      expect(child.executionBasis.terms).toMatchObject({
+        continuationOf: parent.id,
+        rootAttemptId: parent.id,
+      });
+      expect(child.executionStatus).toBe("invalidated");
+      expect(execute).not.toHaveBeenCalled();
+      const restored = await readBookingReview(database, seeded.userId, seeded.tripId, now);
+      expect(restored.history).toHaveLength(2);
+      expect(restored.latestAttempt?.id).toBe(child.id);
+      expect(restored.confirmedCommitments).toHaveLength(1);
+      expect(await database.selectFrom("bookingComponentAttempts").select("id").execute()).toEqual(
+        [],
+      );
+      await expect(
+        authorizeBooking(
+          database,
+          seeded.userId,
+          seeded.tripId,
+          {
+            ...input,
+            requestId: crypto.randomUUID(),
+          },
+          now,
+          seeded.prerequisites,
+        ),
+      ).rejects.toMatchObject({
+        code: "booking_continuation_changed",
+      });
+      const nextReview = await startBookingRevalidation(database, seeded.userId, seeded.tripId, {
+        requestId: crypto.randomUUID(),
+        expectedVersion: 3,
+      });
+      const next = await createRevalidationActivities(database, providers, {
+        prerequisites: seeded.prerequisites,
+        now: () => now,
+      }).revalidateBooking({
+        workflowId: nextReview.workflowId,
+        tripId: seeded.tripId,
+        ownerUserId: seeded.userId,
+        tripVersion: 3,
+      });
+      expect(next.status).toBe("completed");
+      expect(next.terms).toMatchObject({
+        continuationOf: child.id,
+        rootAttemptId: parent.id,
+        totalPrice: { currency: "GBP", minorUnits: 30000 },
+      });
+      expect(execute).not.toHaveBeenCalled();
+    });
+  }, 30_000);
+
+  it.each(["active", "unknown"] as const)(
+    "blocks a fresh whole-trip review while a prior %s action is unresolved",
+    async (state) => {
+      await withIsolatedTestDatabase(async ({ database }) => {
+        const seeded = await seedAuthorizedBooking(database);
+        if (state === "unknown") {
+          const providers = new TransactionProviderRegistry();
+          providers.register({
+            provider: "duffel",
+            capabilities: {
+              book: true,
+              status: false,
+              cancel: false,
+              reschedule: false,
+              idempotency: false,
+            },
+            execute: async () => ({ status: "unknown", safeReason: "Possible commit." }),
+          });
+          const activities = createBookingActivities(database, providers);
+          const componentId = seeded.transaction!.components[0].componentId;
+          const claim = await activities.claimProviderWrite(seeded.transaction!.id, componentId);
+          await activities.executeProviderWrite(
+            seeded.transaction!.id,
+            componentId,
+            claim.idempotencyKey,
+            claim.requestFingerprint,
+          );
+        }
+        await expect(
+          startBookingRevalidation(database, seeded.userId, seeded.tripId, {
+            requestId: crypto.randomUUID(),
+            expectedVersion: (
+              await database
+                .selectFrom("trips")
+                .select("currentVersion")
+                .where("id", "=", seeded.tripId)
+                .executeTakeFirstOrThrow()
+            ).currentVersion,
+          }),
+        ).rejects.toMatchObject({ code: "booking_continuation_blocked" });
+      });
+    },
+    30_000,
+  );
+
+  it("rejects materially altered saved v2 commitments, including service and included charges", async () => {
+    await withIsolatedTestDatabase(async ({ database }) => {
+      const now = new Date();
+      const seeded = await seedReviewedWholeTrip(database, undefined, "completed", undefined, now);
+      const consent = await authorizeBooking(
+        database,
+        seeded.userId,
+        seeded.tripId,
+        seeded.request,
+        now,
+        seeded.prerequisites,
+      );
+      const parent = await startBooking(
+        database,
+        seeded.userId,
+        seeded.tripId,
+        {
+          requestId: crypto.randomUUID(),
+          authorizationId: consent.id,
+        },
+        { now, prerequisites: seeded.prerequisites },
+      );
+      const original = seeded.terms.components[0];
+      const confirmationId = crypto.randomUUID();
+      await database
+        .insertInto("bookingConfirmations")
+        .values({
+          id: confirmationId,
+          transactionId: parent.id,
+          tripId: seeded.tripId,
+          componentId: original.componentId,
+          providerReference: "recorded-commitment",
+          terms: original,
+          confirmedAt: now,
+        })
+        .execute();
+      const confirmed = {
+        ...original,
+        disposition: "already_confirmed" as const,
+        confirmationId,
+      };
+      const replacements = [
+        { ...confirmed, service: { ...confirmed.service, baggage: ["Altered baggage"] } },
+        { ...confirmed, service: { ...confirmed.service, refundTerms: "Altered refund terms" } },
+        { ...confirmed, service: { ...confirmed.service, changeTerms: "Altered change terms" } },
+        { ...confirmed, taxesMinor: confirmed.taxesMinor + 1 },
+        { ...confirmed, feesMinor: confirmed.feesMinor + 1 },
+        { ...confirmed, nonReversible: !confirmed.nonReversible },
+      ];
+      for (const replacement of replacements) {
+        await expect(
+          inTransaction(database, (transaction) =>
+            new BookingRepository(transaction).assertConfirmedBasis(seeded.tripId, {
+              ...seeded.terms,
+              components: [replacement],
+            }),
+          ),
+        ).rejects.toMatchObject({ code: "booking_commitment_mismatch" });
+      }
+      for (const components of [[], [original]]) {
+        await expect(
+          inTransaction(database, (transaction) =>
+            new BookingRepository(transaction).assertConfirmedBasis(seeded.tripId, {
+              ...seeded.terms,
+              components,
+            }),
+          ),
+        ).rejects.toMatchObject({ code: "booking_commitment_mismatch" });
+      }
+    });
+  }, 30_000);
 });
 
 describe("exact-term authorization invalidation", () => {

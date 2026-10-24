@@ -190,6 +190,57 @@ No real key or supplier endpoint was used.
 
 ## Phase 6: User Story 4 — Understand and recover from a booking attempt (Priority: P1)
 
+### Demo-only priority override (2026-10-24)
+
+The user now prioritizes a clickable booking presentation over working supplier
+booking. Implement this narrow browser-only branch before further production
+execution work. It is not completion of US4/US5 or live supplier/payment
+certification; preserve all existing real authorization/dispatch guards.
+
+- [x] T099 Add failing opt-in and browser-only booking preview regressions, including draft/finalized trips, zero API/SSE calls, no saved-trip mutation, local reset, timer cleanup and clear simulated confirmation.
+- [x] T100 Add explicit `BOOKING_DEMO_ENABLED` server configuration and a separately mounted client-only preview on the existing booking page. Retain trip ownership checks, permit guest preview only when enabled, and never mount real finalization/authorization/status effects in the demo branch.
+- [x] T101 Verify the complete demo by keyboard at 320px and wide viewports, assert no booking API calls or persisted booking changes, preserve existing non-demo behavior, and document activation and limitations without modifying credentials or marking production tasks complete.
+
+**Demo acceptance (2026-10-24):** The opt-in/component regressions first failed
+before implementation. Final affected selection: 81 passed / 8 files / zero skips.
+The new demo browser case passed in all five existing browser/device projects
+(5/5, zero skips) against the production build and an owned isolated PostGIS
+database. All `/api/v1/` requests were blocked/counted, none occurred, and saved
+review/authorization/transaction/component-attempt/outbox state was identical
+before/after local booking, reset and reload. Keyboard completion focus, 320px
+overflow, 1280px layout and reduced-motion operation passed. Screenshot review
+informed demo-only heading hierarchy and checkbox layout. Standalone TypeScript,
+production build/typecheck, zero-warning lint, scoped formatting and Compose
+default-off/web-only wiring passed. No live supplier, payment, worker or agent
+was needed; no real booking or application-database migration occurred.
+This is not manual screen-reader, participant-study or production execution proof.
+
+### Authorized Duffel discovery-only follow-up (2026-10-24)
+
+The user explicitly authorized a sandbox test of `DUFFEL_TRANSACTION_SECRET`,
+then selected reassignment of that token to **discovery only**, removing its
+configured booking role. This is not shared-key mode or automatic fallback.
+Retain `PROVIDER_MODE=deterministic` and client-only checkout; supplier/account/
+currency/production approvals are not inferred. Reuse existing optional credential
+roles rather than weakening their separation validation or adding another mode.
+
+- [x] T102 Verify bounded sandbox shopping and an exact granted offer read using the explicitly authorized token; record safe HTTP/normalization/public-projection evidence and the observed EUR-versus-GBP mismatch without raw credentials, IDs, prices or real traveller data.
+- [x] T103 Reassign the local Duffel `readSecretRef` to the tested variable and remove `transactionSecretRef`, preserving all other suppliers, secret values and demo/provider mode settings. Add synthetic configuration/composition/read regressions proving web-only discovery, no worker authority even with forged declarations, EUR preservation, unknown final customer costs and fail-closed currency changes.
+- [x] T104 Validate the persistent local role mapping without printing secrets, run the affected provider/config/application/demo regressions plus types/lint/format checks, and update the current credential/currency guidance and evidence. Do not change protected environment-example files, infer FX rates, activate live providers globally or check production execution tasks.
+
+**Duffel follow-up acceptance:** 164 tests / 10 files passed with zero skips,
+including the new role/currency cases, restricted Duffel wire, saved real-review
+and client-only demo boundaries. After narrowing opaque supplier results through
+the canonical public parser, the final Duffel read file passed 21/21 (overlapping,
+not additive). Standalone TypeScript, affected zero-warning lint, formatting and
+whitespace checks passed. Existing runtime already supports discovery-only roles;
+no transport, schema, shared-key exception, UI or dependency change was needed.
+The ignored local mapping was verified as persistent, sandbox-only in this setup,
+without a worker reference or changes to other suppliers/modes. No secret value
+was printed/changed; no live-provider activation, app database migration or
+consequential provider request occurred. The protected example was not modified.
+Existing production tasks and participant/accessibility gates remain open.
+
 **Goal**: Safely execute one user-facing whole-trip attempt, preserve partial success and provider truth, and offer complete-trip recovery without blind retries or subset checkout.
 
 **Independent Test**: Seed v2 terms and inject deterministic partial failure, timeout-after-commit, no idempotency/status, invalidation, contradictory evidence and restart. Reopen/reconcile/continue the full trip; confirmed bookings persist, unknown actions never repeat, and no confirmed component enters new writes or payable remainder.
@@ -202,23 +253,75 @@ No real key or supplier endpoint was used.
 
 ### Implementation for User Story 4
 
+Post-restart progress (2026-10-24): the isolated PostgreSQL/Temporal coupled
+selection passed **576 tests / 32 files / zero skips**, including the new
+Nuitee long-ID/object-total persistence variant. User confirmed Viator Basic
+affiliate sandbox access and the one-payment-to-OnHolidai merchant direction.
+Added red-first account-tier/environment readiness guards so Basic/unknown
+Viator tiers cannot be promoted to merchant booking; dedicated Duffel
+discovery-key isolation/permission regressions also pass. The final targeted
+all-contract/config/application/coverage/research selection passed **491 /
+25 files / zero skips** (overlapping, not additive). The current Viator tier
+is insufficient for the required checkout; retain Viator only with merchant
+approval or explicitly reconsider supplier scope. Recommend approved Nuitee
+enterprise CREDIT, Duffel Balance and Viator merchant settlement, separate
+from customer PSP collection. No environment/payment/provider activation
+occurred; T064-T068 and remaining execution work stay incomplete. See
+[current sufficiency evidence](evidence/provider-readiness.md#post-restart-sufficiency-and-account-gates-2026-10-24)
+and [funding direction](research.md#2026-10-24-supplier-sufficiency-and-single-customer-payment-direction).
+
+Progress before PC restart (2026-10-24): restricted Duffel instant-order/status
+wire mapping has 59 passing cases. Authorized read-only checks exposed and
+fixed real Nuitee long offer/rate IDs and object-form offer money; the final
+sandbox lookup/rates now normalize and publicly project one offer, without
+claiming a known customer price or final terms. The focused five-file wire
+selection passes 205 cases with zero skips; the broader available selection
+passes 448 with 17 skipped. Types/build passed. The long-ID/object-total
+persistence variant and coupled DB/Temporal acceptance remain unverified
+because Docker Desktop stopped; the user will restart the PC. Duffel search
+access and Viator sandbox transport remain unresolved. Keep all broader
+provider/execution task boxes below unchanged and v2 dispatch disabled. Exact
+scope, commands and provider observations are in the
+[provider ledger](evidence/provider-readiness.md#authorized-supplier-checks-and-wire-compatibility-follow-up-2026-10-24)
+and [restart checkpoint](quickstart.md#current-stopping-point-before-pc-restart-2026-10-24).
+
 - [ ] T064 [US4] Extend `web/server/supply/transactions.ts` and existing provider transaction factories with canonical immutable provenance routing, verified capability/readiness, opaque trusted prerequisite inputs and safe typed outcomes; remove type-only transfer-to-booking assumptions and ensure read/MCP code cannot import or invoke restricted writes.
 - [ ] T065 [US4] Add failing wire regressions in `web/tests/contract/nuitee-transactions.test.ts`, then implement approved hotel booking/status mappings in `web/server/supply/providers/nuitee-transactions.ts` / `nuitee-transaction-http.ts` behind the existing restricted workflow. Require Nuitee environment-specific entitlement, approved exact-terms/revalidation and trusted guest/payment path; bind selected hotel/room/rate/offer/occupancy and complete mandatory pricing/payment terms. Keep any approved prebook/session/payment state private and transaction-controlled; never use it to obtain changed final terms under stale or absent consent. Reusable prebook IDs are not idempotency guarantees. Prove durable timeout-after-commit guards, correlated authenticated status/non-commit and unknown/manual support without blind retry; keep unsupported operations blocked. No new payment frontend, cancellation product or assumed Duffel flight semantics per FR-016-024/027 and plan: Nuitee stays.
 - [ ] T066 [US4] Implement approved Duffel order/status/payment-related mappings behind `web/server/supply/providers/duffel-transactions.ts` and `web/server/supply/providers/duffel-transaction-http.ts`; preserve exact accepted offer/service/customer terms and safe key/status behavior, keep payment/identity opaque and server-only, and test timeout-after-commit/non-commit outcomes without assuming provider-wide idempotency.
 - [ ] T067 [US4] Implement Viator Partner API booking/status mappings in `web/server/supply/providers/viator-transactions.ts` and `web/server/supply/providers/viator-transaction-http.ts` with wire regressions in `web/tests/contract/viator-transactions.test.ts`; use the same upstream key only inside the restricted worker and require actual booking-tier entitlement plus trusted booking-question/payment prerequisites. Bind product/option/party/exact material terms, keep any necessary hold/cart sequencing entirely inside the authorized workflow, and test uncertain/non-commit/status outcomes without assuming idempotency. Missing entitlement/status remains explicitly blocked/manual; discovery cannot invoke these operations.
 - [ ] T068 [US4] Extend `web/tests/contract/deferred-suppliers.test.ts` and `web/tests/contract/supply-transactions.test.ts` to prove dispatch routes exact immutable Duffel flight/Nuitee stay/Viator activity provenance, rejecting Duffel Stays, Nuitee Flights/Experiences and inactive Booking.com/Trainline/GetYourGuide for new writes or fallback. Preserve original saved Duffel stay and other legacy confirmations/approved status reconciliation without relabelling or new onboarding. Required unresolved rail and unverified stay final terms still block complete-trip authorization per FR-001/003/016/031 and US1/AC9.
-- [ ] T069 [US4] Append `web/server/db/migrations/016_booking_attempt_guards.sql` and extend `web/server/db/booking-repository.ts`, `web/server/db/types.ts` for cross-attempt component/requirement confirmed/in-flight guards, immutable parent/root lineage, safe evidence-conflict state and atomic resolved evidence/confirmation/claim release in existing tables; a fresh authorization/new key cannot clear a possible prior commit.
+- [x] T069 [US4] Append `web/server/db/migrations/016_booking_attempt_guards.sql` and extend `web/server/db/booking-repository.ts`, `web/server/db/types.ts` for cross-attempt component/requirement confirmed/in-flight guards, immutable parent/root lineage, safe evidence-conflict state and atomic resolved evidence/confirmation/claim release in existing tables; a fresh authorization/new key cannot clear a possible prior commit.
 - [ ] T070 [US4] Harden dispatch in `web/server/workflows/book-activities.ts` with common trip/transaction/claim lock order, atomic authorization/version/coverage/readiness/expiry/prerequisite checks and fixed fingerprint/claim before the network call; block conflicting material edits/competing continuations while dispatched/unknown and keep provider calls outside database transactions.
-- [ ] T071 [US4] Make durable outcome/confirmation/duplicate-guard persistence and resolved-claim release atomic across `web/server/workflows/book-activities.ts`, `web/domain/booking/apply-outcomes.ts` and `web/server/db/booking-repository.ts`; enforce “Recording authenticated truth cannot depend on execution authority being active”, retain confirmed-but-changed evidence, and show projection action required instead of dropping truth or overwriting an unrelated trip edit.
-- [ ] T072 [US4] Extend status/callback reconciliation in `web/server/workflows/recover-booking.ts`, `web/server/supply/callbacks.ts` and `web/server/workflows/book-activities.ts` to preserve authenticated truth after expiry/invalidation, deduplicate conflicting evidence, retain unresolved claims and require definitive non-commit evidence before any retry; missing status or elapsed time yields manual support, never renewed authority.
-- [ ] T073 [US4] Extend existing `web/domain/booking/revalidate.ts`, `authorize.ts`, `start.ts` and `web/server/db/booking-repository.ts` for server-derived continuationOf/rootAttemptId, locked prior claims, full current requirement review and exact all-unresolved write set; enforce “Confirmed commitments excluded from writes/new amount”, fresh whole-trip authorization and cross-attempt exclusivity rather than a selected-component retry API.
+- [x] T071 [US4] Make durable outcome/confirmation/duplicate-guard persistence and resolved-claim release atomic across `web/server/workflows/book-activities.ts`, `web/domain/booking/apply-outcomes.ts` and `web/server/db/booking-repository.ts`; enforce “Recording authenticated truth cannot depend on execution authority being active”, retain confirmed-but-changed evidence, and show projection action required instead of dropping truth or overwriting an unrelated trip edit.
+- [x] T072 [US4] Extend status/callback reconciliation in `web/server/workflows/recover-booking.ts`, `web/server/supply/callbacks.ts` and `web/server/workflows/book-activities.ts` to preserve authenticated truth after expiry/invalidation, deduplicate conflicting evidence, retain unresolved claims and require definitive non-commit evidence before any retry; missing status or elapsed time yields manual support, never renewed authority.
+- [x] T073 [US4] Extend existing `web/domain/booking/revalidate.ts`, `authorize.ts`, `start.ts` and `web/server/db/booking-repository.ts` for server-derived continuationOf/rootAttemptId, locked prior claims, full current requirement review and exact all-unresolved write set; enforce “Confirmed commitments excluded from writes/new amount”, fresh whole-trip authorization and cross-attempt exclusivity rather than a selected-component retry API.
 - [ ] T074 [US4] Extend `web/server/workflows/book-trip.ts`, `web/server/workflows/outbox-dispatcher.ts` and `web/server/workflows/booking-contract.ts` to execute each eligible component at most safely once, preserve successful siblings after definitive failure, stop remaining writes on uncertainty/changed basis, recover durable starts/replay without repeating writes and derive not-attempted separately from failed.
 - [ ] T075 [US4] Compose Duffel flight/Nuitee stay/Viator activity deterministic and approved restricted clients in `web/server/workflows/worker-entry.ts` and `web/workers/booking/index.ts`, using existing activity injection, worker-only Duffel write key and each provider's trusted Nuitee/Viator shared key. Register product-aware providers instead of an empty registry, preserve legacy status-only routing and prohibit new Duffel stay/Nuitee Flights/Experiences/deferred-provider writes. Allow v2 dispatch only after guard readiness, with independent operation/environment/payment/final-terms gates and no synthetic live fallback.
 - [ ] T076 [US4] Extend `web/components/booking/status.tsx`, `web/components/booking/recovery.tsx` and `web/components/booking/booking-console.tsx` to restore owner-visible durable/root/continuation results with meaningful names, confirmed/failed/uncertain/action-required/not-attempted text, committed versus new amounts, status checking/support/return-to-planning and one whole-trip continuation; retain separate explicit exact-action cancellation/reschedule boundaries without automatic compensation.
 - [ ] T077 [US4] Run T061–T063 against the actual deterministic worker/database, exercise crash points before/after provider confirmation/local projection and >=100 concurrency/replay cases, and record SC-006 zero duplicate bookings plus preserved truth after invalidation/expiry in `specs/003-supplier-mcp-booking/evidence/transaction-safety.md`; skipped suites are not acceptance.
 - [ ] T078 [US4] Complete real deterministic whole-trip success, partial/uncertain reload/status/recovery and full continuation browser journeys from `web/tests/e2e/booking.spec.ts` and `web/tests/e2e/whole-trip-recovery.spec.ts`; record confirmed-commitment preservation, no subset checkout and linked remaining-payment review in `specs/003-supplier-mcp-booking/evidence/recovery.md` before enabling v2 execution outside tests.
 
-**Checkpoint**: One complete user-facing attempt safely represents non-atomic provider outcomes; possible commits cannot be repeated, confirmations remain visible, and complete-trip continuation is possible only after safe reconciliation and fresh consent.
+**Implementation progress, not US4 acceptance**: T069/T071/T072/T073 are verified against isolated PostgreSQL, real Temporal workflows and injected provider/status clients. Recovery review now derives parent/root, rejects active/uncertain/conflicting predecessors, preserves exact confirmed commitments and authorizes/starts only the full remaining set. Two authorizations yield one child; further review retains the original root. Migration 017 preserves distinct workflow intents at one trip version. Definitive rejection and proven-undispatched local stops project as unbooked while attempt history retains their failure/action-required meaning; possible commits never receive that treatment. The combined selection passed 374 tests across 26 files with zero skips; the final affected outcome/workflow/authorization/privacy selection passed 66 tests across 4 files with zero skips after adding the undispatched regression. Type-check, web lint and shared contract drift passed. Recovery-review browser cases passed in all five configured projects (9/10 initial run, fixture-timeout WebKit case passed an unchanged-limit focused rerun); they prove real database review/consent/reload, not supplier dispatch. One test uses 100 concurrent deliveries; this is not T061/T077's 100-distinct-case whole-trip/continuation matrix. T061-T068, T070 and T074-T078 remain open for their full scopes. V2 execution, provider HTTP mappings/composition and full executing recovery acceptance are not activated or certified. See [transaction safety evidence](evidence/transaction-safety.md) and [recovery evidence](evidence/recovery.md).
+
+**Checkpoint (not yet reached)**: One complete user-facing attempt safely represents non-atomic provider outcomes; possible commits cannot be repeated, confirmations remain visible, and complete-trip continuation is possible only after safe reconciliation and fresh consent.
+
+**2026-10-24 restricted wire progress (T064/T065, not completion)**:
+Added the Nuitee server-only transaction factory and fixed-host booking/status
+HTTP mapping with strictly parsed private prerequisites, same-environment
+operation/final-terms/payment approval gates, immutable attempt/offer/inventory/
+hotel/room/party binding and independent saved-status authority. Original
+decimal prices and actual correlated references survive malformed/changed
+terms; timeout, HTTP errors and duplicate-reference 4005 cannot authorize a
+retry. Extra pricing/add-ons and source input mutation regressions failed
+before their fixes. All 69 new wire cases passed within 435 tests / 25 files,
+zero skips, including PostgreSQL/Temporal authorization/workflow/callback/
+privacy regressions; TypeScript and focused zero-warning lint passed.
+The factory does not install an approved private source, create prebooks,
+compose the stock worker, enable v2 dispatch or replace full executing
+acceptance. T064/T065 remain unchecked for their broader source/composition/
+durable execution obligations. T066-T068/T070/T074-T078 remain open, so US5
+retains its earlier-journey prerequisite. See the
+[provider ledger](evidence/provider-readiness.md#restricted-nuitee-transaction-wire-increment-2026-10-24).
 
 ## Phase 7: User Story 5 — Accessible operation and truthful claims (Priority: P2)
 

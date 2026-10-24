@@ -25,6 +25,281 @@ authorization, not unrelated discovery. Reusable prebook IDs do not prove
 idempotency. Read implementation is not live activation or a successful provider
 probe.
 
+### Authorized Duffel discovery-only token reassignment (2026-10-24)
+
+The user explicitly authorized testing the previously transaction-labelled sandbox
+token. The transport allowed only POST flight offer requests and GET of an exact
+granted offer; timeouts, response bounds, redirects and native-ID grants remained
+unchanged. Synthetic shopping used LHR/LIS and one adult, with no real identities.
+
+- Three shopping requests returned **HTTP 201**. The first GBP normalization
+  attempt returned unsupported; bounded inspection of the second response found
+  16 offers with EUR total/base/tax currencies and valid bounded native IDs.
+  Matching-EUR in-memory replay normalized those offers. This was the correct
+  currency guard, not an authentication or mapper defect.
+- The final EUR provider search returned **16 normalized offers**, HTTP 201 in
+  **658 ms**. GET of the exact first granted offer returned **HTTP 200 in 122 ms**.
+  Public projection produced **2,523 bytes**, matching the selected native ID
+  without printing it; service times were known and customer total remained unknown.
+  Final terms/payment readiness were not established.
+- There were **zero consequential requests**: no prebook, hold, reservation,
+  order, payment, cancellation or reschedule. No raw payload, ID, price, token,
+  account data or real traveller data was saved. The probes did not use
+  production credentials, widen deadlines or change endpoint allowlists.
+
+The user then selected discovery-only reassignment. The ignored local configuration
+now has Duffel `readSecretRef: "DUFFEL_TRANSACTION_SECRET"` with no configured
+`transactionSecretRef`. The old read credential remains untouched but unreferenced;
+this is not a fallback or shared-key mode. A safe config assertion verified the
+persistent binding, sandbox token type, unconfigured Duffel worker actions,
+unchanged Nuitee/Viator mappings, demo enabled and deterministic provider mode.
+No secret values changed or were printed. Operation declarations were not
+promoted to verified; no live-provider or worker activation occurred.
+
+Earlier 403 observations below concern the distinct, now-unreferenced old
+discovery credential. They remain valid historical evidence, not the result for
+the tested token. EUR read success is not approval to relabel/convert GBP trips,
+take payment or book. The protected environment example could not be read and
+was not edited or accessed by another method. Runtime code already supports this
+explicit optional-role configuration; no credential-isolation exception is needed.
+
+Validation: **164 tests / 10 files / zero skips** passed across current
+configuration/application, Duffel read/restricted wire, readiness, real-review/
+recovery/auth and client-only demo boundaries. New synthetic cases prove explicit
+legacy-variable reassignment, absent worker authority even with verified operation
+claims and either demo flag, EUR preservation with unknown fees/customer total,
+every mismatched currency field, changed selected-offer currency and zero implicit
+FX/replacement. Existing sharing/no-fallback regressions remain green.
+The read port intentionally returns unknown data; its new test uses the canonical
+public parser for narrowing rather than a cast. The final affected Duffel read
+file passed **21/21**, overlapping the larger selection. Standalone TypeScript,
+affected zero-warning lint, formatting and `git diff --check` passed. Local config
+validation confirmed the mapping remains ignored and all Duffel worker operations
+unconfigured. No UI/transport/schema/dependency changes were required; prior browser
+evidence was not rerun or recertified by these checks.
+
+### Post-restart sufficiency and account gates (2026-10-24)
+
+This follow-up supersedes only the earlier restart-blocked verification and
+unverified account facts below, not the historical evidence. The user restarted
+the PC, confirmed Docker availability and requested supplier sufficiency as the
+main priority.
+
+**Verdict:** the three providers are a plausible product-lane selection, but
+the **current account setup is not sufficient for unified OnHolidai checkout**.
+The user now confirms **Viator Affiliate Basic Access (sandbox)** and wants one
+customer payment to OnHolidai with independent approved supplier settlement.
+Basic affiliate access cannot satisfy the documented merchant-only
+`/bookings/book` flow. Retain Viator conditionally on merchant onboarding;
+do not silently redirect checkout or activate Nuitee Experiences. Funding and
+alternative decisions are recorded in
+[the current supplier/payment assessment](../research.md#2026-10-24-supplier-sufficiency-and-single-customer-payment-direction).
+
+| Lane | New evidence | Remaining gate |
+| --- | --- | --- |
+| Duffel Flights | The same configured sandbox discovery credential returned HTTP 403 with official code `insufficient_permissions` / `authentication_error` in 278 ms. User approved a separate discovery token with search permission; no booking-key fallback. | Provision that distinct token and retest search. Key presence/reference GETs cannot prove offer-request access, production or funding. |
+| Nuitee stays | Sandbox hotel lookup, rates, property GET and fresh rates all returned HTTP 200 (190 / 4,177 / 132 / 2,220 ms). Initial offer normalized with 1,156/549-character offer/rate IDs and explicitly unknown customer price. | Fresh rates did not contain the original selected offer token; exact detail therefore failed closed without substitute inventory. This observation is not a guarantee that all tokens rotate. Final terms/prebook safety, funding and production remain unapproved. |
+| Viator activities | Sandbox content search returned HTTP 200 with one product in 2,883 ms. A separate one-product content-only normalization probe returned HTTP 200 for search/detail (2,824/171 ms), producing one 2,250-byte public offer. | Probes with date filters timed out within the unchanged deadline; a later content-only attempt also timed out. This is intermittent, not proof that dates cause the failure. Normalized content-only probing is not unmodified date-filtered application-search, party availability, booking or production certification. Basic affiliate tier is insufficient for the requested payment/booking model. |
+
+Only fixed official read endpoints were used with synthetic shopping facts.
+No prebook, hold, booking, payment, cancellation or reschedule was performed,
+and no production authentication fallback or TLS bypass occurred. An additional
+shape-only token check found no JSON/obvious financial-field decoding of the
+sampled tokens; that narrow check is not a blanket privacy guarantee. No raw
+supplier IDs/prices, payloads, credentials or real traveller data were recorded.
+
+Implementation now accepts Viator `accessTier` with default `unknown`. Basic,
+full affiliate and unknown tiers cannot establish this worker's merchant
+booking/idempotency/cancel/reschedule readiness, even with asserted verification.
+Approved saved status additionally permits Full Access + Booking. Merchant or
+status-eligible tier still requires implementation support, the correct process
+credential, operation evidence and matching `VIATOR_ENVIRONMENT`. Wrong/missing
+environment evidence cannot become verified. Discovery remains independent.
+This was proved with failing regressions before implementation, including
+Basic/unknown forgery, status-only eligibility, environment mismatch, absent
+keys/evidence, unsupported/blocked operations and deterministic mode.
+
+The post-restart coupled command in the quickstart passed **576 tests in 32
+files with zero skips**, including actual PostgreSQL/Temporal, the new
+long-ID/object-money persistence variant, authorization, workflows, callbacks,
+privacy and migration compatibility. After adding the account-tier gate,
+the targeted all-contract/config/application/coverage/research selection passed
+**491 tests in 25 files with zero skips**. These selections overlap and must not
+be added. Duffel regressions also prove configured search/detail/revalidation
+use only the dedicated discovery token, a worker-only token composes no read
+provider, and HTTP 403 causes no retry, raw error leak or key escalation.
+
+The recommended settlement target is approved Nuitee enterprise CREDIT,
+Duffel Balance and Viator merchant terms, separate from one customer PSP
+payment. No funding path, processor or capture/refund policy was installed.
+The local environment was not modified. The stock worker registry/v2 dispatch
+denial and remaining US4/US5 scope are unchanged; this is not full release or
+live supplier execution certification.
+
+Final verification also passed standalone TypeScript, production build, full
+zero-warning web lint, canonical export/drift checks and 16 shared supply wire
+cases. The latest four-file entitlement/isolation selection passed 62 tests
+with zero skips (overlapping the broader selections). The owned disposable
+PostgreSQL container was stopped and auto-removed; no application database was
+migrated. No implementation extension hooks were configured.
+
+### Authorized supplier checks and wire compatibility follow-up (2026-10-24)
+
+The user authorized supplier testing. This increment used only official,
+bounded read operations with synthetic shopping facts and the corresponding
+configured credentials. It did not enable live application mode, substitute
+Duffel's transaction key, switch Viator to production, or perform any prebook,
+hold, reservation, payment, cancellation or reschedule. No credential values,
+real offer/rate IDs, supplier prices, raw responses or traveller data were
+persisted in evidence.
+
+| Product | Actual authenticated result | Interpretation |
+| --- | --- | --- |
+| Duffel Flights | Read-key offer search returned HTTP 403 / `access_blocked`; the same key's airline lookup returned HTTP 200 with one record in sandbox token mode. | Authentication/reference access works; this search is denied. The exact scope/entitlement cause is not established. No key escalation or search certification. |
+| Nuitee stays | Countries returned HTTP 200 with 249 records. Sourced Lisbon hotel lookup and rates returned HTTP 200. The final corrected client normalized and publicly projected one offer. | Narrow sandbox lookup/rates and normalization evidence only; no final-terms, payment or booking approval. |
+| Viator activities | Two sandbox product-search attempts received no HTTP response before their unchanged approximately eight-second deadlines, including one IPv4-first diagnostic. | Transport remains unavailable/unverified; no claim about authentication or entitlement and no production fallback. |
+
+Actual Nuitee responses exposed two gaps missed by the short synthetic
+fixtures:
+
+- The sampled offer ID was 1,156 characters with Base64 punctuation; its rate ID
+  was 549 characters. Offer/rate tokens now remain exact, bounded to 4,096
+  characters through read normalization, canonical/public offers, accepted
+  components, coverage/consent and private booking/status bases. Hotel, room,
+  booking and URL identifiers retain their existing separate bounds. There is
+  no truncation, invented alias, changed consent canonicalization or migration
+  rewrite. Canonical JSON contracts were regenerated; the agent's existing
+  validator consumes the same generated public-offer schema.
+- The served offer-level `offerRetailRate` and `suggestedSellingPrice` were
+  money objects, while the published rates schema describes one-element
+  arrays. Both forms are supported at those two fields only. Per-room totals
+  remain strict arrays; currency, exact decimal precision, safe arithmetic
+  and summed room/offer consistency still apply. Enriched public selling
+  totals with potentially overlapping property charges leave customer price
+  explicitly unknown rather than adding charges twice.
+
+The final real lookup/rates took 142/1,571 ms respectively and returned
+HTTP 200. One normalized offer became one public offer of 4,287 serialized
+bytes, preserving the 1,156/549-character identifiers exactly. Customer price
+remained explicitly unknown; final terms were **not** verified. These are
+individual observations, not latency/SLA acceptance or general market/party
+coverage. One separate shape diagnostic without proper JSON headers returned
+HTTP 400; it is not classified as an entitlement failure. Correctly formed
+diagnostics and the final existing-client request succeeded.
+
+Added restricted Duffel instant-order/saved-status mapping behind explicit
+environment, operation, final-terms, payment and trusted identity gates.
+Only fixed Orders create/read endpoints and approved balance/ARC-BSP instant
+payments are supported; no hold, standalone payment, card collection or
+ancillary/change product is enabled. Mapping checks actual paid status,
+route/passenger/fare/baggage/service/pricing/policy truth. Correlated changed,
+incomplete or unpaid results preserve references with unverified terms.
+Mutable saved-order metadata cannot suppress authenticated saved status.
+Idempotency remains false and uncertain writes are not retried. Primary
+authority is Duffel's [create-order](https://duffel.com/docs/api/v2/orders/create-order)
+and [get-order-by-id](https://duffel.com/docs/api/v2/orders/get-order-by-id)
+documentation; no real order or payment call was executed.
+
+The focused five-file wire selection passed **205 tests with zero skips**:
+59 Duffel transaction cases, 70 Nuitee transaction cases, 43 Nuitee read cases
+and 33 shared/deferred-provider cases. Red-first regressions reproduced both
+actual normalization failures. New cases cover exact boundary/oversize/unsafe
+IDs, accepted snapshot/consent binding, private booking/saved-status identity,
+object/array money variants and ambiguous enriched charges. Thirty-two
+representative long-ID public offers fit the unchanged 262,144-byte MCP
+output budget. The existing two-room persistence/detail/revision case now
+uses realistic synthetic long IDs and object totals, but its new variant
+**has not run** because Docker Desktop stopped during isolated database
+creation and subsequently reported "unable to start."
+
+The broader available web selection passed **448 tests with 17 skipped**;
+this is not a non-skipped database/Temporal certificate and overlaps the
+focused wire selection. TypeScript, full zero-warning web lint, production
+build, canonical drift/shared wire validation and **48 agent MCP/contract
+export tests** passed. Earlier
+database/Temporal evidence remains historical, not evidence for the new
+persistence variant. The user requested a clean stopping point before a PC
+restart. Rerun the isolated database-dependent research, authorization,
+workflow, callback, privacy and migration checks after restart.
+
+The stock worker's empty transaction registry and v2 consequential dispatch
+denial remain in place. No T064-T068 completion, live activation, full US4/US5
+completion or participant/accessibility certification is inferred.
+
+### Restricted Nuitee transaction wire increment (2026-10-24)
+
+Implemented `web/server/supply/providers/nuitee-transaction-http.ts` and
+`nuitee-transactions.ts` behind the existing transaction adapter contract.
+These are restricted server modules, not discovery/MCP imports or a payment
+frontend. The stock worker is still unchanged; its empty transaction registry,
+the v2 dispatch denial and unsupported live hotel final revalidation remain.
+This increment does not certify T064/T065, complete US4 or enable live writes.
+
+Primary wire authority:
+
+- [Hotel booking schema](https://docs.liteapi.travel/reference/post_rates-book.md):
+  fixed booking host, `POST /rates/book`, `X-API-Key`, `prebookId`, holder,
+  primary guest for each room and an approved payment method. The schema's
+  transaction-based method is `TRANSACTION_ID`, not the prose's `TRANSACTION`.
+- [Saved booking schema](https://docs.liteapi.travel/reference/get_bookings-bookingid.md):
+  fixed booking host, `GET /bookings/{bookingId}`. An actual booking ID is
+  required; a prebook ID or lost response is not sufficient status correlation.
+- The current booking schema describes `clientReference` duplicate detection
+  with error 4005. The client sends a stable hashed attempt reference but does
+  not infer safe retries or resolved non-commit from that error. Capability
+  `idempotency` remains false; durable dispatch/possible-commit guards remain
+  mandatory. No list-by-reference or duplicate-response booking ID is invented.
+
+Booking requires explicit same-environment booking/final-terms evidence
+references, approved payment methods and a separately injected trusted private
+source. Key presence alone cannot enable it. The source must bind the immutable
+attempt key and request fingerprint to the exact offer/inventory, hotel, rooms,
+room/rate/board selections, local dates, occupancy and private provider prices
+and cancellation conditions. It must supply an already approved prebook and
+guest/payment payload; the client never creates a prebook, hold or payment
+session. These source interfaces and their runtime schemas are implemented,
+but **no actual approved private source or deployment approval is installed**.
+Raw-card methods and arbitrary additional booking payload fields are rejected.
+
+Status access is independent of fresh booking, payment and consent expiry.
+Saved reference plus hashed attempt reference must correlate the authenticated
+response. Missing references require manual support without an HTTP guess.
+Transport/HTTP/malformed/pending/duplicate errors remain unknown and cause no
+automatic retry. Canceled bookings are not evidence that an original booking
+never committed. If the response confirms the saved booking but actual terms
+are incomplete, relocated, changed or cannot be reconstructed, preserve the
+reference/evidence with unverified terms rather than copying the authorized
+terms into a false unchanged confirmation. Existing atomic outcome ingestion
+then retains the reference and unresolved guard for support.
+
+Private sources receive isolated request/context copies. They cannot mutate
+the caller's immutable attempt or redirect status correlation while awaiting
+prerequisites. Source failures are explicit safe prerequisite problems; an
+unavailable status terms source does not suppress an already authenticated
+confirmation. Prices retain their original JSON decimal tokens. Additional
+selling prices must match the approved quote; unhandled add-ons require manual
+review, not an assumed included/zero charge.
+
+| Executed check | Result |
+| --- | --- |
+| New wire test before implementation | Failed because the restricted module did not yet exist |
+| Additional pricing regressions | 3 failed before handling selling prices/add-ons |
+| Resolver mutation regressions | 2 failed before isolating immutable inputs |
+| New Nuitee wire suite | 69 cases passed within the combined run below |
+| All web contracts, config/coverage units, booking authorization/workflows/callback/privacy integration | 435 passed / 25 files; zero skips |
+| TypeScript and focused ESLint (`--max-warnings 0`) | Passed |
+| Complete web ESLint, production Next.js build and whitespace validation | Passed |
+| Agent/snapshot contract drift and shared supply wire validation | Passed; 16 shared cases |
+
+The first broad run lacked disposable database variables and skipped 18 cases;
+it is not acceptance evidence. The final 435-case run used a new task-owned
+loopback PostGIS container with synthetic migration/web/worker roles and real
+Temporal test workflows. Wire HTTP remained mocked. No supplier transaction,
+real traveller/payment data, application database or actual environment file
+was used. These cases do not replace the remaining 100-distinct-case executing
+matrix, stock worker/provider composition, full executing browser journeys or
+US5's accessibility/participant evidence.
+
 ### Subsequent discovery acceptance
 
 T028/T031/T032 are complete; see the

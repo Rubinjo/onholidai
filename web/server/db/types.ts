@@ -234,6 +234,9 @@ export interface BookingTransactionTable {
   completedAt: Timestamp | null;
 }
 export interface BookingComponentAttemptTable {
+  requirementIds: Generated<string[]>;
+  providerEvidence: Generated<unknown[]>;
+  evidenceConflict: Generated<boolean>;
   id: string;
   transactionId: string;
   tripId: string;

@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createDuffelFlightsHttpClient } from "../../server/supply/providers/duffel-http";
 import { createDuffelReadProvider } from "../../server/supply/providers/duffel-read";
+import { createConfiguredPlanningProviders } from "../../server/supply/providers";
+import { loadServerConfig } from "../../server/config";
+import { projectPublicPlanningOffer } from "../../server/supply/offers";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
 import type { SupplyReadQuery } from "../../server/supply/read";
@@ -58,6 +61,217 @@ function setup(payload: unknown = { data: { offers: [offer()] } }) {
   return { client, transport };
 }
 describe("Duffel Flights synthetic HTTP wire", () => {
+  it("uses an explicitly reassigned discovery-only token for EUR offers without creating worker authority", async () => {
+    const environment = {
+      PROVIDER_MODE: "live",
+      BOOKING_DEMO_ENABLED: "true",
+      DUFFEL_READ_SECRET: "duffel_test_synthetic_unused",
+      DUFFEL_TRANSACTION_SECRET: "duffel_test_synthetic_discovery_only",
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        duffel: { readSecretRef: "DUFFEL_TRANSACTION_SECRET" },
+      }),
+    };
+    const source = {
+      ...offer(),
+      base_currency: "EUR",
+      tax_currency: "EUR",
+      total_currency: "EUR",
+    };
+    const transport = vi.fn<typeof fetch>(async (url) =>
+      Response.json({
+        data: String(url).includes("/offer_requests?") ? { offers: [source] } : source,
+      }),
+    );
+    const [provider] = createConfiguredPlanningProviders(
+      loadServerConfig(environment),
+      environment,
+      { fetch: transport, flightDestination: () => "JFK" },
+    );
+    const signal = new AbortController().signal;
+    const input = { ...query(), currency: "EUR" };
+    const offers = await provider.search(input, signal);
+    const selected = projectPublicPlanningOffer(
+      await provider.detail!("off_synthetic1", input, signal),
+      now(),
+    );
+    expect(offers).toHaveLength(1);
+    expect(selected.component.supplierOfferId).toBe(
+      projectPublicPlanningOffer(offers[0], now()).component.supplierOfferId,
+    );
+    expect(selected.component.price).toMatchObject({
+      currency: "EUR",
+      finalCustomerMinor: null,
+      feesMinor: null,
+    });
+    for (const [, init] of transport.mock.calls) {
+      expect(new Headers(init?.headers).get("authorization")).toBe(
+        `Bearer ${environment.DUFFEL_TRANSACTION_SECRET}`,
+      );
+      expect(JSON.stringify(init)).not.toContain(environment.DUFFEL_READ_SECRET);
+    }
+    expect(transport.mock.calls.map(([url, init]) => `${init?.method} ${url}`)).toEqual([
+      "POST https://api.duffel.com/air/offer_requests?return_offers=true",
+      "GET https://api.duffel.com/air/offers/off_synthetic1",
+    ]);
+    expect(JSON.stringify(selected)).not.toMatch(
+      /synthetic_discovery_only|synthetic_unused|client_key|SecretRef/,
+    );
+    expect(Object.keys(provider).sort()).toEqual([
+      "capabilities",
+      "detail",
+      "revalidate",
+      "search",
+    ]);
+  });
+
+  it.each(["base_currency", "tax_currency", "total_currency"])(
+    "does not relabel an incompatible %s or grant its offer for detail",
+    async (field) => {
+      const source = {
+        ...offer(),
+        base_currency: "EUR",
+        tax_currency: "EUR",
+        total_currency: "EUR",
+        [field]: "GBP",
+      };
+      const { client, transport } = setup({ data: { offers: [source] } });
+      const input = { ...query(), currency: "EUR" };
+      const signal = new AbortController().signal;
+      await expect(client.search(input, signal)).rejects.toMatchObject({
+        status: "unsupported",
+      });
+      await expect(client.detail(source.id, input, signal)).rejects.toMatchObject({
+        status: "unsupported",
+      });
+      expect(transport).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("rejects EUR shopping results for a GBP trip without inferring an exchange rate", async () => {
+    const source = {
+      ...offer(),
+      base_currency: "EUR",
+      tax_currency: "EUR",
+      total_currency: "EUR",
+    };
+    const { client, transport } = setup({ data: { offers: [source] } });
+    await expect(client.search(query(), new AbortController().signal)).rejects.toMatchObject({
+      status: "unsupported",
+    });
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["detail", "revalidate"] as const)(
+    "rejects a changed selected-offer currency during %s without conversion or a replacement offer",
+    async (operation) => {
+      const { client, transport } = setup();
+      const signal = new AbortController().signal;
+      await client.search(query(), signal);
+      transport.mockImplementation(async () =>
+        Response.json({
+          data: {
+            ...offer(),
+            base_currency: "EUR",
+            tax_currency: "EUR",
+            total_currency: "EUR",
+          },
+        }),
+      );
+      await expect(client[operation]("off_synthetic1", query(), signal)).rejects.toMatchObject({
+        status: "unsupported",
+      });
+      expect(transport).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("uses only the dedicated discovery token for configured search and granted offer reads", async () => {
+    const environment = {
+      PROVIDER_MODE: "live",
+      DUFFEL_READ_SECRET: "duffel_test_synthetic_discovery_rw",
+      DUFFEL_TRANSACTION_SECRET: "duffel_test_synthetic_worker_rw",
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        duffel: {
+          readSecretRef: "DUFFEL_READ_SECRET",
+          transactionSecretRef: "DUFFEL_TRANSACTION_SECRET",
+        },
+      }),
+    };
+    const transport = vi.fn<typeof fetch>(async (url) =>
+      Response.json({
+        data: String(url).includes("/offer_requests?") ? { offers: [offer()] } : offer(),
+      }),
+    );
+    const [provider] = createConfiguredPlanningProviders(
+      loadServerConfig(environment),
+      environment,
+      { fetch: transport, flightDestination: () => "JFK" },
+    );
+    const signal = new AbortController().signal;
+    await provider.search(query(), signal);
+    await provider.detail!("off_synthetic1", query(), signal);
+    await provider.revalidate!("off_synthetic1", query(), signal);
+    expect(transport.mock.calls.map(([url, init]) => `${init?.method} ${url}`)).toEqual([
+      "POST https://api.duffel.com/air/offer_requests?return_offers=true",
+      "GET https://api.duffel.com/air/offers/off_synthetic1",
+      "GET https://api.duffel.com/air/offers/off_synthetic1",
+    ]);
+    for (const [, init] of transport.mock.calls) {
+      expect(new Headers(init?.headers).get("authorization")).toBe(
+        `Bearer ${environment.DUFFEL_READ_SECRET}`,
+      );
+      expect(JSON.stringify(init)).not.toContain(environment.DUFFEL_TRANSACTION_SECRET);
+    }
+    for (const operation of ["execute", "book", "getStatus", "cancel", "reschedule"])
+      expect(provider).not.toHaveProperty(operation);
+  });
+
+  it("does not compose a discovery client from a worker-only Duffel token", () => {
+    const environment = {
+      PROVIDER_MODE: "live",
+      DUFFEL_TRANSACTION_SECRET: "duffel_test_synthetic_worker_rw",
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        duffel: { transactionSecretRef: "DUFFEL_TRANSACTION_SECRET" },
+      }),
+    };
+    const transport = vi.fn<typeof fetch>();
+    expect(
+      createConfiguredPlanningProviders(loadServerConfig(environment), environment, {
+        fetch: transport,
+        flightDestination: () => "JFK",
+      }),
+    ).toEqual([]);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it("reports insufficient search permissions without retrying or falling back to a booking key", async () => {
+    const transport = vi.fn<typeof fetch>(async () =>
+      Response.json(
+        {
+          errors: [
+            {
+              code: "insufficient_permissions",
+              type: "authentication_error",
+              message: "private-supplier-permission-canary",
+            },
+          ],
+        },
+        { status: 403 },
+      ),
+    );
+    const client = createDuffelFlightsHttpClient({
+      readToken: "duffel_test_synthetic_dedicated_discovery",
+      fetch: transport,
+      resolveDestination: () => "JFK",
+    });
+    const failure = client.search(query(), new AbortController().signal);
+    await expect(failure).rejects.toMatchObject({ status: "access_blocked" });
+    await expect(failure).rejects.not.toThrow("private-supplier-permission-canary");
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport.mock.calls[0][0]).toBe(
+      "https://api.duffel.com/air/offer_requests?return_offers=true",
+    );
+  });
+
   it("constructs only documented round-trip search fields and exact minor amounts", async () => {
     const { client, transport } = setup();
     const hits = await client.search(query(), new AbortController().signal);

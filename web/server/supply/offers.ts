@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   componentBaseFields,
+  MAX_SUPPLIER_ID_LENGTH,
   componentPriceFields,
   moneySchema,
   currencySchema,
@@ -60,13 +61,13 @@ const planningOfferFields = {
       accommodationId: z.string().max(256).optional(),
       searchResultId: z.string().max(256).optional(),
       roomId: z.string().max(256).optional(),
-      rateId: z.string().max(256).optional(),
+      rateId: z.string().max(MAX_SUPPLIER_ID_LENGTH).optional(),
       quoteId: z.string().max(256).optional(),
       productCode: z.string().max(256).optional(),
       optionCode: z.string().max(256).optional(),
       availabilityId: z.string().max(256).optional(),
       roomIds: z.array(z.string().max(256)).max(16).optional(),
-      rateIds: z.array(z.string().max(256)).max(16).optional(),
+      rateIds: z.array(z.string().max(MAX_SUPPLIER_ID_LENGTH)).max(16).optional(),
       sessionId: z.string().max(256).optional(),
     })
     .strict()

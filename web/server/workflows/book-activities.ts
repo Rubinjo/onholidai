@@ -2,8 +2,9 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 
 import { resolveBookingActor } from "@/server/auth/planning-actor";
+import { lockBookingEvidenceTrip, lockBookingTrip } from "@/server/auth/booking-access";
 import {
-  bookingComponentTermsSchema,
+  bookingTermsV2ComponentSchema,
   canonicalBookingJson,
   hashBookingTerms,
   isWholeTripTerms,
@@ -13,16 +14,18 @@ import {
   type BookingComponentState,
   type BookingTransaction,
 } from "@/domain/booking/schema";
+import { tripSnapshotSchema } from "@/domain/trip/schema";
 import { inTransaction } from "@/server/db/transaction";
 import { BookingRepository } from "@/server/db/booking-repository";
 import {
   providerForComponent,
   type TransactionProviderRegistry,
+  type TransactionOutcome,
 } from "@/server/supply/transactions";
 import { applyBookingOutcome } from "@/domain/booking/apply-outcomes";
 
 import type { Database } from "@/server/db/database";
-import type { Kysely } from "kysely";
+import type { Kysely, Transaction } from "kysely";
 import type { BookingWorkflowActivities } from "./booking-contract";
 
 export function createBookingActivities(
@@ -34,9 +37,150 @@ export function createBookingActivities(
       .selectFrom("bookingTransactions")
       .selectAll()
       .where("id", "=", transactionId)
-      .executeTakeFirst();
-    if (!row) throw new Error("Booking transaction not found");
+      .executeTakeFirstOrThrow();
     return projectBookingTransactionRow(row);
+  }
+
+  async function lockBasis(dbtx: Transaction<Database>, transactionId: string) {
+    const identity = await dbtx
+      .selectFrom("bookingTransactions")
+      .select(["tripId", "ownerUserId"])
+      .where("id", "=", transactionId)
+      .executeTakeFirstOrThrow();
+    const actor = await resolveBookingActor(dbtx, identity.tripId, identity.ownerUserId);
+    const trip = await lockBookingTrip(dbtx, actor, identity.tripId);
+    if (!trip) throw new Error("Trip ownership changed");
+    const row = await dbtx
+      .selectFrom("bookingTransactions")
+      .selectAll()
+      .where("id", "=", transactionId)
+      .forUpdate()
+      .executeTakeFirstOrThrow();
+    return { trip, booking: projectBookingTransactionRow(row) };
+  }
+
+  async function checkBasis(
+    dbtx: Transaction<Database>,
+    locked: Awaited<ReturnType<typeof lockBasis>>,
+    componentId: string,
+  ) {
+    const { booking, trip } = locked;
+    if (isWholeTripTerms(booking.executionBasis.terms))
+      return "Whole-trip provider execution is not activated";
+    if (!booking.components.some((component) => component.componentId === componentId))
+      return "Component is outside authorization";
+    if (booking.executionStatus !== "active") return "Execution basis is invalid or expired";
+    let failure: string | null = null;
+    const expired = Date.parse(booking.executionBasis.expiresAt) <= Date.now();
+    if (expired) failure = "Execution basis has expired";
+    else if (hashBookingTerms(booking.executionBasis.terms) !== booking.executionBasis.termsHash)
+      failure = "Execution terms no longer match the authorization hash";
+    else if (trip.currentVersion !== booking.lastObservedTripVersion) {
+      const advanced = await dbtx
+        .selectFrom("tripVersions")
+        .select(["version", "initiatingActor"])
+        .where("tripId", "=", booking.tripId)
+        .where("version", ">", booking.lastObservedTripVersion)
+        .where("version", "<=", trip.currentVersion)
+        .orderBy("version")
+        .execute();
+      const evidence = await dbtx
+        .selectFrom("bookingVersionEvidence")
+        .select(["tripVersion", "transactionId", "materialTermsHash"])
+        .where("tripId", "=", booking.tripId)
+        .where("tripVersion", ">", booking.lastObservedTripVersion)
+        .where("tripVersion", "<=", trip.currentVersion)
+        .orderBy("tripVersion")
+        .execute();
+      if (
+        advanced.length !== trip.currentVersion - booking.lastObservedTripVersion ||
+        evidence.length !== advanced.length ||
+        evidence.some(
+          (item) =>
+            item.transactionId !== booking.id ||
+            item.materialTermsHash !== booking.executionBasis.termsHash,
+        ) ||
+        advanced.some((version) => version.initiatingActor !== "booking_workflow")
+      )
+        failure = "Trip changed outside this booking transaction";
+      else {
+        await dbtx
+          .updateTable("bookingTransactions")
+          .set({ lastObservedTripVersion: trip.currentVersion })
+          .where("id", "=", booking.id)
+          .execute();
+        booking.lastObservedTripVersion = trip.currentVersion;
+      }
+    }
+    if (failure) {
+      await dbtx
+        .updateTable("bookingTransactions")
+        .set({ executionStatus: expired ? "expired" : "invalidated", status: "action_required" })
+        .where("id", "=", booking.id)
+        .execute();
+      await new BookingRepository(dbtx).releaseUndispatchedClaims(booking.id);
+    }
+    return failure;
+  }
+
+  function requestIdentity(booking: BookingTransaction, componentId: string) {
+    const terms = booking.executionBasis.terms.components.find(
+      (item) => item.componentId === componentId,
+    );
+    if (!terms) throw new Error("Authorized terms do not include this component");
+    return {
+      terms,
+      idempotencyKey: `${booking.id}:${componentId}:${booking.operation}:${booking.executionBasis.termsHash}`,
+      requestFingerprint: createHash("sha256")
+        .update(canonicalBookingJson({ operation: booking.operation, terms }))
+        .digest("hex"),
+    };
+  }
+
+  async function componentProvider(booking: BookingTransaction, componentId: string) {
+    const version = await database
+      .selectFrom("tripVersions")
+      .select("snapshot")
+      .where("tripId", "=", booking.tripId)
+      .where("version", "=", booking.executionBasis.startingTripVersion)
+      .executeTakeFirstOrThrow();
+    const component = tripSnapshotSchema
+      .parse(version.snapshot)
+      .components.find((item) => item.id === componentId);
+    if (!component) throw new Error("Authorized component is missing from trip snapshot");
+    const terms = booking.executionBasis.terms;
+    if (isWholeTripTerms(terms)) {
+      const authorized = terms.components.find((entry) => entry.componentId === componentId);
+      if (
+        !authorized ||
+        authorized.provider !== component.provider ||
+        authorized.service.type !== component.type
+      )
+        throw new Error("Provider provenance differs from the immutable authorized product");
+    }
+    return {
+      provider: providerForComponent(component.type, component.provider),
+      type: component.type,
+    };
+  }
+
+  async function record(
+    transactionId: string,
+    componentId: string,
+    idempotencyKey: string,
+    result: TransactionOutcome,
+    reconciled: boolean,
+  ) {
+    return inTransaction(database, (dbtx) =>
+      new BookingRepository(dbtx).recordProviderEvidence({
+        transactionId,
+        componentId,
+        idempotencyKey,
+        result,
+        reconciled,
+        now: new Date(),
+      }),
+    );
   }
 
   return {
@@ -45,147 +189,55 @@ export function createBookingActivities(
     },
 
     async assertExecutionBasis(transactionId: string, componentId: string) {
-      const transaction = await load(transactionId);
-      if (isWholeTripTerms(transaction.executionBasis.terms))
-        throw new Error("Whole-trip provider execution is not activated");
-      if (transaction.executionStatus !== "active") {
-        throw new Error("Execution basis is invalid or expired");
-      }
-      if (Date.parse(transaction.executionBasis.expiresAt) <= Date.now()) {
-        await database
-          .updateTable("bookingTransactions")
-          .set({ executionStatus: "expired", status: "action_required" })
-          .where("id", "=", transaction.id)
-          .execute();
-        throw new Error("Execution basis has expired");
-      }
-      if (
-        hashBookingTerms(transaction.executionBasis.terms) !== transaction.executionBasis.termsHash
-      ) {
-        await database
-          .updateTable("bookingTransactions")
-          .set({ executionStatus: "invalidated", status: "action_required" })
-          .where("id", "=", transaction.id)
-          .execute();
-        throw new Error("Execution terms no longer match the authorization hash");
-      }
-      if (!transaction.components.some((component) => component.componentId === componentId))
-        throw new Error("Component is outside authorization");
-      const actor = await resolveBookingActor(
-        database,
-        transaction.tripId,
-        transaction.executionBasis.ownerUserId,
+      const failure = await inTransaction(database, async (dbtx) =>
+        checkBasis(dbtx, await lockBasis(dbtx, transactionId), componentId),
       );
-      const trip = await database
-        .selectFrom("trips")
-        .select(["currentVersion", "ownerUserId"])
-        .where("id", "=", transaction.tripId)
-        .executeTakeFirst();
-      if (!trip || trip.ownerUserId !== actor.planningOwnerId)
-        throw new Error("Trip ownership changed");
-      if (trip.currentVersion === transaction.lastObservedTripVersion) return;
-      const advanced = await database
-        .selectFrom("tripVersions")
-        .select(["version", "initiatingActor", "initiatingRequestId"])
-        .where("tripId", "=", transaction.tripId)
-        .where("version", ">", transaction.lastObservedTripVersion)
-        .where("version", "<=", trip.currentVersion)
-        .orderBy("version")
-        .execute();
-      const evidence = await database
-        .selectFrom("bookingVersionEvidence")
-        .select(["tripVersion", "transactionId", "materialTermsHash"])
-        .where("tripId", "=", transaction.tripId)
-        .where("tripVersion", ">", transaction.lastObservedTripVersion)
-        .where("tripVersion", "<=", trip.currentVersion)
-        .orderBy("tripVersion")
-        .execute();
-      if (
-        advanced.length !== trip.currentVersion - transaction.lastObservedTripVersion ||
-        evidence.length !== advanced.length ||
-        evidence.some(
-          (item) =>
-            item.transactionId !== transaction.id ||
-            item.materialTermsHash !== transaction.executionBasis.termsHash,
-        ) ||
-        advanced.some((version) => version.initiatingActor !== "booking_workflow")
-      ) {
-        await database
-          .updateTable("bookingTransactions")
-          .set({ executionStatus: "invalidated" })
-          .where("id", "=", transaction.id)
-          .execute();
-        throw new Error("Trip changed outside this booking transaction");
-      }
-      await database
-        .updateTable("bookingTransactions")
-        .set({ lastObservedTripVersion: trip.currentVersion })
-        .where("id", "=", transaction.id)
-        .execute();
+      if (failure) throw new Error(failure);
     },
 
     async claimProviderWrite(transactionId: string, componentId: string) {
-      const transaction = await load(transactionId);
-      if (isWholeTripTerms(transaction.executionBasis.terms))
-        throw new Error("Whole-trip provider execution is not activated");
-      const terms = transaction.executionBasis.terms.components.find(
-        (item) => item.componentId === componentId,
-      );
-      if (!terms) throw new Error("Authorized terms do not include this component");
-      const idempotencyKey = `${transaction.id}:${componentId}:${transaction.operation}:${transaction.executionBasis.termsHash}`;
-      const requestFingerprint = createHash("sha256")
-        .update(canonicalBookingJson({ operation: transaction.operation, terms }))
-        .digest("hex");
-      const attemptId = randomUUID();
-      const claimed = await inTransaction(database, async (dbtx) => {
-        const repo = new BookingRepository(dbtx);
-        const existingAttempt = await dbtx
+      const result = await inTransaction(database, async (dbtx) => {
+        const locked = await lockBasis(dbtx, transactionId);
+        const { booking } = locked;
+        const { terms, idempotencyKey, requestFingerprint } = requestIdentity(booking, componentId);
+        const failure = await checkBasis(dbtx, locked, componentId);
+        if (failure) return { allowed: false, idempotencyKey, requestFingerprint, failure };
+        const existing = await dbtx
           .selectFrom("bookingComponentAttempts")
-          .select(["requestFingerprint"])
-          .where("operation", "=", transaction.operation)
+          .select("requestFingerprint")
+          .where("operation", "=", booking.operation)
           .where("idempotencyKey", "=", idempotencyKey)
           .forUpdate()
           .executeTakeFirst();
-        if (existingAttempt) {
-          if (existingAttempt.requestFingerprint !== requestFingerprint)
-            throw new Error("Provider idempotency key fingerprint conflict");
-          return false;
-        }
-        const current = await dbtx
-          .selectFrom("bookingTransactions")
-          .select(["lastObservedTripVersion", "executionBasis"])
-          .where("id", "=", transactionId)
-          .executeTakeFirst();
-        if (!current) return false;
-        const basis = current.executionBasis as BookingTransaction["executionBasis"];
-        await dbtx
-          .insertInto("bookingComponentAttempts")
-          .values({
-            id: attemptId,
-            transactionId,
-            tripId: transaction.tripId,
-            componentId,
-            operation: transaction.operation,
-            idempotencyKey,
-            requestFingerprint,
-            providerAttempt: 1,
-            status: "claimed",
-            providerReference: null,
-            safeReason: null,
-            statusCheckedAt: null,
-          })
-          .execute();
-        return repo.claimComponentWrite({
-          tripId: transaction.tripId,
+        if (
+          existing?.requestFingerprint !== undefined &&
+          existing.requestFingerprint !== requestFingerprint
+        )
+          throw new Error("Provider idempotency key fingerprint conflict");
+        if (existing) return { allowed: false, idempotencyKey, requestFingerprint, failure: null };
+        const allowed = await new BookingRepository(dbtx).claimComponentWrite({
+          tripId: booking.tripId,
           componentId,
           transactionId,
-          attemptId,
-          expectedVersion: current.lastObservedTripVersion,
-          expiresAt: new Date(basis.expiresAt),
+          attemptId: randomUUID(),
+          expectedVersion: booking.lastObservedTripVersion,
+          expiresAt: new Date(booking.executionBasis.expiresAt),
           now: new Date(),
+          operation: booking.operation,
+          idempotencyKey,
+          requestFingerprint,
+          requirementIds: isWholeTripTerms(booking.executionBasis.terms)
+            ? bookingTermsV2ComponentSchema.parse(terms).evidence.requirementIds
+            : [],
         });
+        return { allowed, idempotencyKey, requestFingerprint, failure: null };
       });
-      return { allowed: claimed, idempotencyKey, requestFingerprint };
+      if (result.failure) throw new Error(result.failure);
+      return {
+        allowed: result.allowed,
+        idempotencyKey: result.idempotencyKey,
+        requestFingerprint: result.requestFingerprint,
+      };
     },
 
     async executeProviderWrite(
@@ -194,295 +246,160 @@ export function createBookingActivities(
       idempotencyKey: string,
       requestFingerprint: string,
     ): Promise<BookingComponentState> {
-      const transaction = await load(transactionId);
-      if (isWholeTripTerms(transaction.executionBasis.terms))
+      const booking = await load(transactionId);
+      if (isWholeTripTerms(booking.executionBasis.terms))
         throw new Error("Whole-trip provider execution is not activated");
-      const terms = transaction.executionBasis.terms.components.find(
-        (item) => item.componentId === componentId,
-      );
-      if (!terms) throw new Error("Authorized terms do not include this component");
-      const version = await database
-        .selectFrom("tripVersions")
-        .select("snapshot")
-        .where("tripId", "=", transaction.tripId)
-        .where("version", "=", transaction.executionBasis.startingTripVersion)
-        .executeTakeFirst();
-      if (!version) throw new Error("Authorized trip snapshot is unavailable");
-      const snapshot = version.snapshot as { components?: Array<{ id: string; type: string }> };
-      const component = snapshot.components?.find((item) => item.id === componentId);
-      if (!component) throw new Error("Authorized component is missing from trip snapshot");
-      const provider = providers.require(
-        providerForComponent(component.type),
-        transaction.operation,
-      );
+      const identity = requestIdentity(booking, componentId);
+      if (
+        identity.idempotencyKey !== idempotencyKey ||
+        identity.requestFingerprint !== requestFingerprint
+      )
+        throw new Error("Provider request does not match the immutable claim");
+      const product = await componentProvider(booking, componentId);
+      const provider = isWholeTripTerms(booking.executionBasis.terms)
+        ? providers.requireCurrent(product, booking.operation)
+        : providers.require(product.provider, booking.operation);
       const operation =
-        transaction.operation === "book_trip"
+        booking.operation === "book_trip"
           ? provider.execute
-          : transaction.operation === "cancel_component"
+          : booking.operation === "cancel_component"
             ? provider.cancel
             : provider.reschedule;
       if (!operation) throw new Error("Provider does not support this authorized operation");
-      await database
-        .updateTable("bookingComponentAttempts")
-        .set({ status: "dispatched", updatedAt: new Date() })
-        .where("transactionId", "=", transactionId)
-        .where("componentId", "=", componentId)
-        .where("idempotencyKey", "=", idempotencyKey)
-        .where("requestFingerprint", "=", requestFingerprint)
-        .execute();
+      const dispatch = await inTransaction(database, async (dbtx) => {
+        const locked = await lockBasis(dbtx, transactionId);
+        const failure = await checkBasis(dbtx, locked, componentId);
+        if (failure) return { won: false, failure };
+        const claim = await dbtx
+          .selectFrom("bookingWriteClaims")
+          .selectAll()
+          .where("tripId", "=", booking.tripId)
+          .where("componentId", "=", componentId)
+          .where("transactionId", "=", transactionId)
+          .forUpdate()
+          .executeTakeFirst();
+        if (!claim || claim.state !== "claimed") return { won: false, failure: null };
+        const updated = await dbtx
+          .updateTable("bookingComponentAttempts")
+          .set({ status: "dispatched", updatedAt: new Date() })
+          .where("id", "=", claim.attemptId)
+          .where("transactionId", "=", transactionId)
+          .where("componentId", "=", componentId)
+          .where("idempotencyKey", "=", idempotencyKey)
+          .where("requestFingerprint", "=", requestFingerprint)
+          .where("status", "=", "claimed")
+          .returning("id")
+          .executeTakeFirst();
+        return { won: Boolean(updated), failure: null };
+      });
+      if (dispatch.failure) throw new Error(dispatch.failure);
+      if (!dispatch.won) {
+        const current = await load(transactionId);
+        const outcome = current.components.find((item) => item.componentId === componentId);
+        if (
+          outcome &&
+          ["confirmed", "failed", "unknown", "action_required", "cancelled"].includes(
+            outcome.status,
+          )
+        )
+          return outcome;
+        throw new Error(
+          "Provider dispatch is already in progress; reconcile status instead of retrying",
+        );
+      }
+      let result: TransactionOutcome;
       try {
-        const result = await operation.call(provider, {
-          operation: transaction.operation,
+        result = await operation.call(provider, {
+          operation: booking.operation,
           componentId,
-          supplierOfferId: terms.supplierOfferId,
-          inventoryId: terms.inventoryId,
+          supplierOfferId: identity.terms.supplierOfferId,
+          inventoryId: identity.terms.inventoryId,
           idempotencyKey,
           requestFingerprint,
-          terms,
+          terms: identity.terms,
         });
-        if (result.status === "confirmed") {
-          const confirmedTerms = bookingComponentTermsSchema.parse(result.confirmedTerms);
-          if (
-            canonicalBookingJson(confirmedTerms) !== canonicalBookingJson(terms) ||
-            !result.evidenceId ||
-            !result.providerReference
-          ) {
-            await database
-              .updateTable("bookingTransactions")
-              .set({ executionStatus: "invalidated", status: "action_required" })
-              .where("id", "=", transactionId)
-              .execute();
-            await database
-              .updateTable("bookingWriteClaims")
-              .set({ state: "unknown", updatedAt: new Date() })
-              .where("tripId", "=", transaction.tripId)
-              .where("componentId", "=", componentId)
-              .where("transactionId", "=", transactionId)
-              .execute();
-            return {
-              componentId,
-              status: "action_required",
-              providerReference: null,
-              safeReason:
-                "Supplier confirmed terms that differ from the authorized terms. Review and authorize again.",
-            };
-          }
-        }
-        const status: BookingComponentState["status"] =
-          result.status === "confirmed" ? "confirmed" : result.status;
-        const outcome: BookingComponentState = {
-          componentId,
-          status,
-          providerReference: result.status === "confirmed" ? result.providerReference : null,
-          safeReason: result.status === "confirmed" ? null : result.safeReason.slice(0, 500),
-        };
-        const persistedStatus = status === "action_required" ? "unknown" : status;
-        await database
-          .updateTable("bookingComponentAttempts")
-          .set({
-            status: persistedStatus,
-            providerReference: outcome.providerReference,
-            safeReason: outcome.safeReason,
-            updatedAt: new Date(),
-          })
-          .where("transactionId", "=", transactionId)
-          .where("componentId", "=", componentId)
-          .where("idempotencyKey", "=", idempotencyKey)
-          .execute();
-        if (result.status === "unknown" || status === "action_required") {
-          await inTransaction(database, (dbtx) =>
-            new BookingRepository(dbtx).retainUnknownClaim({
-              tripId: transaction.tripId,
-              componentId,
-              transactionId,
-              evidence: { attemptIdempotencyKey: idempotencyKey },
-              now: new Date(),
-            }),
-          );
-        } else {
-          await inTransaction(database, (dbtx) =>
-            new BookingRepository(dbtx).releaseResolvedClaim(
-              transaction.tripId,
-              componentId,
-              transactionId,
-            ),
-          );
-        }
-        if (result.status === "confirmed") {
-          await database
-            .insertInto("bookingConfirmations")
-            .values({
-              id: randomUUID(),
-              transactionId,
-              tripId: transaction.tripId,
-              componentId,
-              providerReference: result.providerReference,
-              terms: terms,
-              confirmedAt: new Date(),
-            })
-            .onConflict((conflict) =>
-              conflict.columns(["transactionId", "componentId"]).doNothing(),
-            )
-            .execute();
-        }
-        return outcome;
       } catch {
-        await database
-          .updateTable("bookingComponentAttempts")
-          .set({
-            status: "unknown",
-            safeReason: "Provider outcome needs status reconciliation.",
-            updatedAt: new Date(),
-          })
-          .where("transactionId", "=", transactionId)
-          .where("componentId", "=", componentId)
-          .where("idempotencyKey", "=", idempotencyKey)
-          .execute();
-        await database
-          .updateTable("bookingWriteClaims")
-          .set({ state: "unknown", updatedAt: new Date() })
-          .where("tripId", "=", transaction.tripId)
-          .where("componentId", "=", componentId)
-          .where("transactionId", "=", transactionId)
-          .execute();
-        return {
-          componentId,
-          status: "unknown",
-          providerReference: null,
-          safeReason: "Provider outcome needs status reconciliation.",
-        };
+        result = { status: "unknown", safeReason: "Provider outcome needs status reconciliation." };
       }
+      return record(transactionId, componentId, idempotencyKey, result, false);
     },
 
     async recordBookingOutcome(transactionId: string, outcome: BookingComponentState) {
-      // An invalidated or expired basis keeps its durable action-required state; the
-      // trip version it was authorized against no longer accepts booking outcomes.
-      const row = await database
-        .selectFrom("bookingTransactions")
-        .select("executionStatus")
-        .where("id", "=", transactionId)
-        .executeTakeFirst();
-      if (!row || row.executionStatus !== "active") return;
-      await applyBookingOutcome(database, transactionId, outcome);
+      await inTransaction(database, async (transaction) => {
+        const identity = await transaction
+          .selectFrom("bookingTransactions")
+          .select("tripId")
+          .where("id", "=", transactionId)
+          .executeTakeFirstOrThrow();
+        await lockBookingEvidenceTrip(transaction, identity.tripId);
+        await transaction
+          .selectFrom("bookingTransactions")
+          .select("id")
+          .where("id", "=", transactionId)
+          .forUpdate()
+          .executeTakeFirstOrThrow();
+        const attempt = await transaction
+          .selectFrom("bookingComponentAttempts")
+          .select(["id", "status", "providerEvidence"])
+          .where("transactionId", "=", transactionId)
+          .where("componentId", "=", outcome.componentId)
+          .forUpdate()
+          .executeTakeFirst();
+        if (attempt?.providerEvidence.length) return;
+        if (attempt?.status === "claimed")
+          await new BookingRepository(transaction).releaseUndispatchedClaims(
+            transactionId,
+            outcome.componentId,
+          );
+        await applyBookingOutcome(transaction, transactionId, outcome);
+      });
     },
 
     async reconcileProviderStatus(
       transactionId: string,
       componentId: string,
     ): Promise<BookingComponentState> {
-      const transaction = await load(transactionId);
-      const terms = transaction.executionBasis.terms.components.find(
-        (item) => item.componentId === componentId,
-      );
-      const snapshotRow = await database
-        .selectFrom("tripVersions")
-        .select("snapshot")
-        .where("tripId", "=", transaction.tripId)
-        .where("version", "=", transaction.executionBasis.startingTripVersion)
+      const booking = await load(transactionId);
+      const { idempotencyKey } = requestIdentity(booking, componentId);
+      const attempt = await database
+        .selectFrom("bookingComponentAttempts")
+        .select(["status", "providerReference"])
+        .where("transactionId", "=", transactionId)
+        .where("componentId", "=", componentId)
+        .where("idempotencyKey", "=", idempotencyKey)
         .executeTakeFirst();
-      const component = (
-        snapshotRow?.snapshot as { components?: Array<{ id: string; type: string }> } | undefined
-      )?.components?.find((item) => item.id === componentId);
-      if (!terms || !component) throw new Error("Booking component cannot be reconciled");
-      const provider = providers.require(
-        providerForComponent(component.type),
-        transaction.operation,
-      );
-      if (!provider.getStatus)
-        return {
-          componentId,
+      const confirmation = await database
+        .selectFrom("bookingConfirmations")
+        .select("providerReference")
+        .where("transactionId", "=", transactionId)
+        .where("componentId", "=", componentId)
+        .executeTakeFirst();
+      if ((!attempt || attempt.status === "claimed") && !confirmation)
+        throw new Error("No dispatched provider action exists to reconcile");
+      const adapter = providers.get((await componentProvider(booking, componentId)).provider);
+      let result: TransactionOutcome;
+      if (!adapter?.capabilities.status || !adapter.getStatus)
+        result = {
           status: "action_required",
-          providerReference: null,
-          safeReason: "This provider requires manual status confirmation.",
+          safeReason:
+            "This provider requires manual status confirmation. Contact support; do not retry.",
         };
-      const key = `${transaction.id}:${componentId}:${transaction.operation}:${transaction.executionBasis.termsHash}`;
-      const result = await provider.getStatus(key);
-      if (result.status === "confirmed") {
-        const confirmedTerms = bookingComponentTermsSchema.parse(result.confirmedTerms);
-        if (
-          !result.providerReference ||
-          !result.evidenceId ||
-          canonicalBookingJson(confirmedTerms) !== canonicalBookingJson(terms)
-        ) {
-          await database
-            .updateTable("bookingTransactions")
-            .set({ executionStatus: "invalidated", status: "action_required" })
-            .where("id", "=", transactionId)
-            .execute();
-          await database
-            .updateTable("bookingWriteClaims")
-            .set({ state: "unknown", updatedAt: new Date() })
-            .where("tripId", "=", transaction.tripId)
-            .where("componentId", "=", componentId)
-            .where("transactionId", "=", transactionId)
-            .execute();
-          return {
+      else {
+        try {
+          result = await adapter.getStatus(idempotencyKey, {
             componentId,
-            status: "action_required",
-            providerReference: null,
-            safeReason: "Reconciled provider terms differ from the authorized terms.",
+            terms: requestIdentity(booking, componentId).terms,
+            providerReference:
+              confirmation?.providerReference ?? attempt?.providerReference ?? null,
+          });
+        } catch {
+          result = {
+            status: "unknown",
+            safeReason: "Provider status is unavailable. Contact support before continuing.",
           };
         }
-        await inTransaction(database, (dbtx) =>
-          new BookingRepository(dbtx).releaseResolvedClaim(
-            transaction.tripId,
-            componentId,
-            transactionId,
-          ),
-        );
-        await database
-          .updateTable("bookingComponentAttempts")
-          .set({
-            status: "reconciled",
-            providerReference: result.providerReference,
-            statusCheckedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where("transactionId", "=", transactionId)
-          .where("componentId", "=", componentId)
-          .where("idempotencyKey", "=", key)
-          .execute();
-        await database
-          .insertInto("bookingConfirmations")
-          .values({
-            id: randomUUID(),
-            transactionId,
-            tripId: transaction.tripId,
-            componentId,
-            providerReference: result.providerReference,
-            terms,
-            confirmedAt: new Date(),
-          })
-          .onConflict((conflict) => conflict.columns(["transactionId", "componentId"]).doNothing())
-          .execute();
-        return {
-          componentId,
-          status: "confirmed",
-          providerReference: result.providerReference,
-          safeReason: null,
-        };
       }
-      if (result.status === "failed") {
-        await inTransaction(database, (dbtx) =>
-          new BookingRepository(dbtx).releaseResolvedClaim(
-            transaction.tripId,
-            componentId,
-            transactionId,
-          ),
-        );
-        return {
-          componentId,
-          status: "failed",
-          providerReference: null,
-          safeReason: result.safeReason.slice(0, 500),
-        };
-      }
-      return {
-        componentId,
-        status: result.status === "action_required" ? "action_required" : "unknown",
-        providerReference: null,
-        safeReason: result.safeReason.slice(0, 500),
-      };
+      return record(transactionId, componentId, idempotencyKey, result, true);
     },
   } satisfies Omit<
     BookingWorkflowActivities,

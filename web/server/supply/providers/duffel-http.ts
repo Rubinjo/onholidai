@@ -20,6 +20,7 @@ import {
 } from "./read-http";
 
 export interface DuffelFlightsHttpOptions extends ReadHttpOptions {
+  /** Dedicated discovery token with offer-request creation permission, never the worker token. */
   readToken: string;
   /** Trusted place lookup, not an API URL or a model-supplied supplier identifier. */
   resolveDestination: (destinationId: string, query: SupplyReadQuery) => string | null;

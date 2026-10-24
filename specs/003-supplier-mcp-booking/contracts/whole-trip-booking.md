@@ -20,9 +20,61 @@ rechecked after those reads and before recording authorization or start.
 
 V2 provider execution is explicitly refused by basis, claim and dispatch activities.
 The start record is inactive with no dispatched component attempts; its durable outbox
-identity remains pending rather than being falsely marked delivered. Recovery lineage,
-`continuationOf` requests, consequential provider composition and the per-write guards
-described below are US4 scope and are not activated by US3.
+identity remains pending rather than being falsely marked delivered. The US4 additions
+below implement recovery review/lineage without activating consequential provider writes.
+
+## Implemented US4 transaction-safety boundary
+
+Migration 016 extends existing attempts with immutable requirement identities,
+append-only sanitized provider evidence and a monotonic conflict flag. Claims bind
+the exact trip/transaction/component/attempt. Parent/root lineage must belong to
+the same account and trip. Repository checks reject confirmed or outstanding
+component/requirement commitments even with a different authorization/key.
+
+The existing execution activities now claim and dispatch under the access/trip,
+transaction and attempt/claim locks. A durable claimed-to-dispatched compare-and-set
+has one winner; provider calls occur outside transactions. A stopped claim can be
+released only when durable evidence proves dispatch never happened. A dispatched
+or unknown action cannot be reclaimed. Network exceptions remain unknown.
+
+Provider evidence, actual valid confirmation terms/reference, component outcome,
+compatible trip projection and resolved-claim release commit together. Database
+errors after provider success propagate rather than being recast as supplier
+failure. Status/callback ingestion does not require active execution authority.
+Changed confirmations remain commitments requiring support; conflicting evidence
+is retained without replacing the original reference. Incompatible trip versions
+or competing claims prevent projection, not durable truth recording.
+
+Status capability is independent of fresh booking capability. Existing historical
+confirmations without an attempt can acquire a reconciliation-only evidence record;
+this does not grant a new write. The existing authenticated callback bridge remains
+limited to its documented providers; no Nuitee/Viator webhook authentication is
+invented. Unsupported or uncorrelated status requires manual support.
+
+Whole-trip recovery review derives the current parent and original root from durable
+history under the trip lock. Outstanding claims, dispatched/unknown attempts,
+conflicting evidence and active unexpired execution block another review/authorization.
+Authorization and start recheck that lineage; two separately granted authorizations
+cannot create competing children of the same parent. The current leaf is restored
+even when parent/child start timestamps are identical.
+
+Confirmed commitments must remain in the full review, with unchanged actual service,
+traveller, money, included-charge and cancellation/non-reversibility terms. They are
+never revalidated as new offers, added to the remaining amount or included in child
+writes. A definitive non-commit remains `failed` in attempt history but projects
+`unbooked`, not `pending`, so fresh whole-trip review is possible. Uncertainty retains
+its guard and never receives that treatment.
+
+Migration 017 preserves trip-version event uniqueness while identifying booking
+outbox events by their required workflow identity. A fresh review/continuation can
+persist at the same trip version without suppressing a durable workflow intent.
+
+These are recovery-review/persistence changes, not completion of US4. V2 basis,
+claim and dispatch remain explicitly disabled. Restricted supplier HTTP mappings,
+trusted dispatch prerequisites, stock-worker composition, the >=100-distinct-case
+execution matrix and full executing recovery browser certification must still
+complete before activation. A 100-delivery dispatch regression is not 100 distinct
+acceptance cases.
 
 Current execution scope is Duffel flights, Nuitee accommodation and Viator activities. Resolve by immutable provider plus component type, never type-only accommodation defaults or relabelled Duffel stay IDs. Duffel uses its separate worker-only write key; Nuitee/Viator each use their shared upstream key in the trusted worker, with actual booking/payment entitlement and trusted prerequisites required independently. No fresh writes target Duffel Stays, Nuitee Flights/Experiences, deferred Booking.com/Trainline or replaced GetYourGuide. Preserve legacy attribution, commitments and existing approved status reconciliation without requiring inactive onboarding.
 
@@ -34,7 +86,13 @@ Approved worker-only prebook/book/status handling uses exact authorized offer/pa
 
 Add owner-scoped `GET /api/v1/trips/{tripId}/bookings` to the existing POST route. Use the current account/booking actor, trip lock/access rules and safe projection. Return current trip version, current complete coverage report, active/latest whole-trip attempt and continuation history, confirmed commitments and safe per-component outcomes; bound/paginate history. It must restore a durable attempt on reload before offering a new authorization. The accepted trip remains available if supplier reads fail.
 
-Existing `POST /api/v1/trips/{tripId}/booking/revalidations` keeps `{requestId: UUID, expectedVersion: positive integer}` and adds optional `continuationOf: UUID`. No component list is accepted. The server derives the full required set/confirmed commitments and complete unresolved write set. Validate parent ownership/trip/root, reconcile every potentially dispatched predecessor first, and block continuation while uncertainty remains. Missing requirements return a report with actionable blockers, not partial bookable terms.
+Existing `POST /api/v1/trips/{tripId}/booking/revalidations` keeps the strict
+`{requestId: UUID, expectedVersion: positive integer}` request. No component list or
+client-selected parent/root is accepted: the server derives current lineage, the full
+required set/confirmed commitments and complete unresolved write set. Validate parent
+ownership/trip/root, reconcile every potentially dispatched predecessor first, and block
+continuation while uncertainty remains. Missing requirements return a report with
+actionable blockers, not partial bookable terms.
 
 Use the current durable revalidation record/outbox/workflow and `GET /api/v1/booking/revalidations/{workflowId}`. Return run status, coverage, one outcome for every required unbooked component, safe complete v2 review terms/hash/expiry only if eligible, and blockers otherwise. Provider exceptions mean unknown, not definitive unavailability. Readiness/eligibility failures cannot become a generic traveller acknowledgement.
 

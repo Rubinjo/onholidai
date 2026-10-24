@@ -148,15 +148,19 @@ export async function startBooking(
       if (
         !coverage.eligible ||
         canonicalBookingJson(coverage) !== canonicalBookingJson(authorization.terms.coverage) ||
-        authorization.terms.tripVersion !== trip.currentVersion ||
-        authorization.terms.continuationOf !== null ||
-        authorization.terms.rootAttemptId !== null
+        authorization.terms.tripVersion !== trip.currentVersion
       )
         throw new ProblemError({
           title: "The exact complete booking basis changed",
           status: 409,
           code: "booking_coverage_changed",
         });
+      await new BookingRepository(transaction).assertWholeTripLineage(
+        tripId,
+        userId,
+        authorization.terms,
+        now,
+      );
       await new BookingRepository(transaction).assertConfirmedBasis(tripId, authorization.terms);
       await assertTrustedBookingPrerequisites(
         options.prerequisites,

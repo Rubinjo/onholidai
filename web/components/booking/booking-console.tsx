@@ -128,7 +128,21 @@ export function BookingConsole({
     }
   }
   const review = state?.review;
+  const reviewPending = busy || review?.status === "accepted" || review?.status === "running";
   const attempt = started ?? state?.activeAttempt ?? state?.latestAttempt;
+  const canContinue = Boolean(
+    attempt?.operation === "book_trip" &&
+    !state?.activeAttempt &&
+    attempt.components.length &&
+    !attempt.components.some((component) =>
+      ["unknown", "action_required", "booking"].includes(component.status),
+    ) &&
+    !attempt.components.every((component) => ["confirmed", "cancelled"].includes(component.status)),
+  );
+  const lineageMatches = attempt
+    ? review?.terms?.continuationOf === attempt.id &&
+      review.terms.rootAttemptId === (attempt.rootAttemptId ?? attempt.id)
+    : review?.terms?.continuationOf === null && review.terms.rootAttemptId === null;
   const expired = Boolean(review?.expiresAt && Date.parse(review.expiresAt) <= now);
   const eligible =
     state?.tripVersion === tripVersion &&
@@ -136,6 +150,8 @@ export function BookingConsole({
     !error &&
     !submissionError &&
     !expired &&
+    lineageMatches &&
+    (!attempt || canContinue) &&
     review?.status === "completed" &&
     review.tripVersion === tripVersion &&
     review.terms?.schemaVersion === 2 &&
@@ -187,6 +203,26 @@ export function BookingConsole({
           {busy ? "Checking live terms…" : "Revalidate availability and price"}
         </Button>
       )}
+      {canContinue && (
+        <section aria-labelledby="remaining-trip-review">
+          <h3 id="remaining-trip-review">Continue your complete trip</h3>
+          <p>
+            Review every remaining required service together. Confirmed services stay in your trip
+            and are excluded from new bookings and the remaining payable amount.
+          </p>
+          <Button
+            type="button"
+            disabled={stale}
+            aria-disabled={reviewPending}
+            className="aria-disabled:opacity-50"
+            onClick={() => {
+              if (!reviewPending) void revalidate();
+            }}
+          >
+            {busy ? "Checking remaining terms…" : "Review remaining whole trip"}
+          </Button>
+        </section>
+      )}
       {review?.status === "accepted" || review?.status === "running" ? (
         <p role="status">Checking live price and availability…</p>
       ) : null}
@@ -230,13 +266,14 @@ export function BookingConsole({
       {review?.terms && (
         <TermsReview terms={review.terms} outcomes={review.outcomes} estimates={components} />
       )}
-      {attempt ? (
+      {attempt && (
         <BookingStatus
           bookingId={attempt.id}
           tripComponents={components}
           allowComponentActions={attempt.termsVersion === 1}
         />
-      ) : eligible && review?.terms && review.termsHash && review.expiresAt ? (
+      )}
+      {eligible && review?.terms && review.termsHash && review.expiresAt ? (
         <AuthorizationForm
           key={review.termsHash}
           tripId={tripId}
