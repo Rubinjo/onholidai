@@ -23,6 +23,7 @@ changes.md
 pnpm-lock.yaml
 agent/tests/fixtures/evaluation-corpus.json
 web/tests/fixtures/evaluation-corpus.json
+web/server/supply/geo-catalogue.json
 contracts/agent-api/openapi.yaml
 contracts/agent-api/tools.schema.json
 contracts/supply/supplier-tools-v1.schema.json

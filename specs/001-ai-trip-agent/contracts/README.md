@@ -17,7 +17,7 @@ The executable validator rejects source/promotion drift and unresolved local or 
 
 ## Clarified Handoffs (2026-10-10)
 
-- `/places` is an authenticated bounded lookup. Results include country, timezone and explicit identity; deterministic mode labels its synthetic catalogue. Live lookup is unavailable until a live geographic adapter is connected.
+- `/places` is an authenticated bounded lookup. Results include country, timezone and explicit identity; deterministic mode labels its synthetic catalogue. Live lookup uses Google Places (New) text search plus the Time Zone API and falls back to the bundled GeoNames/OurAirports settlement and airport catalogue, which supplies every IATA-coded airport identity.
 - Web internal reads and proposal recording use web-audience `trip:read` and `proposal:create` grants. Headers `x-user-id` and `x-request-id` must match the signed claims; the agent-view base version and path trip must also match. Proposal recording verifies the reserved run identity in PostgreSQL before persisting.
 - Pricing diagnostics require a separate signing secret, web-audience `pricing:read`, an explicit `version` (or `x-base-trip-version`), and a database-held `pricing_auditor`/`administrator` role. The implementation also checks trip ownership. The pricing secret is excluded from agent configuration.
 - New browser drafts submit an empty public estimated price, empty components and empty itinerary. Web constructs the full internal zero-price snapshot and creates version one with an actor-scoped receipt through the shared commit boundary. Customer-supplied supplier costs, margins or confirmations are rejected.

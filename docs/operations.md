@@ -29,6 +29,19 @@ non-synthetic `NEBIUS_API_KEY`, `NEBIUS_MODEL`, `MAPS_GROUNDING_API_KEY` and
 Compose configuration or raw environment dumps: they can contain credentials.
 Changing the environment requires container recreation, not just `restart`.
 
+### Live destination lookup
+
+`/trips/new` resolves the destination search box and map country clicks through
+`GET /api/v1/places`. Deterministic mode answers from the reviewed synthetic
+catalogue. Live mode calls Google Places (New) text search and the Time Zone API
+with `MAPS_GROUNDING_API_KEY`, which Compose now forwards to web as well as
+agent, so the key must be enabled for both APIs. Country quick-picks, IATA-coded
+airports and the fallback when text search fails come from the bundled
+`web/server/supply/geo-catalogue.json` (GeoNames cities5000 and OurAirports,
+regenerate with `pnpm --filter @onholidai/web geo:catalogue`). Without a key the
+endpoint answers `503 place_lookup_unavailable` and the setup form reports the
+outage instead of blaming the traveller's input.
+
 Supplier discovery is a separate web-owned boundary. Compose forwards
 `SUPPLIER_PROVIDERS`, `DUFFEL_READ_SECRET`, `NUITEE_SECRET`,
 `NUITEE_ENVIRONMENT`, `VIATOR_SECRET` and `VIATOR_ENVIRONMENT` to web only.

@@ -53,6 +53,8 @@ export function planningError(error: unknown): string {
     return "Research is temporarily limited. Wait before retrying and answer any pending questions in your other trips; no account or subscription is needed.";
   if (error instanceof PlanningRequestError && error.code === "agent_unavailable")
     return "The research service could not confirm your request. Retry the same update; your saved trip and message are preserved.";
+  if (error instanceof PlanningRequestError && error.code === "place_lookup_unavailable")
+    return "Destination search is unavailable right now. Retry in a moment; your inputs and saved trip are unchanged.";
   if (error instanceof PlanningRequestError && error.code === "draft_revision_conflict")
     return "Another tab saved changes. Compare the saved draft before replacing anything. Your local edits are preserved.";
   if (error instanceof PlanningRequestError && error.status === 409)

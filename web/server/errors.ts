@@ -27,6 +27,19 @@ export interface ProblemErrorOptions {
   fieldErrors?: readonly { path: string; message: string }[];
 }
 
+// Bundlers may inline this module into more than one server chunk, which gives
+// each copy its own class identity. The symbol registry is realm-wide, so a
+// brand survives that duplication where `instanceof` does not.
+const problemBrand = Symbol.for("onholidai.problem-error");
+
+export function isProblemError(error: unknown): error is ProblemError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    ((error as Record<symbol, unknown>)[problemBrand] === true || error instanceof ProblemError)
+  );
+}
+
 export class ProblemError extends Error {
   readonly type: string;
   readonly title: string;
@@ -60,6 +73,7 @@ export class ProblemError extends Error {
     this.currentRevision = currentRevision;
     this.nextPath = nextPath;
     this.fieldErrors = fieldErrors;
+    (this as unknown as Record<symbol, unknown>)[problemBrand] = true;
   }
 }
 
@@ -73,7 +87,7 @@ const internalProblem = {
 export function problemResponse(error: unknown, correlationId: string): Response {
   const safeCorrelationId = isValidCorrelationId(correlationId) ? correlationId : randomUUID();
   const safeProblem =
-    error instanceof ProblemError &&
+    isProblemError(error) &&
     ![
       error.type,
       error.title,
@@ -89,17 +103,15 @@ export function problemResponse(error: unknown, correlationId: string): Response
     title: safeProblem.title,
     status: safeProblem.status,
     code: safeProblem.code,
-    ...(safeProblem instanceof ProblemError && safeProblem.detail
-      ? { detail: safeProblem.detail }
-      : {}),
+    ...(isProblemError(safeProblem) && safeProblem.detail ? { detail: safeProblem.detail } : {}),
     correlationId: safeCorrelationId,
-    ...(safeProblem instanceof ProblemError && safeProblem.currentRevision !== undefined
+    ...(isProblemError(safeProblem) && safeProblem.currentRevision !== undefined
       ? { currentRevision: safeProblem.currentRevision }
       : {}),
-    ...(safeProblem instanceof ProblemError && safeProblem.nextPath
+    ...(isProblemError(safeProblem) && safeProblem.nextPath
       ? { nextPath: safeProblem.nextPath }
       : {}),
-    ...(safeProblem instanceof ProblemError && safeProblem.fieldErrors
+    ...(isProblemError(safeProblem) && safeProblem.fieldErrors
       ? { fieldErrors: safeProblem.fieldErrors }
       : {}),
   };
@@ -108,7 +120,7 @@ export function problemResponse(error: unknown, correlationId: string): Response
     "Content-Type": "application/problem+json",
     [CORRELATION_ID_HEADER]: safeCorrelationId,
   };
-  if (safeProblem instanceof ProblemError && safeProblem.retryAfterSeconds !== undefined) {
+  if (isProblemError(safeProblem) && safeProblem.retryAfterSeconds !== undefined) {
     headers["Retry-After"] = String(Math.max(1, Math.ceil(safeProblem.retryAfterSeconds)));
   }
 

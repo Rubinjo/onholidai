@@ -117,6 +117,8 @@ const serverConfigSchema = z.object({
   PRICING_DIAGNOSTIC_SECRET: z.string().min(32).default("synthetic-local-pricing-secret-000000000"),
   TEMPORAL_ADDRESS: z.string().default("localhost:7233"),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
+  // Live place lookup uses Google Places (New) text search and the Time Zone API.
+  MAPS_GROUNDING_API_KEY: z.string().trim().min(1).optional(),
   SUPPLIER_PROVIDERS: providersConfigSchema,
 });
 

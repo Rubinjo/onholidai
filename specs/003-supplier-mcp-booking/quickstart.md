@@ -23,7 +23,7 @@ Do not use this demo as evidence for the still-open production US4/US5 gates bel
 Focused component/config/access and preserved live-review checks:
 
 ```powershell
-corepack.cmd pnpm --dir web exec vitest run tests\unit\booking-demo.test.tsx tests\unit\booking-demo-route.test.tsx tests\unit\config.test.ts tests\integration\booking-review.test.tsx tests\unit\booking-continuation.test.tsx tests\unit\auth-hydration.test.tsx tests\unit\application.test.ts tests\contract\provider-readiness.test.ts
+corepack.cmd pnpm --dir web exec vitest run tests/unit/booking-demo.test.tsx tests/unit/booking-demo-route.test.tsx tests/unit/config.test.ts tests/integration/booking-review.test.tsx tests/unit/booking-continuation.test.tsx tests/unit/auth-hydration.test.tsx tests/unit/application.test.ts tests/contract/provider-readiness.test.ts
 ```
 
 With the existing isolated HTTPS whole-trip browser fixture database, seeded-role
@@ -145,11 +145,11 @@ Contract checks cover current exporters plus new public supply and MCP fixtures.
 Build/run the current local stack with reviewed migration changes:
 
 ```powershell
-docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure up -d
-docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure --profile migrations build migrate
-docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure --profile migrations run --rm migrate
-docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure --profile applications up -d --build
-docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure --profile booking up -d --build booking-worker
+docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure up -d
+docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile migrations build migrate
+docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile migrations run --rm migrate
+docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile applications up -d --build
+docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile booking up -d --build booking-worker
 ```
 
 Set `PROVIDER_MODE=deterministic` through existing composition. Ensure deterministic transaction clients are actually registered: the pre-feature worker's empty registry is not a successful booking demonstration. For host mode, use existing `pnpm dev`, `pnpm dev:agent`, and `pnpm --dir web booking:worker` in separate terminals with equivalent safe configuration. No extra port or MCP service is required.
@@ -206,13 +206,13 @@ itself is neither trip acceptance nor booking authorization.
 With all four isolated test database URLs set in the same shell:
 
 ```powershell
-uv run --no-sync --project agent pytest agent\tests -q
+uv run --no-sync --project agent pytest agent/tests -q
 pnpm --dir web test tests/contract/refinement-api.test.ts tests/integration/trip-planning.test.ts tests/integration/refinement.test.ts tests/integration/offer-research.test.tsx tests/integration/workspace-propagation.test.tsx tests/unit/automatic-result.test.ts tests/unit/evaluation-fixtures.test.ts
 pnpm --dir web test:foundation
 pnpm test:contracts
 pnpm --dir web corpus:check
 pnpm --dir web typecheck
-uv run --no-sync --project agent pyright agent\src agent\tests
+uv run --no-sync --project agent pyright agent/src agent/tests
 ```
 
 The 26 fixed decision cases require 18 appropriate selections and eight focused

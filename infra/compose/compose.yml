@@ -122,6 +122,7 @@ services:
       NUITEE_ENVIRONMENT: "${NUITEE_ENVIRONMENT:-sandbox}"
       VIATOR_SECRET: "${VIATOR_SECRET:-}"
       VIATOR_ENVIRONMENT: "${VIATOR_ENVIRONMENT:-sandbox}"
+      MAPS_GROUNDING_API_KEY: "${MAPS_GROUNDING_API_KEY:-}"
       BETTER_AUTH_URL: http://localhost:3000
       AGENT_BASE_URL: http://agent:8000
       TEMPORAL_ADDRESS: temporal:7233

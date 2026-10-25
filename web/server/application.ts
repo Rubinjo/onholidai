@@ -68,7 +68,11 @@ export function createApplication(
       auth,
       providerReadiness,
       bookingPrerequisites: dependencies.bookingPrerequisites,
-      places: dependencies.places ?? createPlaceLookupProvider(config.PROVIDER_MODE),
+      places:
+        dependencies.places ??
+        createPlaceLookupProvider(config.PROVIDER_MODE, {
+          apiKey: config.MAPS_GROUNDING_API_KEY,
+        }),
       planningProviders,
       shutdown(): Promise<void> {
         shutdownPromise ??= Promise.allSettled([database.destroy(), authPool.end()]).then(
