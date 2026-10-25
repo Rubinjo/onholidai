@@ -122,6 +122,25 @@ const serverConfigSchema = z.object({
 
 export type ServerConfig = z.infer<typeof serverConfigSchema>;
 
+const workerConfigSchema = serverConfigSchema
+  .pick({
+    NODE_ENV: true,
+    DATABASE_URL: true,
+    PROVIDER_MODE: true,
+    VIATOR_ENVIRONMENT: true,
+    NUITEE_ENVIRONMENT: true,
+    SUPPLIER_PROVIDERS: true,
+  })
+  .extend({
+    TEMPORAL_ADDRESS: z.string().trim().min(1),
+  });
+
+export type WorkerConfig = z.infer<typeof workerConfigSchema>;
+type SupplierConfig = Pick<
+  ServerConfig,
+  "PROVIDER_MODE" | "VIATOR_ENVIRONMENT" | "NUITEE_ENVIRONMENT" | "SUPPLIER_PROVIDERS"
+>;
+
 export interface ProviderOperationReadiness {
   support: z.infer<typeof operationConfigSchema>["support"];
   access: z.infer<typeof operationConfigSchema>["access"];
@@ -143,7 +162,7 @@ export interface SupplierReadiness {
 }
 
 export function deriveProviderReadiness(
-  config: ServerConfig,
+  config: SupplierConfig,
   environment: Readonly<Record<string, string | undefined>>,
   audience: "web" | "worker" = "web",
 ): SupplierReadiness {
@@ -281,21 +300,23 @@ export function deriveProviderReadiness(
   };
 }
 
-export function loadServerConfig(environment: Record<string, string | undefined>): ServerConfig {
+function requireProductionConfiguration(
+  environment: Record<string, string | undefined>,
+  keys: readonly string[],
+): void {
   if (environment.NODE_ENV === "production") {
-    for (const key of [
-      "DATABASE_URL",
-      "BETTER_AUTH_SECRET",
-      "BETTER_AUTH_URL",
-      "SERVICE_TOKEN_SECRET",
-      "PRICING_DIAGNOSTIC_SECRET",
-    ] as const) {
+    for (const key of keys) {
       if (!environment[key] || environment[key]?.startsWith("synthetic")) {
         throw new Error(`Production requires explicit ${key}`);
       }
     }
   }
-  const config = serverConfigSchema.parse(environment);
+}
+
+function validateSupplierSecrets(
+  config: SupplierConfig,
+  environment: Record<string, string | undefined>,
+): void {
   const duffel = config.SUPPLIER_PROVIDERS.duffel;
   const duffelReadKey = duffel?.readSecretRef
     ? environment[duffel.readSecretRef]?.trim()
@@ -306,6 +327,25 @@ export function loadServerConfig(environment: Record<string, string | undefined>
   if (duffelReadKey && duffelWriteKey && duffelReadKey === duffelWriteKey) {
     throw new Error("Duffel read and transaction keys must be separate");
   }
+}
+
+export function loadWorkerConfig(environment: Record<string, string | undefined>): WorkerConfig {
+  requireProductionConfiguration(environment, ["DATABASE_URL", "TEMPORAL_ADDRESS"]);
+  const config = workerConfigSchema.parse(environment);
+  validateSupplierSecrets(config, environment);
+  return config;
+}
+
+export function loadServerConfig(environment: Record<string, string | undefined>): ServerConfig {
+  requireProductionConfiguration(environment, [
+    "DATABASE_URL",
+    "BETTER_AUTH_SECRET",
+    "BETTER_AUTH_URL",
+    "SERVICE_TOKEN_SECRET",
+    "PRICING_DIAGNOSTIC_SECRET",
+  ]);
+  const config = serverConfigSchema.parse(environment);
+  validateSupplierSecrets(config, environment);
   if (config.SERVICE_TOKEN_SECRET === config.PRICING_DIAGNOSTIC_SECRET) {
     throw new Error("Pricing diagnostics require an independent signing secret");
   }

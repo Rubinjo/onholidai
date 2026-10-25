@@ -6,7 +6,9 @@ vi.mock("server-only", () => ({}));
 describe("explicit application composition", () => {
   it("composes a reassigned discovery-only credential in web but no planning or booking authority in worker", async () => {
     const { createApplication } = await import("../../server/application");
+    const { createWorkerApplication } = await import("../../server/worker-application");
     const environment = {
+      TEMPORAL_ADDRESS: "localhost:7233",
       PROVIDER_MODE: "live",
       BOOKING_DEMO_ENABLED: "true",
       DUFFEL_TRANSACTION_SECRET: "synthetic-reassigned-read-role-canary",
@@ -30,7 +32,7 @@ describe("explicit application composition", () => {
     };
     const transport = vi.fn<typeof fetch>();
     const web = createApplication(environment, { supplierMappings: { fetch: transport } });
-    const worker = createApplication(environment, { audience: "worker" });
+    const worker = createWorkerApplication(environment);
     try {
       expect(web.planningProviders).toHaveLength(1);
       expect(web.planningProviders[0].capabilities).toMatchObject({
@@ -39,7 +41,7 @@ describe("explicit application composition", () => {
         search: ["flight"],
         readOnly: true,
       });
-      expect(worker.planningProviders).toEqual([]);
+      expect(worker).not.toHaveProperty("planningProviders");
       for (const operation of ["book", "status", "idempotency", "cancel", "reschedule"] as const)
         expect(worker.providerReadiness.duffel.products.flight.operations[operation].access).toBe(
           "unconfigured",
@@ -244,38 +246,32 @@ describe("explicit application composition", () => {
   });
 
   it("composes worker readiness without enabling web research or revealing credentials", async () => {
-    const { createApplication } = await import("../../server/application");
-    const { createReadAdapter } = await import("../../server/supply/providers/adapter");
+    const { createWorkerApplication } = await import("../../server/worker-application");
     const verified = {
       support: "supported",
       access: "verified",
       evidenceRef: "synthetic-worker-approval",
       verifiedAt: "2026-10-19T00:00:00Z",
     };
-    const application = createApplication(
-      {
-        PROVIDER_MODE: "live",
-        VIATOR_SECRET: "synthetic-shared-canary",
-        SUPPLIER_PROVIDERS: JSON.stringify({
-          viator: {
-            accessTier: "merchant",
-            readSecretRef: "VIATOR_SECRET",
-            transactionSecretRef: "VIATOR_SECRET",
-            products: {
-              activity: {
-                operations: { search: verified, book: { ...verified, environment: "sandbox" } },
-              },
+    const application = createWorkerApplication({
+      TEMPORAL_ADDRESS: "localhost:7233",
+      PROVIDER_MODE: "live",
+      VIATOR_SECRET: "synthetic-shared-canary",
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        viator: {
+          accessTier: "merchant",
+          readSecretRef: "VIATOR_SECRET",
+          transactionSecretRef: "VIATOR_SECRET",
+          products: {
+            activity: {
+              operations: { search: verified, book: { ...verified, environment: "sandbox" } },
             },
           },
-        }),
-      },
-      {
-        audience: "worker",
-        planningProviders: [createReadAdapter("viator", "activity", { search: async () => [] })],
-      },
-    );
+        },
+      }),
+    });
     try {
-      expect(application.planningProviders).toEqual([]);
+      expect(application).not.toHaveProperty("planningProviders");
       expect(application.providerReadiness.viator.products.activity.operations.book.access).toBe(
         "verified",
       );

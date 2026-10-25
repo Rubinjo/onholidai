@@ -27,19 +27,15 @@ export function createApplication(
   dependencies: {
     planningProviders?: readonly SupplyReadProvider[];
     places?: PlaceLookupProvider;
-    audience?: "web" | "worker";
     supplierMappings?: PlanningProviderMappings;
     bookingPrerequisites?: TrustedBookingPrerequisiteReader;
   } = {},
 ) {
   const config = loadServerConfig(environment);
-  const audience = dependencies.audience ?? "web";
-  const providerReadiness = deriveProviderReadiness(config, environment, audience);
+  const providerReadiness = deriveProviderReadiness(config, environment);
   const planningProviders = (
-    audience === "worker"
-      ? []
-      : (dependencies.planningProviders ??
-        createConfiguredPlanningProviders(config, environment, dependencies.supplierMappings))
+    dependencies.planningProviders ??
+    createConfiguredPlanningProviders(config, environment, dependencies.supplierMappings)
   ).filter((provider) => {
     if (
       !provider.capabilities.readOnly ||

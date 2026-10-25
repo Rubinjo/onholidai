@@ -8,6 +8,7 @@ vi.mock("server-only", () => ({}));
 import {
   deriveProviderReadiness,
   loadServerConfig,
+  loadWorkerConfig,
   SUPPLIER_PROVIDER_IDS,
 } from "../../server/config";
 
@@ -21,6 +22,68 @@ const productionEnvironment = {
 } as const;
 
 describe("deployment configuration validation", () => {
+  const workerEnvironment = {
+    NODE_ENV: "production",
+    DATABASE_URL: "postgresql://onholidai_worker@postgres:5432/onholidai",
+    TEMPORAL_ADDRESS: "temporal:7233",
+    PROVIDER_MODE: "deterministic",
+  };
+
+  it("accepts the production Compose worker environment without web configuration", () => {
+    expect(loadWorkerConfig(workerEnvironment)).toEqual({
+      ...workerEnvironment,
+      VIATOR_ENVIRONMENT: "sandbox",
+      NUITEE_ENVIRONMENT: "sandbox",
+      SUPPLIER_PROVIDERS: {},
+    });
+    expect(() => loadServerConfig(workerEnvironment)).toThrow("BETTER_AUTH_SECRET");
+  });
+
+  it.each(["DATABASE_URL", "TEMPORAL_ADDRESS"])("requires explicit production worker %s", (key) => {
+    for (const value of [undefined, "", `synthetic-${key.toLowerCase()}`]) {
+      expect(() => loadWorkerConfig({ ...workerEnvironment, [key]: value })).toThrow(key);
+    }
+  });
+
+  it.each([
+    ["NODE_ENV", "invalid"],
+    ["DATABASE_URL", "not-a-url"],
+    ["TEMPORAL_ADDRESS", " "],
+    ["PROVIDER_MODE", "invalid"],
+    ["VIATOR_ENVIRONMENT", "invalid"],
+    ["NUITEE_ENVIRONMENT", "invalid"],
+    ["SUPPLIER_PROVIDERS", "not-json"],
+  ])("rejects invalid worker %s", (key, value) => {
+    expect(() => loadWorkerConfig({ ...workerEnvironment, [key]: value })).toThrow();
+  });
+
+  it("does not parse or retain unused web credentials in worker configuration", () => {
+    expect(
+      loadWorkerConfig({
+        ...workerEnvironment,
+        BETTER_AUTH_SECRET: "unused",
+        BETTER_AUTH_URL: "unused",
+        SERVICE_TOKEN_SECRET: "unused",
+        PRICING_DIAGNOSTIC_SECRET: "unused",
+      }),
+    ).toEqual(loadWorkerConfig(workerEnvironment));
+  });
+
+  it("preserves supplier secret separation in worker configuration", () => {
+    for (const transactionSecretRef of ["DUFFEL_READ_SECRET", "DUFFEL_WRITE_SECRET"]) {
+      expect(() =>
+        loadWorkerConfig({
+          ...workerEnvironment,
+          DUFFEL_READ_SECRET: "same-provider-key",
+          DUFFEL_WRITE_SECRET: "same-provider-key",
+          SUPPLIER_PROVIDERS: JSON.stringify({
+            duffel: { readSecretRef: "DUFFEL_READ_SECRET", transactionSecretRef },
+          }),
+        }),
+      ).toThrow("separate");
+    }
+  });
+
   it("requires explicit opt-in to a booking-only demo without changing provider readiness", () => {
     expect(loadServerConfig({}).BOOKING_DEMO_ENABLED).toBe(false);
     expect(loadServerConfig({ BOOKING_DEMO_ENABLED: "false" }).BOOKING_DEMO_ENABLED).toBe(false);

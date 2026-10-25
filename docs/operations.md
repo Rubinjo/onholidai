@@ -6,6 +6,8 @@ Use Node.js 24, pnpm 12, Python 3.13/uv, and Docker Compose v2. Provision distin
 
 Start `--profile infrastructure` for PostgreSQL 18/PostGIS, Temporal, and local observability. Apply schema migrations through the dedicated migration role using `--profile infrastructure --profile migrations`; migrations 001–014 are ordered and checksum-verified. Migration 014 adds read-only research runs and immutable offer revisions without changing accepted-trip storage. The `migrate` job depends on `postgres`, and Compose only resolves a `depends_on` target inside a profile enabled for that invocation, so the migration command must name `infrastructure` too. Start `--profile applications` afterward. Start `--profile booking` only when the TypeScript Temporal worker is required. Do not run a second migration process concurrently.
 
+The booking worker has its own composition root and configuration validation. Production requires explicit `DATABASE_URL` and `TEMPORAL_ADDRESS`; supplier configuration retains the same validation and worker-only readiness rules. It does not initialize web authentication or planning clients and does not require `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `SERVICE_TOKEN_SECRET`, or `PRICING_DIAGNOSTIC_SECRET`. Keep those web/service secrets out of the worker; Compose mounts only `worker_db_password` for its database role. Web production startup still requires all of its auth and signing settings. After updating worker code, rebuild and recreate it with `docker compose -f infra/compose/compose.yml --profile infrastructure --profile booking up -d --build booking-worker`.
+
 ### Disposable foundation database tests (PowerShell)
 
 Run from the repository root with Docker's Linux engine available. This uses

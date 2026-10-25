@@ -154,6 +154,8 @@ docker compose -f infra/compose/compose.yml --profile infrastructure --profile b
 
 Set `PROVIDER_MODE=deterministic` through existing composition. Ensure deterministic transaction clients are actually registered: the pre-feature worker's empty registry is not a successful booking demonstration. For host mode, use existing `pnpm dev`, `pnpm dev:agent`, and `pnpm --dir web booking:worker` in separate terminals with equivalent safe configuration. No extra port or MCP service is required.
 
+The booking worker uses a separate initializer. Production startup requires explicit `DATABASE_URL` and `TEMPORAL_ADDRESS`, but no web authentication, service-token, or pricing-diagnostic secrets. These requirements also apply to production-mode host runs. See the [operations guide](../../docs/operations.md) for process-specific configuration. Successful startup alone does not configure transaction providers or enable live booking.
+
 ### Bounded US1 discovery checks
 
 With the isolated test database URLs configured, the current discovery gate is:

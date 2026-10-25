@@ -9,7 +9,7 @@ import { withTemporalTestEnvironment } from "../helpers/temporal";
 
 const describeWithDatabase = hasIsolatedDatabaseConfiguration() ? describe : describe.skip;
 describeWithDatabase("standalone booking worker", () => {
-  it("registers the preload hooks and starts the actual entrypoint against isolated services", async () => {
+  it("starts the production entrypoint without web secrets against isolated services", async () => {
     await withIsolatedTestDatabase(async (database) =>
       withTemporalTestEnvironment(async (temporal) => {
         const child = spawn(
@@ -26,7 +26,11 @@ describeWithDatabase("standalone booking worker", () => {
             windowsHide: true,
             env: {
               ...process.env,
-              NODE_ENV: "test",
+              NODE_ENV: "production",
+              BETTER_AUTH_SECRET: undefined,
+              BETTER_AUTH_URL: undefined,
+              SERVICE_TOKEN_SECRET: undefined,
+              PRICING_DIAGNOSTIC_SECRET: undefined,
               PROVIDER_MODE: "deterministic",
               DATABASE_URL: database.workerConnectionString,
               TEMPORAL_ADDRESS: temporal.address,

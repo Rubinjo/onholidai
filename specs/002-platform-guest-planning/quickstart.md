@@ -86,6 +86,8 @@ Use one migration runner, not parallel host/container jobs. For host apps follow
 docker compose -f infra/compose/compose.yml --profile infrastructure --profile booking up -d --build booking-worker
 ```
 
+The booking worker uses a separate initializer. Production startup requires explicit `DATABASE_URL` and `TEMPORAL_ADDRESS`, but no web authentication, service-token, or pricing-diagnostic secrets. See the [operations guide](../../docs/operations.md) for process-specific configuration.
+
 Integration tests need TEST_DATABASE_ADMIN_URL, TEST_DATABASE_MIGRATION_URL, TEST_DATABASE_APP_URL and TEST_DATABASE_WORKER_URL as existing isolated helpers require. Missing configuration or skipped suites are not acceptance. Guest browser tests explicitly use new empty contexts and no inherited US1_STORAGE_STATE; existing account tests retain their fixtures. Do not print secrets.
 
 ### Browser-run prerequisites
