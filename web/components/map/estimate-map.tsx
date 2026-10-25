@@ -37,6 +37,8 @@ export function EstimateMap({
     map = useRef<LibreMap | null>(null),
     markers = useRef<Marker[]>([]);
   const markerFactory = useRef<((element: HTMLElement) => Marker) | null>(null);
+  const viewport = useRef("");
+  const countryCenters = useRef(new Map<string, [number, number]>());
   const current = useRef({ destinations, segments, activities });
   const update = useCallback(() => {
     const instance = map.current;
@@ -120,11 +122,21 @@ export function EstimateMap({
           .addTo(instance);
         if (marker) markers.current.push(marker);
       }
-    if (points.length > 1) {
-      const west = Math.min(...points.map((point) => point[0])),
-        east = Math.max(...points.map((point) => point[0]));
-      const south = Math.min(...points.map((point) => point[1])),
-        north = Math.max(...points.map((point) => point[1]));
+    // Country selections do not have stop coordinates. Use the basemap's label
+    // position for the camera only, without inventing route points or markers.
+    const cameraPoints = data.destinations.flatMap((place): [number, number][] => {
+      if (place.location) return [[place.location.longitude, place.location.latitude]];
+      const center = countryCenters.current.get(place.countryCode);
+      return center ? [center] : [];
+    });
+    const nextViewport = JSON.stringify(cameraPoints);
+    if (viewport.current === nextViewport) return;
+    viewport.current = nextViewport;
+    if (cameraPoints.length > 1) {
+      const west = Math.min(...cameraPoints.map((point) => point[0])),
+        east = Math.max(...cameraPoints.map((point) => point[0]));
+      const south = Math.min(...cameraPoints.map((point) => point[1])),
+        north = Math.max(...cameraPoints.map((point) => point[1]));
       instance.fitBounds(
         [
           [west, south],
@@ -132,7 +144,7 @@ export function EstimateMap({
         ],
         { padding: 75, maxZoom: 5, animate: false },
       );
-    } else if (points[0]) instance.jumpTo({ center: points[0], zoom: 3 });
+    } else if (cameraPoints[0]) instance.jumpTo({ center: cameraPoints[0], zoom: 3 });
   }, []);
   useEffect(() => {
     current.current = { destinations, segments, activities };
@@ -145,6 +157,9 @@ export function EstimateMap({
       .then((library) => {
         if (stopped || !container.current) return;
         library.setWorkerUrl(workerUrl);
+        const firstLocation = current.current.destinations.find(
+          (place) => place.location,
+        )?.location;
         const instance = new library.Map({
           container: container.current,
           style: {
@@ -154,11 +169,12 @@ export function EstimateMap({
               { id: "background", type: "background", paint: { "background-color": "#deedf0" } },
             ],
           },
-          center: [20, 25],
-          zoom: 1,
+          center: firstLocation ? [firstLocation.longitude, firstLocation.latitude] : [20, 25],
+          zoom: firstLocation ? 3 : 1,
           attributionControl: false,
         });
         map.current = instance;
+        viewport.current = "";
         instance.getCanvas().tabIndex = -1;
         instance.on("error", () => {
           if (!stopped) setFailed(true);
@@ -221,6 +237,27 @@ export function EstimateMap({
           });
           markerFactory.current = (element) => new library.Marker({ element });
           update();
+          void (instance.getSource("countries") as GeoJSONSource)
+            .getData()
+            .then((data) => {
+              if (stopped) return;
+              if (data.type !== "FeatureCollection") throw new Error("Invalid country basemap");
+              for (const { properties } of data.features) {
+                const code: unknown = properties?.ISO_A2_EH ?? properties?.ISO_A2,
+                  longitude: unknown = properties?.LABEL_X,
+                  latitude: unknown = properties?.LABEL_Y;
+                if (
+                  typeof code === "string" &&
+                  typeof longitude === "number" &&
+                  typeof latitude === "number"
+                )
+                  countryCenters.current.set(code, [longitude, latitude]);
+              }
+              update();
+            })
+            .catch(() => {
+              if (!stopped) setFailed(true);
+            });
         });
         observer = new ResizeObserver(() => instance.resize());
         observer.observe(container.current);

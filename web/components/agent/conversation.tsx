@@ -159,6 +159,7 @@ export function Conversation({
   ]);
   const result = run.data?.result,
     active = ["queued", "running"].includes(run.data?.status ?? "");
+  const canSend = !busy && !active && Boolean(message.trim()) && trip.lifecycleState === "draft";
   const checkpoints = versions.data?.pages.flatMap((page) => page.items) ?? [];
   const committedRuns = new Set(checkpoints.map((entry) => entry.runId).filter(Boolean));
   const timeline = [
@@ -308,7 +309,7 @@ export function Conversation({
         className="assistant-chat__composer"
         onSubmit={(event) => {
           event.preventDefault();
-          void submit();
+          if (canSend) void submit();
         }}
       >
         <label>
@@ -319,12 +320,14 @@ export function Conversation({
             maxLength={12000}
             value={message}
             onChange={(event) => setMessage(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+              event.preventDefault();
+              if (!event.repeat && canSend) event.currentTarget.form?.requestSubmit();
+            }}
           />
         </label>
-        <Button
-          type="submit"
-          disabled={busy || active || !message.trim() || trip.lifecycleState !== "draft"}
-        >
+        <Button type="submit" disabled={!canSend}>
           Send message
         </Button>
       </form>

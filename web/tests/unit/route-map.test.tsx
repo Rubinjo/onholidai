@@ -1,16 +1,27 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { EstimateMap } from "../../components/map/estimate-map";
 import { travelSegmentSchema } from "../../domain/trip/schema";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
-const runtime = vi.hoisted(() => ({ created: vi.fn(), data: vi.fn() }));
+const runtime = vi.hoisted(() => ({
+  created: vi.fn(),
+  data: vi.fn(),
+  fitBounds: vi.fn(),
+  jumpTo: vi.fn(),
+  countries: vi.fn(
+    (): Promise<{
+      type: "FeatureCollection";
+      features: { properties: Record<string, unknown> }[];
+    }> => Promise.resolve({ type: "FeatureCollection", features: [] }),
+  ),
+}));
 vi.mock("maplibre-gl", () => ({
   setWorkerUrl() {},
   Map: class {
     constructor(public options: { container: HTMLElement }) {
-      runtime.created();
+      runtime.created(options);
     }
     sources = new Set<string>();
     on(event: string, handler: () => void) {
@@ -19,8 +30,8 @@ vi.mock("maplibre-gl", () => ({
     setProjection() {}
     addLayer() {}
     setFilter() {}
-    fitBounds() {}
-    jumpTo() {}
+    fitBounds = runtime.fitBounds;
+    jumpTo = runtime.jumpTo;
     resize() {}
     remove() {}
     addSource(name: string) {
@@ -28,7 +39,7 @@ vi.mock("maplibre-gl", () => ({
     }
     getSource(name: string) {
       return this.sources.has(name)
-        ? { setData: (data: unknown) => runtime.data(name, data) }
+        ? { setData: (data: unknown) => runtime.data(name, data), getData: runtime.countries }
         : undefined;
     }
     getCanvas() {
@@ -52,6 +63,120 @@ vi.mock("maplibre-gl", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  runtime.countries.mockResolvedValue({ type: "FeatureCollection", features: [] });
+});
+it("starts centered on the selected stop and focuses an AI-generated route on the same map", async () => {
+  const places = createSyntheticTripSnapshot().destinations;
+  const view = render(<EstimateMap destinations={places} />);
+  await waitFor(() =>
+    expect(runtime.jumpTo).toHaveBeenCalledWith({ center: [-9.1393, 38.7223], zoom: 3 }),
+  );
+  expect(runtime.created).toHaveBeenCalledWith(
+    expect.objectContaining({ center: [-9.1393, 38.7223], zoom: 3 }),
+  );
+  view.rerender(
+    <EstimateMap
+      destinations={[
+        ...places,
+        {
+          ...places[0],
+          id: crypto.randomUUID(),
+          name: "Porto",
+          routePosition: 1,
+          location: { latitude: 41.1579, longitude: -8.6291 },
+        },
+      ]}
+    />,
+  );
+  await waitFor(() =>
+    expect(runtime.fitBounds).toHaveBeenCalledWith(
+      [
+        [-9.1393, 38.7223],
+        [-8.6291, 41.1579],
+      ],
+      { padding: 75, maxZoom: 5, animate: false },
+    ),
+  );
+  expect(runtime.created).toHaveBeenCalledTimes(1);
+});
+it("centers country-only selections once basemap data loads without inventing stops", async () => {
+  let finish: (data: Awaited<ReturnType<typeof runtime.countries>>) => void = () => {};
+  runtime.countries.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const country = {
+    ...createSyntheticTripSnapshot().destinations[0],
+    kind: "country" as const,
+    name: "Japan",
+    countryCode: "JP",
+    location: null,
+  };
+  render(<EstimateMap destinations={[country]} />);
+  await waitFor(() => expect(runtime.countries).toHaveBeenCalled());
+  expect(runtime.jumpTo).not.toHaveBeenCalled();
+  await act(async () =>
+    finish({
+      type: "FeatureCollection",
+      features: [{ properties: { ISO_A2_EH: "JP", LABEL_X: 138, LABEL_Y: 37 } }],
+    }),
+  );
+  expect(runtime.jumpTo).toHaveBeenCalledWith({ center: [138, 37], zoom: 3 });
+  expect(runtime.data).toHaveBeenCalledWith("route", {
+    type: "FeatureCollection",
+    features: [],
+  });
+  expect(document.querySelector(".map-stop")).toBeNull();
+  expect(runtime.jumpTo).toHaveBeenCalledTimes(1);
+});
+it("fits all selected destinations on initial load, using coordinates before country labels", async () => {
+  const places = createSyntheticTripSnapshot().destinations;
+  runtime.countries.mockResolvedValue({
+    type: "FeatureCollection",
+    features: [
+      { properties: { ISO_A2_EH: "PT", LABEL_X: -8, LABEL_Y: 40 } },
+      { properties: { ISO_A2_EH: "JP", LABEL_X: 138, LABEL_Y: 37 } },
+    ],
+  });
+  render(
+    <EstimateMap
+      destinations={[
+        ...places,
+        {
+          ...places[0],
+          id: crypto.randomUUID(),
+          kind: "country",
+          name: "Japan",
+          countryCode: "JP",
+          routePosition: 1,
+          location: null,
+        },
+      ]}
+    />,
+  );
+  await waitFor(() =>
+    expect(runtime.fitBounds).toHaveBeenCalledWith(
+      [
+        [-9.1393, 37],
+        [138, 38.7223],
+      ],
+      { padding: 75, maxZoom: 5, animate: false },
+    ),
+  );
+});
+it("focuses destinations arriving after an initially empty trip loads", async () => {
+  const view = render(<EstimateMap destinations={[]} />);
+  await waitFor(() => expect(runtime.created).toHaveBeenCalledTimes(1));
+  expect(runtime.jumpTo).not.toHaveBeenCalled();
+  view.rerender(<EstimateMap destinations={createSyntheticTripSnapshot().destinations} />);
+  await waitFor(() => expect(runtime.jumpTo).toHaveBeenCalledTimes(1));
+});
+it("shows the map recovery control if basemap data cannot be read", async () => {
+  runtime.countries.mockRejectedValueOnce(new Error("Basemap unavailable"));
+  render(<EstimateMap destinations={createSyntheticTripSnapshot().destinations} />);
+  expect(await screen.findByRole("button", { name: "Retry route map" })).toBeTruthy();
 });
 it("updates the same map with accepted stays/activities and mixed authoritative transport, without inventing missing geometry", async () => {
   const places = createSyntheticTripSnapshot().destinations;
@@ -110,6 +235,7 @@ it("updates the same map with accepted stays/activities and mixed authoritative 
   await screen.findByText("Museum visit");
   expect(screen.getByText("9 nights")).toBeTruthy();
   expect(runtime.created).toHaveBeenCalledTimes(1);
+  expect(runtime.jumpTo).toHaveBeenCalledTimes(1);
   expect(runtime.data).toHaveBeenCalledWith("segments", {
     type: "FeatureCollection",
     features: [],
