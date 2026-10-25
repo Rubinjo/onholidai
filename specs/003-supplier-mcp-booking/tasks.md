@@ -10,6 +10,8 @@
 
 **2026-10-23 scope revision**: Update this existing feature, not a new convergence phase. Active inventory is Duffel Flights, Nuitee stays and Viator activities. Nuitee Flights is a future complementary candidate only; Experiences is evaluated but inactive. No automatic fallback. Duffel Stays becomes saved-evidence/approved-reconciliation-only. Booking.com/Trainline remain deferred with no rail replacement; GetYourGuide remains replaced. All 29 completed task lines remain unchanged as historical work, not certification of this revision. Retain every existing ID; revise unchecked T017/T031/T035/T065/T068/T075/T089 for current scope. New T094-T098 re-establish configuration, contracts, composition and regression evidence. These corrections supersede old supplier-specific directions in completed tasks without rerunning obsolete Duffel Stays work.
 
+**2026-10-25 customer-facing research alignment**: The current customer-facing requirement is agent-led research, internal supplier comparison and routine selection, with decisions reflected in the accepted trip under existing proposal policy and concise explanations or material questions in chat. There is no customer supplier-results/comparison/selection panel or manual research button. Initial research starts automatically after setup submission; opening an existing trip alone does not replace its plan. Retain supplier search/detail/revalidation APIs, MCP contracts and internal decision tests. Completed T011/T031 notes and the 2026-10-23 panel/browser evidence below record what was implemented and tested at that time; they are historical, not a requirement to restore the retired panel. Update the remaining accessibility/usability work to test this current flow.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - `[P]` identifies a task eligible for a named parallel wave after its predecessors finish; it does not remove dependencies or authorize spawning agents.
@@ -327,7 +329,7 @@ retains its earlier-journey prerequisite. See the
 
 **Goal**: Complete every journey with keyboard/screen-reader/mobile operation and make actual provider readiness evident. Accessibility basics and truthful mode labels are required in earlier phases too; this phase certifies and closes the whole journey.
 
-**Independent Test**: Traverse discovery, selection, complete review, authorization and partial/uncertain recovery using keyboard/screen reader at 320px and desktop; inspect all provider/mode/limitation states and the separate implementation/live evidence ledger.
+**Independent Test**: Traverse agent-led discovery and routine selection, chat explanations/material questions, complete booking review, authorization and partial/uncertain recovery using keyboard/screen reader at 320px and desktop; inspect provider/mode/limitation states and the separate implementation/live evidence ledger without exposing non-selected supplier offers.
 
 ### Tests for User Story 5
 
@@ -336,11 +338,11 @@ retains its earlier-journey prerequisite. See the
 
 ### Implementation for User Story 5
 
-- [ ] T081 [US5] Close keyboard/screen-reader/focus/status issues in `web/components/trip-workspace/offer-research.tsx`, `web/components/agent/conversation.tsx` and `web/components/trip-workspace/workspace.tsx` using existing controls; preserve DOM reading order, accessible comparison details and non-disruptive current-version announcements.
+- [ ] T081 [US5] Close keyboard/screen-reader/focus/status issues in `web/components/agent/conversation.tsx` and `web/components/trip-workspace/workspace.tsx` using existing controls; preserve logical chat reading order, accessible plan-decision/limitation summaries, focused material questions and non-disruptive current-version announcements. Do not reintroduce a supplier-results panel or manual research control.
 - [ ] T082 [US5] Close booking/recovery accessibility/responsiveness issues in `web/components/booking/booking-review.tsx`, `authorization-form.tsx`, `terms-review.tsx`, `status.tsx`, `recovery.tsx` and `web/app/globals.css`; support logical visible focus/error-summary focus after blocked submit, screen-reader status and full 320px readability without a redesign/new UI toolkit.
-- [ ] T083 [US5] Complete safe provider capability/mode/prerequisite presentation in `web/components/trip-workspace/offer-research.tsx`, `web/components/booking/booking-console.tsx` and `web/server/supply/read.ts`, keeping “supported | unsupported | unknown” separate from “unconfigured | configured_unverified | verified | blocked” and surfacing missing identity/payment/access prerequisites without secrets or fake live fallback.
+- [ ] T083 [US5] Complete safe provider capability/mode/prerequisite communication through agent outcomes/chat, `web/components/booking/booking-console.tsx` and `web/server/supply/read.ts`, keeping “supported | unsupported | unknown” separate from “unconfigured | configured_unverified | verified | blocked” and surfacing relevant missing identity/payment/access prerequisites without secrets or fake live fallback. Do not expose non-selected supplier offers or comparison controls.
 - [ ] T084 [US5] Run T079–T080 plus manual keyboard/screen-reader checks across the four journeys, narrow/wide layouts and guest/account return, recording browser/assistive technology, fixes and zero critical/serious findings for SC-008 in `specs/003-supplier-mcp-booking/evidence/accessibility.md`; unavailable manual checks remain unrun/unchecked, not certified by automated tests alone.
-- [ ] T085 [US5] Conduct the specified ten-participant evaluation using `specs/003-supplier-mcp-booking/quickstart.md` and record SC-002 comparison <=2min, SC-004 review/authorization <=3min and SC-007 partial/uncertain understanding <=1min with >=9/10 success in `specs/003-supplier-mcp-booking/evidence/usability.md`; use available consenting participants only, do not send recruitment messages without authority, and leave this task unchecked if participant evidence is unavailable.
+- [ ] T085 [US5] Conduct the specified ten-participant evaluation using `specs/003-supplier-mcp-booking/quickstart.md` and record SC-002 understanding of the agent's plan decision, rationale, selected-plan price/provider/freshness and unknown facts within 2 minutes, SC-004 review/authorization within 3 minutes and SC-007 partial/uncertain understanding within 1 minute, with >=9/10 success in `specs/003-supplier-mcp-booking/evidence/usability.md`. Do not ask participants to compare non-selected supplier offers. Use available consenting participants only, do not send recruitment messages without authority, and leave this task unchecked if participant evidence is unavailable.
 
 **Checkpoint**: Whole-journey accessibility and provider claims have explicit evidence. Missing human/live evidence remains a named release gate rather than a fabricated pass or an implementation defect hidden by simulation.
 
@@ -416,25 +418,25 @@ Contract/model changes precede services, services precede endpoints/integration,
 
 ## Requirement Coverage
 
-| Specification area                           | Implementation and proof tasks                                                                           |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| FR-001–002 reuse/access                      | T004–T008/T093, T014–T015, T021–T025, T029–T030, T034, T037–T038, T042, T051–T053                        |
-| FR-003–010 discovery/capabilities/Tavily     | T093, T009–T032, current correction T094–T098, T080, T083, T092                                          |
-| FR-011–014 decisions/workspace/state         | T027–T029, T031–T041, T055–T056, T081                                                                    |
-| FR-015–020 complete review/authorization     | T042–T060, dispatch checks T061/T070 and exact continuation T073                                         |
-| FR-021–026 safe execution/recovery           | T061–T078, compatibility T091                                                                            |
-| FR-027–029 privacy/credentials/audit         | T003/T005/T008/T093, T009/T013/T017/T019/T021–T024/T094–T098, T049/T057, T064–T075, T086/T089/T092       |
-| FR-030 accessibility/responsiveness          | Basic UI T027/T040/T054–T055/T076, cross-journey T079–T084                                               |
-| FR-031 deterministic acceptance              | T007/T093/T094–T098/T009–T011/T016–T020/T026/T031–T034/T042–T044/T059–T063/T065–T068/T077–T080/T086–T092 |
-| SC-001 search bounds                         | T021/T032/T087                                                                                           |
-| SC-002 comparison and SC-004 complete review | T027/T054–T055 plus participant evidence T085                                                            |
-| SC-003 decision/question quality             | T033/T035–T036/T041                                                                                      |
-| SC-005 no unauthorized writes                | T042–T044/T051–T052/T056/T059–T061/T070/T077                                                             |
-| SC-006 no duplicate writes                   | T061/T069–T075/T077/T091                                                                                 |
-| SC-007 recovery understanding                | T063/T076/T078 plus participant evidence T085                                                            |
-| SC-008 accessibility                         | T079–T084                                                                                                |
-| SC-009 data exposure/audit                   | T005/T049/T057/T086                                                                                      |
-| SC-010 truthful provider readiness           | T003/T093/T094–T098/T009/T013/T017–T020/T026/T065–T068/T080/T083/T092                                    |
+| Specification area                                            | Implementation and proof tasks                                                                           |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| FR-001–002 reuse/access                                       | T004–T008/T093, T014–T015, T021–T025, T029–T030, T034, T037–T038, T042, T051–T053                        |
+| FR-003–010 discovery/capabilities/Tavily                      | T093, T009–T032, current correction T094–T098, T080, T083, T092                                          |
+| FR-011–014 decisions/workspace/state                          | T027–T029, T031–T041, T055–T056, T081                                                                    |
+| FR-015–020 complete review/authorization                      | T042–T060, dispatch checks T061/T070 and exact continuation T073                                         |
+| FR-021–026 safe execution/recovery                            | T061–T078, compatibility T091                                                                            |
+| FR-027–029 privacy/credentials/audit                          | T003/T005/T008/T093, T009/T013/T017/T019/T021–T024/T094–T098, T049/T057, T064–T075, T086/T089/T092       |
+| FR-030 accessibility/responsiveness                           | Basic UI T027/T040/T054–T055/T076, cross-journey T079–T084                                               |
+| FR-031 deterministic acceptance                               | T007/T093/T094–T098/T009–T011/T016–T020/T026/T031–T034/T042–T044/T059–T063/T065–T068/T077–T080/T086–T092 |
+| SC-001 search bounds                                          | T021/T032/T087                                                                                           |
+| SC-002 plan-decision comprehension and SC-004 complete review | T027/T054–T055 plus participant evidence T085                                                            |
+| SC-003 decision/question quality                              | T033/T035–T036/T041                                                                                      |
+| SC-005 no unauthorized writes                                 | T042–T044/T051–T052/T056/T059–T061/T070/T077                                                             |
+| SC-006 no duplicate writes                                    | T061/T069–T075/T077/T091                                                                                 |
+| SC-007 recovery understanding                                 | T063/T076/T078 plus participant evidence T085                                                            |
+| SC-008 accessibility                                          | T079–T084                                                                                                |
+| SC-009 data exposure/audit                                    | T005/T049/T057/T086                                                                                      |
+| SC-010 truthful provider readiness                            | T003/T093/T094–T098/T009/T013/T017–T020/T026/T065–T068/T080/T083/T092                                    |
 
 The data-model constraints are carried explicitly into T004 (money/strict accepted component), T012/T014/T016 (offer evidence, nullable unknowns, immutable revisions/stable party), T013/T083 (provider identity/support/access), T045/T046 (classification/coverage fields), T047/T049/T051 (v2 terms, dispositions, totals/acknowledgements/lineage/replay), and T069–T074 (attempt/claim/outcome transitions). No optional missing legacy fact becomes a verified pass.
 
@@ -442,7 +444,7 @@ The data-model constraints are carried explicitly into T004 (money/strict accept
 
 ### MVP first
 
-Retain completed setup/foundation/US1 work; complete T094 -> T095 -> T017 -> T096 -> T097 -> T098 -> T028 -> T031 -> T032. Demonstrate Duffel flight/Nuitee stay/Viator activity search/comparison/details and safe-or-unsupported revalidation from the real workspace without inactive products or rail, preserving saved Duffel stay evidence and accepted state. Live final-terms/prebook/payment operations remain gated. This is a discovery MVP, not a complete booking launch.
+Retain completed setup/foundation/US1 work; complete T094 -> T095 -> T017 -> T096 -> T097 -> T098 -> T028 -> T031 -> T032. Demonstrate agent-led Duffel flight/Nuitee stay/Viator activity search, internal comparison/selection, useful plan/chat outcomes and safe-or-unsupported detail/revalidation behavior without inactive products or rail, preserving saved Duffel stay evidence and accepted state. Do not expose a separate supplier-results panel or manual research action. Live final-terms/prebook/payment operations remain gated. This is a discovery MVP, not a complete booking launch.
 
 ### Incremental delivery
 
@@ -456,16 +458,22 @@ T084 manual accessibility and T085 participant outcomes remain unchecked if not 
 
 ## Generation Validation
 
-| Group                               | Tasks                     |
-| ----------------------------------- | ------------------------- |
-| Setup                               | 3                         |
-| Foundation                          | 8 (T004-T008, T093-T095)  |
-| US1 — Discovery/comparison          | 27 (T009-T032, T096-T098) |
-| US2 — Preference decisions          | 9                         |
-| US3 — Complete review/authorization | 19                        |
-| US4 — Safe execution/recovery       | 18                        |
-| US5 — Accessibility/truthful claims | 7                         |
-| Polish/cross-cutting verification   | 7                         |
-| Total                               | 98                        |
+| Group                                   | Tasks                     |
+| --------------------------------------- | ------------------------- |
+| Setup                                   | 3                         |
+| Foundation                              | 8 (T004-T008, T093-T095)  |
+| US1 — Discovery/comparison              | 27 (T009-T032, T096-T098) |
+| US2 — Preference decisions              | 9                         |
+| US3 — Complete review/authorization     | 19                        |
+| US4 — Safe execution/recovery           | 18                        |
+| US5 — Accessibility/truthful claims     | 7                         |
+| Polish/cross-cutting verification       | 7 (T086–T092)             |
+| Demo booking presentation override      | 3 (T099–T101)             |
+| Authorized sandbox credential follow-up | 3 (T102–T104)             |
+| Total                                   | 104                       |
 
 Revision review (2026-10-23): 98 unique IDs T001-T098; all 29 completed task lines are preserved, with 69 unchecked tasks including the five new corrections. Later-numbered correction prerequisites intentionally precede revised T017 rather than renumbering history. Current provider scope supersedes obsolete supplier-specific instructions in completed tasks and dated progress entries. All tasks have file paths, story-phase tasks are labelled, and all 31 functional requirements and 10 success criteria remain mapped. Independent tests and dependency-qualified parallel examples remain defined. No unresolved design placeholder or extension hook is configured. External prebook/access/payment/human gates remain explicit; document quality is not implementation certification.
+
+Alignment review (2026-10-25): The current specification retires customer-facing offer comparison and manual research controls while preserving read-only supplier APIs and their access/contract requirements. Prior comparison-panel tasks and evidence remain dated implementation history. Current open accessibility and participant tasks now measure the chat-and-plan experience. T099–T101 are the separately scoped demo booking presentation tasks; they do not change discovery, booking authorization or provider-readiness requirements.
+
+Current task inventory review (2026-10-25): 104 unique task IDs T001–T104, 76 completed and 28 unchecked. T001–T098 and the dated 2026-10-23 review retain their historical counts; T099–T104 are subsequent demo-presentation and explicitly authorized sandbox follow-up work.

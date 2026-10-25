@@ -9,6 +9,16 @@ const workspace = read("components/trip-workspace/workspace.tsx");
 const estimateMap = read("components/map/estimate-map.tsx");
 
 describe("final workspace layout", () => {
+  it("keeps destination-order positioning and highlights without a shared background", () => {
+    const toggle = /\.route-order__toggle\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
+    expect(toggle).toMatch(/display:\s*flex/);
+    expect(toggle).toMatch(/padding:\s*0.3rem/);
+    expect(toggle).not.toMatch(/background/);
+    expect(styles).toMatch(
+      /\.route-order__toggle \[aria-pressed="true"\]\s*\{[^}]*text-decoration:\s*underline/,
+    );
+  });
+
   it("scrolls the outer panels independently of the middle panel", () => {
     const pane = /\.trip-workspace__pane\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
     expect(pane).toMatch(/overflow-y:\s*auto/);

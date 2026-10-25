@@ -66,16 +66,12 @@ for (const reducedMotion of ["no-preference", "reduce"] as const)
     await page.route("**/maps/countries.geojson", (route) => route.abort());
     await page.reload();
     await expect(savedVersion(page, 3)).toBeVisible();
-    const conversationBottom = await page
-      .getByRole("region", { name: "Your travel assistant", exact: true })
-      .evaluate((element) => element.getBoundingClientRect().bottom);
-    const supplierTop = await page
-      .getByRole("region", { name: "Compare supplier options", exact: true })
-      .evaluate((element) => element.getBoundingClientRect().top);
-    expect(
-      supplierTop,
-      "Supplier options must not overlap the conversation",
-    ).toBeGreaterThanOrEqual(conversationBottom);
+    await expect(
+      page.getByRole("region", { name: "Compare supplier options", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /Research estimate|Research route options/ }),
+    ).toHaveCount(0);
     await page.getByRole("button", { name: "Restore trip to version 2" }).click();
     await expect(savedVersion(page, 4)).toBeVisible();
     expect((await (await page.request.get(`/api/v1/trips/${tripId}`)).json()).snapshot).toEqual(

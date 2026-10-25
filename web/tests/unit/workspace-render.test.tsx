@@ -75,6 +75,9 @@ it("renders consistent workspace sections, a labelled composer and guarded actio
   expect(html).toContain("Trip details");
   expect(html).not.toContain("Version history");
   expect(html).not.toContain("Finalization review");
+  expect(html).not.toContain("Compare supplier options");
+  expect(html).not.toContain("Research estimate");
+  expect(html).not.toContain("Research route options");
   expect(html).toContain("Book trip");
   // Opt-in synthetic artifact for browser layout/focus verification; no private data.
   if (process.env.WORKSPACE_VISUAL_HTML) {

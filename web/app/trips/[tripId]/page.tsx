@@ -40,6 +40,7 @@ export default async function TripPage({
         .select("id")
         .where("tripId", "=", tripId)
         .where("ownerUserId", "=", actor.planningOwnerId)
+        .where("purpose", "!=", "supplier_research")
         .orderBy("startedAt", "desc")
         .limit(1)
         .executeTakeFirst();
@@ -50,6 +51,7 @@ export default async function TripPage({
             .where("id", "=", selected.data)
             .where("tripId", "=", tripId)
             .where("ownerUserId", "=", actor.planningOwnerId)
+            .where("purpose", "!=", "supplier_research")
             .executeTakeFirst()
         : undefined;
       const draft = await transaction

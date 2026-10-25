@@ -17,9 +17,6 @@ import { PriceBar } from "./price-bar";
 import { DayPlan } from "./day-plan";
 import { ComponentDetails } from "./component-details";
 import { tripEnvelopeSchema } from "./use-trip";
-import { OfferResearch } from "./offer-research";
-
-import type { SelectedOffer } from "@/domain/trip/proposal";
 
 type WorkspaceProps = {
   initialTrip: TripEnvelope;
@@ -37,12 +34,6 @@ function WorkspacePanes({
     trip = query.data;
   const [editor, setEditor] = useState({ base: initialTrip, snapshot: initialTrip.snapshot }),
     [editingRoute, setEditingRoute] = useState(false);
-  const [selection, setSelection] = useState<{
-    requestId: string;
-    tripId: string;
-    tripVersion: number;
-    offer: SelectedOffer;
-  } | null>(null);
   // Refresh clean controls with accepted facts, but keep a dirty draft tied to the
   // version it was edited against. Never silently rebase unsaved traveller input.
   if (
@@ -146,18 +137,6 @@ function WorkspacePanes({
             initialRunId={initialRunId}
             initialResearchRequestId={initialResearchRequestId}
             onCommit={query.accept}
-            selection={selection}
-          />
-          <OfferResearch
-            trip={trip}
-            onSelect={(offer) =>
-              setSelection({
-                requestId: crypto.randomUUID(),
-                tripId: trip.tripId,
-                tripVersion: trip.version,
-                offer,
-              })
-            }
           />
         </div>
         <PriceBar trip={trip} authenticated={authenticated} />

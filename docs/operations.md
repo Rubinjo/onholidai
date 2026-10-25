@@ -115,14 +115,14 @@ not API tokens. The workflow still handles both push and pull-request events.
 Failure traces and screenshots are retained in `web/test-results/` locally and
 uploaded as `playwright-failures` in CI with three-day retention.
 
-The conversation pane keeps its conversation and supplier sections at their content
-height while the pane scrolls. Shrinking those sections allows supplier controls
-to overlap chat checkpoints and block restore actions; the guest journey checks
-that the sections do not overlap before restoring a saved version.
+The conversation pane contains chat, material clarifications and saved-trip
+checkpoints. Supplier comparison is internal to the estimate agent, not a
+separate customer panel. The guest journey checks that the removed supplier
+panel and manual research controls stay absent before restoring a saved version.
 
 ## Provider capabilities
 
-Deterministic doubles are the default. Current search composition is Duffel Flights, Nuitee stays and Viator activities; Booking.com and Trainline are deferred, and GetYourGuide is replaced. Nuitee Flights/Experiences are inactive, with no fallback. Duffel stays remains a historical identity only: saved evidence/confirmations retain their original provider, but cannot be refreshed or used for new discovery/booking. Rail-only and mixed searches return an explicit unsupported/deferred rail outcome, without invoking rail adapters or substituting inventory. Supported mixed-query results are retained. Read-only HTTP transports, revisioned evidence, the four-tool in-memory MCP facade and the workspace comparison panel are implemented and tested with synthetic fixtures. This is discovery, not completion of [feature 003](../specs/003-supplier-mcp-booking/tasks.md) or verified supplier access.
+Deterministic doubles are the default. Current search composition is Duffel Flights, Nuitee stays and Viator activities; Booking.com and Trainline are deferred, and GetYourGuide is replaced. Nuitee Flights/Experiences are inactive, with no fallback. Duffel stays remains a historical identity only: saved evidence/confirmations retain their original provider, but cannot be refreshed or used for new discovery/booking. Rail-only and mixed searches return an explicit unsupported/deferred rail outcome, without invoking rail adapters or substituting inventory. Supported mixed-query results are retained. Read-only HTTP transports, revisioned evidence and the four-tool in-memory MCP facade are implemented and tested with synthetic fixtures. This is discovery, not completion of [feature 003](../specs/003-supplier-mcp-booking/tasks.md) or verified supplier access.
 
 Search results distinguish available inventory, successful no-matches, unconfigured/blocked access, unsupported coverage, rate limiting, deadlines and errors per provider/product. Source mode is explicit (`deterministic`, `live` or `unknown` for an undeclared injected client). The internal search route supplies product readiness and request cancellation; configured-but-unverified live access does not execute. Reads have an eight-second source ceiling, propagate abort, and deduplicate before fairly allocating up to 32 offers across products and requirement/selection groups. There are no default retries: only a trusted `SupplyReadError` with a bounded rate-limit delay can trigger one read retry, and only when that delay fits the original source deadline. The retry does not reset that deadline, and cancellation stops the wait without another supplier call. Arbitrary exception messages/payloads never become public retry guidance or error text. Search and evidence refresh enforce a twelve-second overall budget at access/persistence boundaries; cancelled or expired work cannot append evidence. Refresh rejects a known-stale revision before a supplier call and rechecks the latest revision under the source-run lock before appending, so concurrent refreshes cannot overwrite immutable evidence.
 
@@ -130,8 +130,20 @@ Live provider use requires separately provisioned credentials, commercial access
 
 ### Research evidence and live read prerequisites
 
-The workspace's **Find supplier options** action starts an ordinary
-`supplier_research` run. Only `supplier_search`, `supplier_offer_details`,
+Opening a draft starts its initial estimate automatically when setup supplied
+a research request or a version-one trip has no components, daily plan or
+existing run. Reloads
+resume the existing run rather than starting another estimate. The estimate agent
+searches suppliers and selects eligible offers internally; accepted changes
+propagate to the map, trip plan and price through the existing trip refresh.
+Only material choices requiring traveller input appear as chat clarifications.
+Read-only supplier runs are excluded from the customer timeline and the
+workspace's resumed planning run, including historical technical messages.
+There is no manual **Research estimate** or supplier-selection panel; failed
+submissions can be retried in chat with the same pending request identity.
+
+Read-only `supplier_research` runs remain available through the research API.
+Only `supplier_search`, `supplier_offer_details`,
 `supplier_revalidate_offer` and `supplier_capabilities` are registered in its
 in-memory MCP server. Owner/trip/run/version/token context is captured by the
 server, not supplied by tool arguments. Signed callbacks use the web audience

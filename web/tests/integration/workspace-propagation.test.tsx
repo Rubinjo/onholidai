@@ -40,7 +40,7 @@ function initialTrip() {
 }
 
 describe("committed workspace convergence", () => {
-  it("imports a selection once through automatic refinement without directly accepting the trip", async () => {
+  it("starts research once automatically and asks material questions in chat", async () => {
     const initial = initialTrip();
     const run = {
       id: "10000000-0000-4000-8000-000000000080",
@@ -62,19 +62,14 @@ describe("committed workspace convergence", () => {
     });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const onCommit = vi.fn();
-    const selection = {
-      requestId: "10000000-0000-4000-8000-000000000081",
-      tripId: initial.tripId,
-      tripVersion: 1,
-      offer: { offerRef: "10000000-0000-4000-8000-000000000082", revision: 2 },
-    };
+    const requestId = "10000000-0000-4000-8000-000000000081";
     const view = render(
       <QueryClientProvider client={client}>
         <Conversation
           trip={initial}
           initialRunId={null}
           onCommit={onCommit}
-          selection={selection}
+          initialResearchRequestId={requestId}
         />
       </QueryClientProvider>,
     );
@@ -84,28 +79,49 @@ describe("committed workspace convergence", () => {
     );
     expect(submissions).toHaveLength(1);
     expect(submissions[0][1]).toMatchObject({
-      requestId: selection.requestId,
+      requestId,
       baseTripVersion: 1,
-      purpose: "refinement",
+      purpose: "initial_estimate",
       applicationPolicy: "automatic",
-      selectedOffers: [selection.offer],
     });
     expect(JSON.stringify(submissions[0][1])).not.toMatch(/supplierOfferId|finalCustomerMinor/);
     expect(onCommit).not.toHaveBeenCalled();
     expect(initial.version).toBe(1);
+    expect(
+      screen.queryByRole("button", { name: /Research estimate|Research route options/ }),
+    ).toBeNull();
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <Conversation
+          trip={{ ...initial, version: 2 }}
+          initialRunId={null}
+          initialResearchRequestId={requestId}
+          onCommit={onCommit}
+        />
+      </QueryClientProvider>,
+    );
+    expect(
+      api.read.mock.calls.filter(([path, body]) => path.endsWith("/agent-runs") && body),
+    ).toHaveLength(1);
     view.unmount();
     client.clear();
   });
 
-  it("does not silently rebase selected evidence onto a newer trip version", async () => {
+  it("retries an uncertain automatic submission with its original identity and base version", async () => {
     const initial = initialTrip();
-    api.read.mockImplementation((path: string) =>
-      Promise.resolve(
-        path.includes("/versions") || path.includes("/conversations")
-          ? { items: [], nextCursor: null, nextBeforeVersion: null }
-          : { ...initial, version: 2 },
-      ),
-    );
+    const commands: unknown[] = [];
+    api.read.mockImplementation(async (path: string, body?: unknown) => {
+      if (path.endsWith("/agent-runs") && body) {
+        commands.push(body);
+        if (commands.length === 1) throw new Error("Network unavailable");
+        return { id: crypto.randomUUID(), status: "completed", result: { kind: "answer" } };
+      }
+      if (path.includes("/agent-runs/"))
+        return { id: path.split("/").at(-1), status: "completed", result: { kind: "answer" } };
+      if (path.includes("/versions") || path.includes("/conversations"))
+        return { items: [], nextCursor: null, nextBeforeVersion: null };
+      return { ...initial, version: commands.length ? 2 : 1 };
+    });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const view = render(
       <QueryClientProvider client={client}>
@@ -113,22 +129,101 @@ describe("committed workspace convergence", () => {
           trip={initial}
           initialRunId={null}
           onCommit={vi.fn()}
-          selection={{
-            requestId: crypto.randomUUID(),
-            tripId: initial.tripId,
-            tripVersion: 1,
-            offer: { offerRef: crypto.randomUUID(), revision: 1 },
-          }}
+          initialResearchRequestId={crypto.randomUUID()}
         />
       </QueryClientProvider>,
     );
     await screen.findByText("Safe conflict");
+    fireEvent.click(screen.getByRole("button", { name: "Retry trip update" }));
+    await waitFor(() => expect(commands).toHaveLength(2));
+    expect(commands[0]).toEqual(commands[1]);
+    expect(commands[1]).toMatchObject({ baseTripVersion: 1, applicationPolicy: "automatic" });
+    view.unmount();
+    client.clear();
+  });
+
+  it("automatically estimates an empty draft without a setup request", async () => {
+    const initial = initialTrip();
+    initial.snapshot.components = [];
+    initial.snapshot.itineraryDays = [];
+    api.read.mockImplementation(async (path: string, body?: unknown) => {
+      if (path.endsWith("/agent-runs") && body)
+        return { id: crypto.randomUUID(), status: "completed", result: { kind: "answer" } };
+      if (path.includes("/agent-runs/"))
+        return { id: path.split("/").at(-1), status: "completed", result: { kind: "answer" } };
+      if (path.includes("/versions") || path.includes("/conversations"))
+        return { items: [], nextCursor: null, nextBeforeVersion: null };
+      return initial;
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <Conversation trip={initial} initialRunId={null} onCommit={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(
+        api.read.mock.calls.filter(([path, body]) => path.endsWith("/agent-runs") && body),
+      ).toHaveLength(1),
+    );
+    expect(
+      api.read.mock.calls.find(([path, body]) => path.endsWith("/agent-runs") && body)?.[1],
+    ).toMatchObject({ purpose: "initial_estimate", applicationPolicy: "automatic" });
+    view.unmount();
+    client.clear();
+  });
+
+  it("resumes an existing run without starting duplicate research", async () => {
+    const initial = initialTrip();
+    initial.snapshot.components = [];
+    initial.snapshot.itineraryDays = [];
+    const runId = crypto.randomUUID();
+    api.read.mockImplementation(async (path: string) => {
+      if (path.includes("/agent-runs/"))
+        return { id: runId, status: "completed", result: { kind: "answer" } };
+      return { items: [], nextCursor: null, nextBeforeVersion: null };
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <Conversation
+          trip={initial}
+          initialRunId={runId}
+          initialResearchRequestId={crypto.randomUUID()}
+          onCommit={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(api.read).toHaveBeenCalledWith(`/api/v1/agent-runs/${runId}`));
     expect(api.read.mock.calls.some(([path, body]) => path.endsWith("/agent-runs") && body)).toBe(
       false,
     );
     view.unmount();
     client.clear();
   });
+
+  it.each(["existing plan", "restored version", "finalized trip"])(
+    "does not automatically replace an %s",
+    async (scenario) => {
+      const initial = initialTrip();
+      if (scenario !== "existing plan") initial.snapshot.itineraryDays = [];
+      if (scenario === "restored version") initial.version = 2;
+      if (scenario === "finalized trip") initial.lifecycleState = "finalized";
+      api.read.mockResolvedValue({ items: [], nextCursor: null, nextBeforeVersion: null });
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const view = render(
+        <QueryClientProvider client={client}>
+          <Conversation trip={initial} initialRunId={null} onCommit={vi.fn()} />
+        </QueryClientProvider>,
+      );
+      await waitFor(() => expect(api.read).toHaveBeenCalled());
+      expect(api.read.mock.calls.some(([path, body]) => path.endsWith("/agent-runs") && body)).toBe(
+        false,
+      );
+      view.unmount();
+      client.clear();
+    },
+  );
 
   it("rejects another trip's response without replacing accepted cached state", async () => {
     const initial = initialTrip();
@@ -224,6 +319,8 @@ describe("committed workspace convergence", () => {
     });
     const view = render(<Workspace initialTrip={initial} initialRunId={null} />);
     await waitFor(() => expect(api.read).toHaveBeenCalled());
+    expect(screen.queryByRole("region", { name: "Compare supplier options" })).toBeNull();
+    expect(api.read.mock.calls.some(([path]) => path.includes("/planning-offers"))).toBe(false);
     const started = performance.now();
     latest = {
       ...initial,

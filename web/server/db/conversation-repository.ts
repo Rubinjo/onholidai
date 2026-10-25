@@ -30,10 +30,17 @@ export class ConversationRepository {
     let query = this.database
       .selectFrom("conversationMessages")
       .innerJoin("conversations", "conversations.id", "conversationMessages.conversationId")
+      .leftJoin("agentRuns", "agentRuns.id", "conversationMessages.agentRunId")
       .selectAll("conversationMessages")
       .where("conversations.ownerUserId", "=", userId)
       .where("conversations.tripId", "=", tripId)
       .where("conversationMessages.retentionExpiresAt", ">", new Date())
+      .where((expression) =>
+        expression.or([
+          expression("agentRuns.purpose", "is", null),
+          expression("agentRuns.purpose", "!=", "supplier_research"),
+        ]),
+      )
       .orderBy("conversationMessages.createdAt", "desc")
       .orderBy("conversationMessages.id", "desc")
       .limit(limit);

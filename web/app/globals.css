@@ -44,21 +44,6 @@
   line-height: 1.5;
 }
 
-.offer-research {
-  margin-block-start: 1.5rem;
-  padding-block-start: 1rem;
-  border-block-start: 2px solid var(--accent);
-  overflow-wrap: anywhere;
-}
-.offer-research__options {
-  list-style: none;
-  padding: 0;
-}
-.offer-research__options > li {
-  padding-block: 1rem;
-  border-block-end: 1px solid var(--border);
-}
-
 *,
 *::before,
 *::after {
@@ -1313,7 +1298,6 @@ summary {
   flex-wrap: wrap;
   gap: 0.3rem;
   padding: 0.3rem;
-  background: var(--surface-muted);
   border-radius: 0.7rem;
 }
 .preference-control__heading {

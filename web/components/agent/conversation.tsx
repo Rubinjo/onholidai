@@ -12,8 +12,6 @@ import { ProposalCard } from "./proposal-card";
 import { Clarification } from "./clarification";
 import { TripCheckpoint, useChatVersions } from "./trip-checkpoints";
 
-import type { SelectedOffer } from "@/domain/trip/proposal";
-
 const runSchema = z
   .object({
     id: z.uuid(),
@@ -58,18 +56,11 @@ export function Conversation({
   initialRunId,
   initialResearchRequestId,
   onCommit,
-  selection,
 }: {
   trip: TripEnvelope;
   initialRunId: string | null;
   initialResearchRequestId?: string;
   onCommit: (raw: unknown) => void;
-  selection?: {
-    requestId: string;
-    tripId: string;
-    tripVersion: number;
-    offer: SelectedOffer;
-  } | null;
 }) {
   const client = useQueryClient(),
     [runId, setRunId] = useState(initialRunId),
@@ -82,9 +73,8 @@ export function Conversation({
   const pendingResearch = useRef<{
     requestId: string;
     baseTripVersion: number;
-    purpose: "initial_estimate" | "refinement" | "finalization";
+    purpose: "initial_estimate" | "refinement";
     message: string;
-    selectedOffers?: SelectedOffer[];
   } | null>(null);
   const history = useInfiniteQuery({
     queryKey: ["conversation", trip.tripId],
@@ -107,10 +97,7 @@ export function Conversation({
   });
   const refreshHistory = history.refetch;
   const submit = useCallback(
-    async (
-      purpose?: "initial_estimate" | "refinement" | "finalization",
-      selected?: NonNullable<typeof selection>,
-    ) => {
+    async (purpose?: "initial_estimate") => {
       setError("");
       setOutcome("");
       setBusy(true);
@@ -118,25 +105,13 @@ export function Conversation({
         // A new reservation uses current accepted facts; uncertain submissions
         // replay their original request and version until their outcome is known.
         const latest = tripEnvelopeSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}`));
-        if (
-          selected &&
-          (selected.tripId !== latest.tripId || selected.tripVersion !== latest.version)
-        )
-          throw new Error("Selected research is stale. Request current options.");
         pendingResearch.current ??= {
           requestId:
-            selected?.requestId ??
-            (!runId && initialResearchRequestId ? initialResearchRequestId : crypto.randomUUID()),
+            !runId && initialResearchRequestId ? initialResearchRequestId : crypto.randomUUID(),
           baseTripVersion: latest.version,
           purpose:
             purpose ?? (latest.snapshot.components.length ? "refinement" : "initial_estimate"),
-          message:
-            purpose === "finalization"
-              ? "Prepare detailed itinerary"
-              : selected
-                ? "Use this selected supplier research within my current trip requirements."
-                : message || "Estimate my reviewed settings and update my draft trip.",
-          ...(selected ? { selectedOffers: [selected.offer] } : {}),
+          message: message || "Estimate my reviewed settings and update my draft trip.",
         };
         const sent = pendingResearch.current;
         const value = runSchema.parse(
@@ -159,24 +134,29 @@ export function Conversation({
     },
     [trip.tripId, runId, initialResearchRequestId, message, refreshHistory],
   );
-  const handledSelection = useRef<string | null>(null);
-  useEffect(() => {
-    if (selection && handledSelection.current !== selection.requestId) {
-      handledSelection.current = selection.requestId;
-      if (pendingResearch.current) {
-        setError("A planning request is still pending. Retry it before selecting another option.");
-        return;
-      }
-      void submit("refinement", selection);
-    }
-  }, [selection, submit]);
   const initialStarted = useRef(false);
   useEffect(() => {
-    if (!initialStarted.current && !initialRunId && initialResearchRequestId) {
+    if (
+      !initialStarted.current &&
+      !initialRunId &&
+      trip.lifecycleState === "draft" &&
+      (initialResearchRequestId ||
+        (trip.version === 1 &&
+          !trip.snapshot.components.length &&
+          !trip.snapshot.itineraryDays.length))
+    ) {
       initialStarted.current = true;
-      void submit();
+      void submit("initial_estimate");
     }
-  }, [initialRunId, initialResearchRequestId, submit]);
+  }, [
+    initialRunId,
+    initialResearchRequestId,
+    trip.lifecycleState,
+    trip.version,
+    trip.snapshot.components.length,
+    trip.snapshot.itineraryDays.length,
+    submit,
+  ]);
   const result = run.data?.result,
     active = ["queued", "running"].includes(run.data?.status ?? "");
   const checkpoints = versions.data?.pages.flatMap((page) => page.items) ?? [];
@@ -209,8 +189,8 @@ export function Conversation({
       <h2 id="conversation-heading">Your travel assistant</h2>
       <p>Ask a question, explore an option, or tell us what you’d change.</p>
       <p className="assistant-chat__hint">
-        Planning changes are applied automatically. Restore an earlier version below. Nothing is
-        booked here.
+        I research and compare options automatically, then update your map and trip plan. I’ll ask
+        here when I need your input. Restore an earlier version below. Nothing is booked here.
       </p>
       {versions.hasNextPage && (
         <Button
@@ -266,7 +246,7 @@ export function Conversation({
           ? "Sending your request…"
           : outcome ||
             (run.data?.status === "failed"
-              ? "Research interrupted. Request a fresh update on this saved trip."
+              ? "Research interrupted. Retry the update or send a message to continue."
               : active
                 ? "Updating your trip…"
                 : "Ready")}
@@ -315,13 +295,13 @@ export function Conversation({
           }}
         />
       )}
-      {!active && (
+      {!active && (error || run.data?.status === "failed") && (
         <Button
           variant="outline"
           disabled={busy || trip.lifecycleState !== "draft"}
-          onClick={() => void submit("initial_estimate")}
+          onClick={() => void submit()}
         >
-          {trip.snapshot.components.length ? "Research route options" : "Research estimate"}
+          Retry trip update
         </Button>
       )}
       <form
