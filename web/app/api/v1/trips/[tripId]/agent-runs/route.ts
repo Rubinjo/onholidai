@@ -42,11 +42,7 @@ export async function POST(request: Request, route: { params: Promise<{ tripId: 
           ...(input.selectedOffers ? { selectedOffers: input.selectedOffers } : {}),
         });
       });
-      try {
-        await dispatchEstimate(application, run, input.message);
-      } catch {
-        /* Durable reservation is replayable. */
-      }
+      await dispatchEstimate(application, run, input.message);
       return inTransaction(application.database, async (transaction) => {
         await lockPlanningAccess(transaction, actor);
         return publicRun(transaction, id, run.id);

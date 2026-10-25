@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
 import { changeProposalSchema } from "@/domain/trip/proposal";
-import { planningJson, planningError } from "@/components/trip-setup/http";
+import { planningJson, planningError, PlanningRequestError } from "@/components/trip-setup/http";
 import { tripEnvelopeSchema, type TripEnvelope } from "@/components/trip-workspace/use-trip";
 import { Button } from "@/components/ui/button";
 
@@ -69,6 +69,14 @@ export function Conversation({
     [busy, setBusy] = useState(false),
     [dismissed, setDismissed] = useState<string | null>(null);
   const [outcome, setOutcome] = useState("");
+  const [retryPending, setRetryPending] = useState(false);
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
+  const initialRequest = useRef(initialRunId ? undefined : initialResearchRequestId);
+  useEffect(() => {
+    if (retryAfterSeconds <= 0) return;
+    const timer = setTimeout(() => setRetryAfterSeconds((remaining) => remaining - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [retryAfterSeconds]);
   const versions = useChatVersions(trip.tripId, trip.version);
   const pendingResearch = useRef<{
     requestId: string;
@@ -105,14 +113,16 @@ export function Conversation({
         // A new reservation uses current accepted facts; uncertain submissions
         // replay their original request and version until their outcome is known.
         const latest = tripEnvelopeSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}`));
-        pendingResearch.current ??= {
-          requestId:
-            !runId && initialResearchRequestId ? initialResearchRequestId : crypto.randomUUID(),
-          baseTripVersion: latest.version,
-          purpose:
-            purpose ?? (latest.snapshot.components.length ? "refinement" : "initial_estimate"),
-          message: message || "Estimate my reviewed settings and update my draft trip.",
-        };
+        if (!pendingResearch.current) {
+          pendingResearch.current = {
+            requestId: initialRequest.current ?? crypto.randomUUID(),
+            baseTripVersion: latest.version,
+            purpose:
+              purpose ?? (latest.snapshot.components.length ? "refinement" : "initial_estimate"),
+            message: message || "Estimate my reviewed settings and update my draft trip.",
+          };
+          initialRequest.current = undefined;
+        }
         const sent = pendingResearch.current;
         const value = runSchema.parse(
           await planningJson(`/api/v1/trips/${trip.tripId}/agent-runs`, {
@@ -122,17 +132,31 @@ export function Conversation({
           }),
         );
         pendingResearch.current = null;
+        setRetryPending(false);
         setRunId(value.id);
         setMessage((current) => (current === sent.message ? "" : current));
         setDismissed(null);
         void refreshHistory();
       } catch (failure) {
+        // A rejected reservation has no work to replay. Transport/5xx failures
+        // can have committed, so retain their exact identity until acknowledged.
+        if (
+          failure instanceof PlanningRequestError &&
+          failure.status >= 400 &&
+          failure.status < 500 &&
+          failure.status !== 408
+        )
+          pendingResearch.current = null;
+        setRetryPending(Boolean(pendingResearch.current));
+        setRetryAfterSeconds(
+          failure instanceof PlanningRequestError ? (failure.retryAfterSeconds ?? 0) : 0,
+        );
         setError(planningError(failure));
       } finally {
         setBusy(false);
       }
     },
-    [trip.tripId, runId, initialResearchRequestId, message, refreshHistory],
+    [trip.tripId, message, refreshHistory],
   );
   const initialStarted = useRef(false);
   useEffect(() => {
@@ -159,7 +183,13 @@ export function Conversation({
   ]);
   const result = run.data?.result,
     active = ["queued", "running"].includes(run.data?.status ?? "");
-  const canSend = !busy && !active && Boolean(message.trim()) && trip.lifecycleState === "draft";
+  const canSend =
+    !busy &&
+    !active &&
+    !retryPending &&
+    retryAfterSeconds === 0 &&
+    Boolean(message.trim()) &&
+    trip.lifecycleState === "draft";
   const checkpoints = versions.data?.pages.flatMap((page) => page.items) ?? [];
   const committedRuns = new Set(checkpoints.map((entry) => entry.runId).filter(Boolean));
   const timeline = [
@@ -246,11 +276,13 @@ export function Conversation({
         {busy
           ? "Sending your request…"
           : outcome ||
-            (run.data?.status === "failed"
-              ? "Research interrupted. Retry the update or send a message to continue."
-              : active
-                ? "Updating your trip…"
-                : "Ready")}
+            (retryPending
+              ? "The previous request is unconfirmed. Retry it before sending another message; your draft is preserved."
+              : run.data?.status === "failed"
+                ? "Research interrupted. Retry the update or send a message to continue."
+                : active
+                  ? "Updating your trip…"
+                  : "Ready")}
       </p>
       <p role="alert">
         {error ||
@@ -299,10 +331,12 @@ export function Conversation({
       {!active && (error || run.data?.status === "failed") && (
         <Button
           variant="outline"
-          disabled={busy || trip.lifecycleState !== "draft"}
+          disabled={busy || retryAfterSeconds > 0 || trip.lifecycleState !== "draft"}
           onClick={() => void submit()}
         >
-          Retry trip update
+          {retryAfterSeconds > 0
+            ? `Retry trip update in ${retryAfterSeconds}s`
+            : "Retry trip update"}
         </Button>
       )}
       <form

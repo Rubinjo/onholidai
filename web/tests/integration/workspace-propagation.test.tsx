@@ -173,6 +173,40 @@ describe("committed workspace convergence", () => {
     client.clear();
   });
 
+  it("uses a fresh identity after an acknowledged failed initial run", async () => {
+    const initial = initialTrip();
+    const requestId = crypto.randomUUID();
+    const commands: unknown[] = [];
+    api.read.mockImplementation(async (path: string, body?: unknown) => {
+      if (path.endsWith("/agent-runs") && body) {
+        commands.push(body);
+        return { id: crypto.randomUUID(), status: "failed", result: null };
+      }
+      if (path.includes("/agent-runs/"))
+        return { id: path.split("/").at(-1), status: "failed", result: null };
+      if (path.includes("/versions") || path.includes("/conversations"))
+        return { items: [], nextCursor: null, nextBeforeVersion: null };
+      return initial;
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <Conversation
+          trip={initial}
+          initialRunId={null}
+          initialResearchRequestId={requestId}
+          onCommit={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Retry trip update" }));
+    await waitFor(() => expect(commands).toHaveLength(2));
+    expect(commands[0]).toMatchObject({ requestId });
+    expect(commands[1]).not.toMatchObject({ requestId });
+    view.unmount();
+    client.clear();
+  });
+
   it("resumes an existing run without starting duplicate research", async () => {
     const initial = initialTrip();
     initial.snapshot.components = [];

@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { Conversation } from "../../components/agent/conversation";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
+import { PlanningRequestError } from "../../components/trip-setup/http";
 
 const api = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock("../../components/trip-setup/http", async (original) => ({
@@ -132,5 +133,71 @@ it("preserves a new composer draft while an earlier message is being sent", asyn
   expect(api.request.mock.calls.find(([, body]) => Boolean(body))?.[1]).toMatchObject({
     message: "First question",
   });
+  client.clear();
+});
+
+it("sends the edited message after a rejected reservation instead of replaying the old one", async () => {
+  const { client, input, sends } = await renderComposer();
+  const original = api.request.getMockImplementation()!;
+  api.request.mockImplementation((path: string, body?: unknown) =>
+    body
+      ? Promise.reject(new PlanningRequestError(429, "guest_research_limited"))
+      : original(path, body),
+  );
+  fireEvent.change(input, { target: { value: "First question" } });
+  fireEvent.submit(input.closest("form")!);
+  await screen.findByText(/Research is temporarily limited/);
+  api.request.mockImplementation(original);
+  fireEvent.change(input, { target: { value: "A different question" } });
+  fireEvent.submit(input.closest("form")!);
+  await waitFor(() => expect(sends()).toHaveLength(2));
+  expect(sends()[1][1]).toMatchObject({ message: "A different question" });
+  expect(sends()[1][1].requestId).not.toBe(sends()[0][1].requestId);
+  await waitFor(() => expect(input).toHaveValue(""));
+  client.clear();
+});
+
+it("requires replay of an uncertain request before sending a different message", async () => {
+  const { client, input, sends } = await renderComposer();
+  const original = api.request.getMockImplementation()!;
+  api.request.mockImplementation((path: string, body?: unknown) =>
+    body
+      ? Promise.reject(new PlanningRequestError(503, "agent_unavailable"))
+      : original(path, body),
+  );
+  fireEvent.change(input, { target: { value: "First question" } });
+  fireEvent.submit(input.closest("form")!);
+  await screen.findByRole("button", { name: "Retry trip update" });
+  fireEvent.change(input, { target: { value: "Next question" } });
+  expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  api.request.mockImplementation(original);
+  fireEvent.click(screen.getByRole("button", { name: "Retry trip update" }));
+  await waitFor(() => expect(sends()).toHaveLength(2));
+  expect(sends()[1][1]).toEqual(sends()[0][1]);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled());
+  expect(input).toHaveValue("Next question");
+  client.clear();
+});
+
+it("honors Retry-After without discarding the chat draft", async () => {
+  const { client, input, sends } = await renderComposer();
+  const original = api.request.getMockImplementation()!;
+  api.request.mockImplementation((path: string, body?: unknown) =>
+    body
+      ? Promise.reject(new PlanningRequestError(429, "guest_research_limited", 1))
+      : original(path, body),
+  );
+  fireEvent.change(input, { target: { value: "Keep my question" } });
+  fireEvent.submit(input.closest("form")!);
+  await screen.findByText(/Research is temporarily limited/);
+  expect(screen.getByRole("button", { name: /Retry trip update/ })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+  fireEvent.submit(input.closest("form")!);
+  expect(sends()).toHaveLength(1);
+  await waitFor(
+    () => expect(screen.getByRole("button", { name: "Retry trip update" })).toBeEnabled(),
+    { timeout: 2000 },
+  );
+  expect(input).toHaveValue("Keep my question");
   client.clear();
 });

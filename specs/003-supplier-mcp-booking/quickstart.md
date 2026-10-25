@@ -145,14 +145,25 @@ Contract checks cover current exporters plus new public supply and MCP fixtures.
 Build/run the current local stack with reviewed migration changes:
 
 ```powershell
-docker compose -f infra/compose/compose.yml --profile infrastructure up -d
-docker compose -f infra/compose/compose.yml --profile infrastructure --profile migrations build migrate
-docker compose -f infra/compose/compose.yml --profile infrastructure --profile migrations run --rm migrate
-docker compose -f infra/compose/compose.yml --profile infrastructure --profile applications up -d --build
-docker compose -f infra/compose/compose.yml --profile infrastructure --profile booking up -d --build booking-worker
+docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure up -d
+docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure --profile migrations build migrate
+docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure --profile migrations run --rm migrate
+docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure --profile applications up -d --build
+docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure --profile booking up -d --build booking-worker
 ```
 
 Set `PROVIDER_MODE=deterministic` through existing composition. Ensure deterministic transaction clients are actually registered: the pre-feature worker's empty registry is not a successful booking demonstration. For host mode, use existing `pnpm dev`, `pnpm dev:agent`, and `pnpm --dir web booking:worker` in separate terminals with equivalent safe configuration. No extra port or MCP service is required.
+
+Web and agent now honor the interpolated `PROVIDER_MODE`; the base booking worker
+remains deterministic. For `live`, supply the required Nebius, Maps and Tavily
+settings plus independently verified web-owned supplier configuration. Base
+Compose forwards canonical discovery-secret names, not arbitrary JSON secret
+references or transaction keys. The historical Duffel discovery-only reassignment
+therefore needs the Docker read-role mapping described in
+[Docker research diagnostics](../../docs/operations.md#docker-research-mode-and-retry-diagnostics).
+That section also explains web-side 429 limits, pending clarifications and
+dispatch retry behavior. Do not treat the remaining US4/US5 tasks as completed,
+or bypass readiness gates, to get planning running.
 
 The booking worker uses a separate initializer. Production startup requires explicit `DATABASE_URL` and `TEMPORAL_ADDRESS`, but no web authentication, service-token, or pricing-diagnostic secrets. These requirements also apply to production-mode host runs. See the [operations guide](../../docs/operations.md) for process-specific configuration. Successful startup alone does not configure transaction providers or enable live booking.
 

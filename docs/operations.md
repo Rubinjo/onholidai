@@ -8,6 +8,75 @@ Start `--profile infrastructure` for PostgreSQL 18/PostGIS, Temporal, and local 
 
 The booking worker has its own composition root and configuration validation. Production requires explicit `DATABASE_URL` and `TEMPORAL_ADDRESS`; supplier configuration retains the same validation and worker-only readiness rules. It does not initialize web authentication or planning clients and does not require `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `SERVICE_TOKEN_SECRET`, or `PRICING_DIAGNOSTIC_SECRET`. Keep those web/service secrets out of the worker; Compose mounts only `worker_db_password` for its database role. Web production startup still requires all of its auth and signing settings. After updating worker code, rebuild and recreate it with `docker compose -f infra/compose/compose.yml --profile infrastructure --profile booking up -d --build booking-worker`.
 
+### Docker research mode and retry diagnostics
+
+Run Compose from the repository root with `--env-file .env` explicitly.
+The file supplies interpolation values; it is not injected wholesale into every
+container. Web and agent now use `PROVIDER_MODE` (default `deterministic`) rather
+than overriding it with a hard-coded mode. Compose still uses mounted signing
+and database secrets and internal service URLs, not the host-run values.
+
+```powershell
+docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure --profile applications up -d --build
+docker compose --env-file .env -f infra\compose\compose.yml --profile infrastructure --profile applications ps
+Invoke-RestMethod http://localhost:8000/health
+docker compose --env-file .env -f infra\compose\compose.yml logs --tail 80 web agent
+```
+
+The agent health response includes `providerMode`. Live startup requires
+non-synthetic `NEBIUS_API_KEY`, `NEBIUS_MODEL`, `MAPS_GROUNDING_API_KEY` and
+`TAVILY_API_KEY`; Compose forwards all four to the agent. Never publish resolved
+Compose configuration or raw environment dumps: they can contain credentials.
+Changing the environment requires container recreation, not just `restart`.
+
+Supplier discovery is a separate web-owned boundary. Compose forwards
+`SUPPLIER_PROVIDERS`, `DUFFEL_READ_SECRET`, `NUITEE_SECRET`,
+`NUITEE_ENVIRONMENT`, `VIATOR_SECRET` and `VIATOR_ENVIRONMENT` to web only.
+Use those exact read-secret names in the JSON references, or provide an explicit
+reviewed Compose override for different names. In particular, the historical
+discovery-only reassignment to `DUFFEL_TRANSACTION_SECRET` is **not** forwarded
+by the base Compose file. For Docker, provision that discovery-only token as
+`DUFFEL_READ_SECRET` and reference that name, leaving transaction authority
+absent. Do not forward all host secrets or share an actual booking credential
+with web to make a missing reference resolve.
+
+Live credentials alone do not establish verified supplier operations. Keep the
+existing per-provider/product readiness gates, destination mappings, occupancy
+and currency requirements. Nuitee still needs an injected trusted stay-search
+mapping; an API key alone cannot supply it. Missing readiness must remain an
+explicit unavailable outcome, never synthetic live success. The base booking
+worker remains deterministic; this planning configuration does not activate
+unfinished live booking.
+
+For a request that appears to do nothing, inspect the browser's
+`POST /api/v1/trips/{tripId}/agent-runs` response:
+
+- **429 / `guest_research_limited`** is a web-side quota rejection, so no agent
+  request is expected. Defaults are two active runs and ten accepted research
+  requests per hour, shared across the guest session's trips. Runs awaiting a
+  clarification count as active: answer their questions in the original trips.
+  Queued/running leases expire after 90 seconds without progress; hourly usage
+  ages out over an hour. Repeated immediate retries cannot bypass these limits.
+  Compose forwards `GUEST_MAX_ACTIVE_RUNS`, `GUEST_MAX_RUNS_PER_HOUR` and
+  `GUEST_MAX_SESSIONS_PER_HOUR`; do not disable abuse controls as a workaround.
+- **503 / `agent_unavailable`** means dispatch could not be confirmed. Check
+  agent health, startup settings and shared service signing secrets. The
+  reservation remains durable: retry the same request instead of creating
+  duplicates. The endpoint no longer hides this failure behind HTTP 202.
+- **202** acknowledges a run; inspect its subsequent status/events and chat
+  questions. It is not evidence of a completed plan or verified live inventory.
+
+Chat honors `Retry-After`, preserves unsent text, and distinguishes a rejected
+reservation from an uncertain dispatch. Rejected commands can be edited and
+sent anew. Uncertain commands require replay before sending another message;
+that replay retains the original request ID, message and base version.
+
+As of 2026-10-25, feature 003 has 76 checked tasks and 28 unchecked tasks.
+Agent-led automatic planning is the current customer flow; the retired manual
+supplier panel is not a prerequisite. Remaining US4/US5 transaction/recovery,
+live-access, accessibility and acceptance work is not certified by a working
+deterministic agent or a healthy container. See the [current task list](../specs/003-supplier-mcp-booking/tasks.md).
+
 ### Disposable foundation database tests (PowerShell)
 
 Run from the repository root with Docker's Linux engine available. This uses

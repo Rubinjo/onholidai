@@ -111,8 +111,17 @@ services:
         exec pnpm --filter @onholidai/web start
     environment:
       NODE_ENV: production
-      PROVIDER_MODE: deterministic
+      PROVIDER_MODE: "${PROVIDER_MODE:-deterministic}"
       BOOKING_DEMO_ENABLED: "${BOOKING_DEMO_ENABLED:-false}"
+      GUEST_MAX_ACTIVE_RUNS: "${GUEST_MAX_ACTIVE_RUNS:-2}"
+      GUEST_MAX_RUNS_PER_HOUR: "${GUEST_MAX_RUNS_PER_HOUR:-10}"
+      GUEST_MAX_SESSIONS_PER_HOUR: "${GUEST_MAX_SESSIONS_PER_HOUR:-20}"
+      SUPPLIER_PROVIDERS: "${SUPPLIER_PROVIDERS:-{}}"
+      DUFFEL_READ_SECRET: "${DUFFEL_READ_SECRET:-}"
+      NUITEE_SECRET: "${NUITEE_SECRET:-}"
+      NUITEE_ENVIRONMENT: "${NUITEE_ENVIRONMENT:-sandbox}"
+      VIATOR_SECRET: "${VIATOR_SECRET:-}"
+      VIATOR_ENVIRONMENT: "${VIATOR_ENVIRONMENT:-sandbox}"
       BETTER_AUTH_URL: http://localhost:3000
       AGENT_BASE_URL: http://agent:8000
       TEMPORAL_ADDRESS: temporal:7233
@@ -156,12 +165,14 @@ services:
         export SERVICE_TOKEN_SECRET="$$(cat /run/secrets/service_token_secret)"
         exec uvicorn onholidai_agent.api.main:app --host 0.0.0.0 --port 8000
     environment:
-      PROVIDER_MODE: deterministic
+      PROVIDER_MODE: "${PROVIDER_MODE:-deterministic}"
       ENVIRONMENT: production
       WEB_BASE_URL: http://web:3000
       NEBIUS_BASE_URL: ${NEBIUS_BASE_URL:-https://api.tokenfactory.nebius.com/v1}
       NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
       NEBIUS_MODEL: ${NEBIUS_MODEL:-synthetic-model}
+      MAPS_GROUNDING_API_KEY: ${MAPS_GROUNDING_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
       LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://eu.api.smith.langchain.com}
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}

@@ -82,31 +82,55 @@ export async function dispatchEstimate(
         ? ["trip:read", "context:read"]
         : ["trip:read", "context:read", "proposal:create"],
   });
-  const response = await transport(
-    new URL("/internal/v1/agent-runs", application.config.AGENT_BASE_URL),
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        authorization: `Bearer ${token}`,
-        "x-agent-run-id": run.id,
+  let response: Response;
+  try {
+    response = await transport(
+      new URL("/internal/v1/agent-runs", application.config.AGENT_BASE_URL),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          authorization: `Bearer ${token}`,
+          "x-agent-run-id": run.id,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
+        cache: "no-store",
       },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(8000),
-      cache: "no-store",
-    },
-  );
+    );
+  } catch (error) {
+    if (!(error instanceof TypeError) && !(error instanceof DOMException)) throw error;
+    throw new ProblemError({
+      title: "Research service unavailable",
+      status: 503,
+      code: "agent_unavailable",
+    });
+  }
   if (!response.ok)
     throw new ProblemError({
       title: "Research service unavailable",
       status: 503,
       code: "agent_unavailable",
     });
-  const acknowledged = AgentRunSchema.parse(await response.json());
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    throw new ProblemError({
+      title: "Invalid research acknowledgement",
+      status: 502,
+      code: "invalid_agent_response",
+    });
+  }
+  const acknowledged = AgentRunSchema.safeParse(payload);
   if (
-    acknowledged.id !== run.id ||
-    acknowledged.requestId !== run.requestId ||
-    acknowledged.baseTripVersion !== run.baseTripVersion
+    !acknowledged.success ||
+    acknowledged.data.id !== run.id ||
+    acknowledged.data.requestId !== run.requestId ||
+    acknowledged.data.tripId !== run.tripId ||
+    acknowledged.data.conversationId !== run.conversationId ||
+    acknowledged.data.baseTripVersion !== run.baseTripVersion
   )
     throw new ProblemError({
       title: "Invalid research acknowledgement",
