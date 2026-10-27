@@ -269,8 +269,7 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
     const partyAdults = guests - partyChildren;
     hit.maximumAdults =
       capacityKnown && capacity >= partyChildren ? capacity - partyChildren : null;
-    hit.maximumChildren =
-      capacityKnown && capacity >= partyAdults ? capacity - partyAdults : null;
+    hit.maximumChildren = capacityKnown && capacity >= partyAdults ? capacity - partyAdults : null;
     // The stay window is the authoritative service period; clock times stay unverified.
     hit.serviceStart = `${query.startDate}T00:00:00Z`;
     hit.serviceEnd = `${query.endDate}T00:00:00Z`;

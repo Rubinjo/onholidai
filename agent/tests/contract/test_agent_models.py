@@ -162,7 +162,12 @@ def test_flattened_closed_events_accept_legitimate_variant_fields() -> None:
         {**common, "type": "failed", "status": "failed", "safeErrorCode": "source_unavailable"},
     ]
     for event in events:
-        assert AgentEvent.model_validate(event).model_dump(mode="json", by_alias=True) is not None
+        assert (
+            AgentEvent.model_validate(event).model_dump(
+                mode="json", by_alias=True, exclude_unset=True
+            )
+            == event
+        )
     for invalid in [
         {**events[0], "unknown": True},
         {**common, "type": "booking"},

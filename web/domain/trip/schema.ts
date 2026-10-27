@@ -332,7 +332,12 @@ const priceParts = (price: {
   platformMargin: { currency: string; minorUnits: number } | null;
   customerPayableTaxes: { currency: string; minorUnits: number } | null;
   customerPayableFees: { currency: string; minorUnits: number } | null;
-}) => [price.supplierAmount, price.platformMargin, price.customerPayableTaxes, price.customerPayableFees];
+}) => [
+  price.supplierAmount,
+  price.platformMargin,
+  price.customerPayableTaxes,
+  price.customerPayableFees,
+];
 
 export const componentPriceSchema = z
   .object(componentPriceFields)
@@ -412,7 +417,11 @@ const transferDetailsSchema = z
 export const travelComponentSchema = z
   .discriminatedUnion("type", [
     z
-      .object({ ...componentBaseFields, type: z.literal("flight"), details: flightDetailsSchema.nullable() })
+      .object({
+        ...componentBaseFields,
+        type: z.literal("flight"),
+        details: flightDetailsSchema.nullable(),
+      })
       .strict(),
     z
       .object({
@@ -429,7 +438,11 @@ export const travelComponentSchema = z
       })
       .strict(),
     z
-      .object({ ...componentBaseFields, type: z.literal("rail"), details: railDetailsSchema.nullable() })
+      .object({
+        ...componentBaseFields,
+        type: z.literal("rail"),
+        details: railDetailsSchema.nullable(),
+      })
       .strict(),
     z
       .object({
@@ -548,7 +561,7 @@ export const tripPriceSchema = z
       price.finalCustomerTotal.currency !== price.currency
     ) {
       addIssue(context, ["currency"], "Every trip price total must use the presentation currency");
-  }
+    }
     if (present.length !== parts.length) return;
     if (
       price.finalCustomerTotal.minorUnits !==
@@ -745,7 +758,12 @@ function validateSnapshot(snapshot: SnapshotForValidation, context: z.Refinement
 
   // Rolled-up parts mirror their components: a bucket is known only when every component
   // established it, so an unknown part stays null instead of being reported as zero.
-  const parts = ["supplierAmount", "platformMargin", "customerPayableTaxes", "customerPayableFees"] as const;
+  const parts = [
+    "supplierAmount",
+    "platformMargin",
+    "customerPayableTaxes",
+    "customerPayableFees",
+  ] as const;
   const declared: Record<(typeof parts)[number], number | null> = {
     supplierAmount: snapshot.price.supplierTotal?.minorUnits ?? null,
     platformMargin: snapshot.price.platformMarginTotal?.minorUnits ?? null,

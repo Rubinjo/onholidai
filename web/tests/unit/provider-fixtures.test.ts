@@ -116,15 +116,27 @@ describe("deterministic provider fixtures", () => {
     });
   });
 
-  it("restores committed provider truth across a simulated process crash", () => {
+  it("replays timeout-after-commit as a duplicate before and after a simulated process crash", () => {
     const original = new DeterministicProviderDouble();
     expect(() =>
       original.commit("crash-request", "offer-available-001", "timeout_after_commit"),
     ).toThrow(TimeoutAfterCommitError);
-    const restored = new DeterministicProviderDouble(undefined, original.snapshot());
-    expect(restored.commit("crash-request", "offer-available-001")[0].duplicate).toBe(true);
-    expect(restored.counters.writes).toBe(1);
-    expect(restored.commit("partial-request", "offer-unavailable-001")[0].status).toBe("rejected");
+    for (const provider of [
+      original,
+      new DeterministicProviderDouble(undefined, original.snapshot()),
+    ]) {
+      expect(provider.commit("crash-request", "offer-available-001")).toEqual([
+        expect.objectContaining({
+          requestId: "crash-request",
+          status: "confirmed",
+          duplicate: true,
+        }),
+      ]);
+      expect(provider.counters.writes).toBe(1);
+      expect(provider.commit("partial-request", "offer-unavailable-001")[0].status).toBe(
+        "rejected",
+      );
+    }
   });
 
   it("includes stable changed and unavailable offers", () => {
@@ -132,22 +144,6 @@ describe("deterministic provider fixtures", () => {
       { id: "offer-available-001", status: "available" },
       { id: "offer-changed-001", status: "changed" },
       { id: "offer-unavailable-001", status: "unavailable" },
-    ]);
-  });
-
-  it("records a timeout-after-commit and replays it as a duplicate", () => {
-    const provider = new DeterministicProviderDouble();
-
-    expect(() =>
-      provider.commit("request-timeout-001", "offer-available-001", "timeout_after_commit"),
-    ).toThrow(TimeoutAfterCommitError);
-
-    expect(provider.commit("request-timeout-001", "offer-available-001")).toEqual([
-      expect.objectContaining({
-        requestId: "request-timeout-001",
-        status: "confirmed",
-        duplicate: true,
-      }),
     ]);
   });
 

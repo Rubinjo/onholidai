@@ -204,18 +204,17 @@ def test_frozen_100_estimates_execute_real_graph_with_failure_inclusive_denomina
             started = perf_counter()
             try:
                 result = (await estimate(request, Sources(trip))).root
-                success = result.kind == "proposal" and perf_counter() - started <= 30
-                outcomes.append(success)
+            except Exception:
+                outcomes.append(False)
+                required_accounted.append(False)
+            else:
+                outcomes.append(result.kind == "proposal" and perf_counter() - started <= 30)
                 if result.kind == "proposal":
                     assert [operation.target for operation in result.proposal.operations] == [
                         "/destinations",
                         "/components",
                         "/itineraryDays",
-                    ]
-                    assert all(
-                        operation.target != "/availabilityWindows"
-                        for operation in result.proposal.operations
-                    )
+                    ], case["id"]
                     required_accounted.append(
                         any(
                             "No activities before 10:00" in warning
@@ -224,9 +223,6 @@ def test_frozen_100_estimates_execute_real_graph_with_failure_inclusive_denomina
                     )
                 else:
                     required_accounted.append(False)
-            except Exception:
-                outcomes.append(False)
-                required_accounted.append(False)
             durations.append((perf_counter() - started) * 1000)
 
     asyncio.run(evaluate())

@@ -10,13 +10,13 @@ are preserved historical evidence, not instructions to reactivate that lane.
 User reports Duffel Flights-only access and Nuitee access; no credentials or
 authenticated requests were inspected/executed in this revision.
 
-| Product                      | Implementation evidence                                                                                                                                           | Provider-test / live approval                               | Remaining gate                                                                                                                                                                             |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Duffel Flights               | Existing mapped read client; historical synthetic tests only                                                                                                      | No new certification                                        | Existing per-operation prerequisites remain                                                                                                                                                |
+| Product                      | Implementation evidence                                                                                                                                                                    | Provider-test / live approval                               | Remaining gate                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Duffel Flights               | Existing mapped read client; historical synthetic tests only                                                                                                                               | No new certification                                        | Existing per-operation prerequisites remain                                                                                    |
 | Nuitee stays                 | Fixed-host rates/property-detail client; 22 synthetic wire cases, persisted multi-room revision/privacy certification and five-project deterministic browser acceptance; foundation passed | User-reported access only, operation/environment unverified | Trusted nationality/occupancy, live operation approval, prebook safety, exact pricing/payment path, booking/status correlation |
-| Viator activities            | Existing mapped read client; historical synthetic tests only                                                                                                      | No new certification; booking-tier entitlement unverified   | Actual merchant booking/status permission and trusted prerequisites                                                                                                                        |
-| Duffel Stays                 | Historical implementation/probes below                                                                                                                            | Not a current activation target                             | Preserve saved provenance/approved reconciliation; disable new discovery/refresh/book writes                                                                                               |
-| Nuitee Flights / Experiences | Evaluated in [research](../research.md#2026-10-23-provider-selection-revision), not selected                                                                      | Not checked or required                                     | Separately approved future scope, no fallback                                                                                                                                              |
+| Viator activities            | Existing mapped read client; historical synthetic tests only                                                                                                                               | No new certification; booking-tier entitlement unverified   | Actual merchant booking/status permission and trusted prerequisites                                                            |
+| Duffel Stays                 | Historical implementation/probes below                                                                                                                                                     | Not a current activation target                             | Preserve saved provenance/approved reconciliation; disable new discovery/refresh/book writes                                   |
+| Nuitee Flights / Experiences | Evaluated in [research](../research.md#2026-10-23-provider-selection-revision), not selected                                                                                               | Not checked or required                                     | Separately approved future scope, no fallback                                                                                  |
 
 Nuitee hotel prebook is documented checkout-session creation, not established
 read-only revalidation. Keep it excluded unless a no-hold/no-payment variant
@@ -95,11 +95,11 @@ do not silently redirect checkout or activate Nuitee Experiences. Funding and
 alternative decisions are recorded in
 [the current supplier/payment assessment](../research.md#2026-10-24-supplier-sufficiency-and-single-customer-payment-direction).
 
-| Lane | New evidence | Remaining gate |
-| --- | --- | --- |
-| Duffel Flights | The same configured sandbox discovery credential returned HTTP 403 with official code `insufficient_permissions` / `authentication_error` in 278 ms. User approved a separate discovery token with search permission; no booking-key fallback. | Provision that distinct token and retest search. Key presence/reference GETs cannot prove offer-request access, production or funding. |
-| Nuitee stays | Sandbox hotel lookup, rates, property GET and fresh rates all returned HTTP 200 (190 / 4,177 / 132 / 2,220 ms). Initial offer normalized with 1,156/549-character offer/rate IDs and explicitly unknown customer price. | Fresh rates did not contain the original selected offer token; exact detail therefore failed closed without substitute inventory. This observation is not a guarantee that all tokens rotate. Final terms/prebook safety, funding and production remain unapproved. |
-| Viator activities | Sandbox content search returned HTTP 200 with one product in 2,883 ms. A separate one-product content-only normalization probe returned HTTP 200 for search/detail (2,824/171 ms), producing one 2,250-byte public offer. | Probes with date filters timed out within the unchanged deadline; a later content-only attempt also timed out. This is intermittent, not proof that dates cause the failure. Normalized content-only probing is not unmodified date-filtered application-search, party availability, booking or production certification. Basic affiliate tier is insufficient for the requested payment/booking model. |
+| Lane              | New evidence                                                                                                                                                                                                                                   | Remaining gate                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duffel Flights    | The same configured sandbox discovery credential returned HTTP 403 with official code `insufficient_permissions` / `authentication_error` in 278 ms. User approved a separate discovery token with search permission; no booking-key fallback. | Provision that distinct token and retest search. Key presence/reference GETs cannot prove offer-request access, production or funding.                                                                                                                                                                                                                                                                  |
+| Nuitee stays      | Sandbox hotel lookup, rates, property GET and fresh rates all returned HTTP 200 (190 / 4,177 / 132 / 2,220 ms). Initial offer normalized with 1,156/549-character offer/rate IDs and explicitly unknown customer price.                        | Fresh rates did not contain the original selected offer token; exact detail therefore failed closed without substitute inventory. This observation is not a guarantee that all tokens rotate. Final terms/prebook safety, funding and production remain unapproved.                                                                                                                                     |
+| Viator activities | Sandbox content search returned HTTP 200 with one product in 2,883 ms. A separate one-product content-only normalization probe returned HTTP 200 for search/detail (2,824/171 ms), producing one 2,250-byte public offer.                      | Probes with date filters timed out within the unchanged deadline; a later content-only attempt also timed out. This is intermittent, not proof that dates cause the failure. Normalized content-only probing is not unmodified date-filtered application-search, party availability, booking or production certification. Basic affiliate tier is insufficient for the requested payment/booking model. |
 
 Only fixed official read endpoints were used with synthetic shopping facts.
 No prebook, hold, booking, payment, cancellation or reschedule was performed,
@@ -153,11 +153,11 @@ hold, reservation, payment, cancellation or reschedule. No credential values,
 real offer/rate IDs, supplier prices, raw responses or traveller data were
 persisted in evidence.
 
-| Product | Actual authenticated result | Interpretation |
-| --- | --- | --- |
-| Duffel Flights | Read-key offer search returned HTTP 403 / `access_blocked`; the same key's airline lookup returned HTTP 200 with one record in sandbox token mode. | Authentication/reference access works; this search is denied. The exact scope/entitlement cause is not established. No key escalation or search certification. |
-| Nuitee stays | Countries returned HTTP 200 with 249 records. Sourced Lisbon hotel lookup and rates returned HTTP 200. The final corrected client normalized and publicly projected one offer. | Narrow sandbox lookup/rates and normalization evidence only; no final-terms, payment or booking approval. |
-| Viator activities | Two sandbox product-search attempts received no HTTP response before their unchanged approximately eight-second deadlines, including one IPv4-first diagnostic. | Transport remains unavailable/unverified; no claim about authentication or entitlement and no production fallback. |
+| Product           | Actual authenticated result                                                                                                                                                    | Interpretation                                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duffel Flights    | Read-key offer search returned HTTP 403 / `access_blocked`; the same key's airline lookup returned HTTP 200 with one record in sandbox token mode.                             | Authentication/reference access works; this search is denied. The exact scope/entitlement cause is not established. No key escalation or search certification. |
+| Nuitee stays      | Countries returned HTTP 200 with 249 records. Sourced Lisbon hotel lookup and rates returned HTTP 200. The final corrected client normalized and publicly projected one offer. | Narrow sandbox lookup/rates and normalization evidence only; no final-terms, payment or booking approval.                                                      |
+| Viator activities | Two sandbox product-search attempts received no HTTP response before their unchanged approximately eight-second deadlines, including one IPv4-first diagnostic.                | Transport remains unavailable/unverified; no claim about authentication or entitlement and no production fallback.                                             |
 
 Actual Nuitee responses exposed two gaps missed by the short synthetic
 fixtures:
@@ -280,16 +280,16 @@ confirmation. Prices retain their original JSON decimal tokens. Additional
 selling prices must match the approved quote; unhandled add-ons require manual
 review, not an assumed included/zero charge.
 
-| Executed check | Result |
-| --- | --- |
-| New wire test before implementation | Failed because the restricted module did not yet exist |
-| Additional pricing regressions | 3 failed before handling selling prices/add-ons |
-| Resolver mutation regressions | 2 failed before isolating immutable inputs |
-| New Nuitee wire suite | 69 cases passed within the combined run below |
-| All web contracts, config/coverage units, booking authorization/workflows/callback/privacy integration | 435 passed / 25 files; zero skips |
-| TypeScript and focused ESLint (`--max-warnings 0`) | Passed |
-| Complete web ESLint, production Next.js build and whitespace validation | Passed |
-| Agent/snapshot contract drift and shared supply wire validation | Passed; 16 shared cases |
+| Executed check                                                                                         | Result                                                 |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| New wire test before implementation                                                                    | Failed because the restricted module did not yet exist |
+| Additional pricing regressions                                                                         | 3 failed before handling selling prices/add-ons        |
+| Resolver mutation regressions                                                                          | 2 failed before isolating immutable inputs             |
+| New Nuitee wire suite                                                                                  | 69 cases passed within the combined run below          |
+| All web contracts, config/coverage units, booking authorization/workflows/callback/privacy integration | 435 passed / 25 files; zero skips                      |
+| TypeScript and focused ESLint (`--max-warnings 0`)                                                     | Passed                                                 |
+| Complete web ESLint, production Next.js build and whitespace validation                                | Passed                                                 |
+| Agent/snapshot contract drift and shared supply wire validation                                        | Passed; 16 shared cases                                |
 
 The first broad run lacked disposable database variables and skipped 18 cases;
 it is not acceptance evidence. The final 435-case run used a new task-owned
@@ -333,13 +333,13 @@ The existing research introduction still named Duffel for stays. A failing UI
 regression reproduced that mismatch before the copy was corrected to Nuitee.
 No layout or interaction redesign was introduced.
 
-| T098 executed check | Result |
-| --- | --- |
-| Isolated `pnpm --dir web test:foundation` | 44 passed / 4 files; zero skips/unhandled errors |
-| All web contracts plus current supplier access/browser-panel/config/application/provider/discovery suites | 277 passed / 24 files; zero skips |
-| Actual FastMCP protocol plus Python canonical export tests | 45 passed; zero skips |
-| Agent/snapshot/promoted contract drift and shared supply validation | Passed; 16 wire cases |
-| Web/Python typecheck, targeted ESLint/Ruff and changed-test formatting | Passed |
+| T098 executed check                                                                                       | Result                                           |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Isolated `pnpm --dir web test:foundation`                                                                 | 44 passed / 4 files; zero skips/unhandled errors |
+| All web contracts plus current supplier access/browser-panel/config/application/provider/discovery suites | 277 passed / 24 files; zero skips                |
+| Actual FastMCP protocol plus Python canonical export tests                                                | 45 passed; zero skips                            |
+| Agent/snapshot/promoted contract drift and shared supply validation                                       | Passed; 16 wire cases                            |
+| Web/Python typecheck, targeted ESLint/Ruff and changed-test formatting                                    | Passed                                           |
 
 T097/T098 are complete. TypeScript persistence and actual MCP protocol are
 tested at their existing boundaries; protocol callbacks remain mocked, not a
@@ -361,15 +361,15 @@ estimate failures caused by its fixture still injecting retired Duffel Stays.
 Replaced that fixture with Nuitee, retaining the essential-accommodation safety
 check and asserting the current provider/product matrix.
 
-| Executed check | Result |
-| --- | --- |
-| `pnpm --dir web test:foundation`, isolated synthetic test URLs | 44 passed / 4 files; zero skips or unhandled errors |
-| Supplier access/browser component, all web contract tests, config/application/provider/discovery units | 276 passed / 24 files; zero skips |
-| `pytest agent/tests/integration/test_supplier_mcp.py` | 41 passed; actual in-process FastMCP protocol |
-| Python canonical contract suite via `pnpm test:contracts` | 41 passed |
-| Canonical exports, agent/snapshot/promoted-contract drift, shared supply cases | Passed; 16 shared supply wire cases |
-| Web TypeScript and Python Pyright | Passed; Python zero errors/warnings |
-| Targeted ESLint/Ruff and changed-test Prettier/Black checks | Passed |
+| Executed check                                                                                         | Result                                              |
+| ------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| `pnpm --dir web test:foundation`, isolated synthetic test URLs                                         | 44 passed / 4 files; zero skips or unhandled errors |
+| Supplier access/browser component, all web contract tests, config/application/provider/discovery units | 276 passed / 24 files; zero skips                   |
+| `pytest agent/tests/integration/test_supplier_mcp.py`                                                  | 41 passed; actual in-process FastMCP protocol       |
+| Python canonical contract suite via `pnpm test:contracts`                                              | 41 passed                                           |
+| Canonical exports, agent/snapshot/promoted-contract drift, shared supply cases                         | Passed; 16 shared supply wire cases                 |
+| Web TypeScript and Python Pyright                                                                      | Passed; Python zero errors/warnings                 |
+| Targeted ESLint/Ruff and changed-test Prettier/Black checks                                            | Passed                                              |
 
 The first general contract command ran without database variables and skipped 13
 database cases; the final 276-test run above includes all web contract tests with
@@ -844,11 +844,11 @@ This supersedes the `Provider-test / live access` and `Activation gate` cells
 for Duffel Flights and Nuitee stays above; the earlier rows describe the
 2026-10-19/21 state.
 
-| Product | Access | Evidence | Remaining gate |
-| ------- | ------ | -------- | -------------- |
-| Duffel Flights | `search` verified, environment sandbox (`live_mode: false`); detail/revalidation/booking undeclared | `supplier-live-verification-2026-10-26.md`: paged offer read, `places/suggestions` gateway resolution | Dedicated discovery credential; production inventory; service/payment cost verification |
-| Nuitee stays | `search` + `detail` verified, environment sandbox; prebook/payment/booking undeclared | `supplier-live-verification-2026-10-26.md`: `data/places`, `data/hotels`, `hotels/rates`, adapter normalization | Production access; final checkout terms; cancellation/payment semantics |
-| Viator activities | `search` verified for `affiliate_basic`; merchant/status/booking undeclared | `supplier-live-verification-2026-10-26.md`: direct product search | Sandbox `products/search` currently takes 23-40 s (three attempts, one `500`), so the 8-second source budget yields `deadline`; reconnect/verify before claiming activity coverage |
+| Product           | Access                                                                                              | Evidence                                                                                                        | Remaining gate                                                                                                                                                                     |
+| ----------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duffel Flights    | `search` verified, environment sandbox (`live_mode: false`); detail/revalidation/booking undeclared | `supplier-live-verification-2026-10-26.md`: paged offer read, `places/suggestions` gateway resolution           | Dedicated discovery credential; production inventory; service/payment cost verification                                                                                            |
+| Nuitee stays      | `search` + `detail` verified, environment sandbox; prebook/payment/booking undeclared               | `supplier-live-verification-2026-10-26.md`: `data/places`, `data/hotels`, `hotels/rates`, adapter normalization | Production access; final checkout terms; cancellation/payment semantics                                                                                                            |
+| Viator activities | `search` verified for `affiliate_basic`; merchant/status/booking undeclared                         | `supplier-live-verification-2026-10-26.md`: direct product search                                               | Sandbox `products/search` currently takes 23-40 s (three attempts, one `500`), so the 8-second source budget yields `deadline`; reconnect/verify before claiming activity coverage |
 
 Trusted identity rule now in force: an operation only runs when the composition
 root can prove the supplier identity it needs. Flights resolve country/city

@@ -1,3 +1,4 @@
+import asyncio
 from copy import deepcopy
 from datetime import UTC, datetime
 from typing import cast
@@ -9,7 +10,7 @@ from onholidai_agent.graph.estimate import estimate
 from onholidai_agent.integrations.nebius import NebiusClient
 from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import CreateAgentRunRequest
-from tests.fixtures.planning import complete_component_facts
+from tests.fixtures.planning import complete_component_facts, quoted_offers
 
 
 def request():
@@ -62,9 +63,14 @@ class Sources:
         return {"offers": [], "outcomes": [{"status": "unavailable"}]}
 
 
-def test_missing_origin_asks_before_flight_research():
-    import asyncio
+class QuotedSources(Sources):
+    async def search(
+        self, request: CreateAgentRunRequest, query: dict[str, object]
+    ) -> dict[str, object]:
+        return {"offers": quoted_offers(query)}
 
+
+def test_missing_origin_asks_before_flight_research():
     sources = Sources(False)
     result = asyncio.run(estimate(request(), sources, now=datetime(2029, 1, 1, tzinfo=UTC)))
     assert result.root.kind == "clarification"
@@ -72,8 +78,6 @@ def test_missing_origin_asks_before_flight_research():
 
 
 def test_source_failure_preserves_preferred_dates_and_never_returns_zero_cost_success():
-    import asyncio
-
     sources = Sources()
     original = deepcopy(sources.trip)
     with pytest.raises(ValueError, match="source_unavailable"):
@@ -83,39 +87,20 @@ def test_source_failure_preserves_preferred_dates_and_never_returns_zero_cost_su
 
 
 def test_alternative_supplier_quotes_are_not_added_together_as_booked_components():
-    import asyncio
-    from typing import cast
-
     class Alternatives(Sources):
         async def search(
             self, request: CreateAgentRunRequest, query: dict[str, object]
         ) -> dict[str, object]:
             return {
-                "offers": [
-                    {
-                        "component": {
-                            **complete_component_facts(kind, query),
-                            "id": f"a0000000-a000-4000-8000-a{index:011}",
-                            "type": kind,
-                            "bookingStatus": "unbooked",
-                            "price": {
-                                "currency": "EUR",
-                                "finalCustomerMinor": price,
-                                "taxesMinor": 0,
-                                "feesMinor": 0,
-                            },
-                        }
-                    }
-                    for index, (kind, price) in enumerate(
-                        (
-                            ("flight", 10000),
-                            ("flight", 20000),
-                            ("accommodation", 10000),
-                            ("accommodation", 20000),
-                        ),
-                        1,
-                    )
-                ]
+                "offers": quoted_offers(
+                    query,
+                    (
+                        ("flight", 10000),
+                        ("flight", 20000),
+                        ("accommodation", 10000),
+                        ("accommodation", 20000),
+                    ),
+                )
             }
 
     sources = Alternatives()
@@ -128,33 +113,12 @@ def test_alternative_supplier_quotes_are_not_added_together_as_booked_components
 
 
 def test_departure_comparison_proposes_the_supported_cheaper_origin_without_changing_the_trip():
-    import asyncio
-    from typing import cast
-
     class OriginAlternatives(Sources):
         async def search(
             self, request: CreateAgentRunRequest, query: dict[str, object]
         ) -> dict[str, object]:
             price = 5000 if query.get("departurePlaceId") == "ams" else 10000
-            return {
-                "offers": [
-                    {
-                        "component": {
-                            **complete_component_facts(kind, query),
-                            "id": f"a0000000-a000-4000-8000-a{index:011}",
-                            "type": kind,
-                            "bookingStatus": "unbooked",
-                            "price": {
-                                "currency": "EUR",
-                                "finalCustomerMinor": price,
-                                "taxesMinor": 0,
-                                "feesMinor": 0,
-                            },
-                        }
-                    }
-                    for index, kind in enumerate(["flight", "accommodation"], 1)
-                ]
-            }
+            return {"offers": quoted_offers(query, (("flight", price), ("accommodation", price)))}
 
     source = OriginAlternatives()
     snapshot = cast(dict[str, object], source.trip["snapshot"])
@@ -177,10 +141,7 @@ def test_departure_comparison_proposes_the_supported_cheaper_origin_without_chan
 
 
 def test_ai_estimate_proposes_origin_aware_order_for_review_without_changing_saved_order():
-    import asyncio
-    from typing import cast
-
-    class RouteSources(Sources):
+    class RouteSources(QuotedSources):
         def __init__(self):
             super().__init__()
             self.search_queries: list[dict[str, object]] = []
@@ -189,25 +150,7 @@ def test_ai_estimate_proposes_origin_aware_order_for_review_without_changing_sav
             self, request: CreateAgentRunRequest, query: dict[str, object]
         ) -> dict[str, object]:
             self.search_queries.append(query)
-            return {
-                "offers": [
-                    {
-                        "component": {
-                            **complete_component_facts(kind, query),
-                            "id": f"a0000000-a000-4000-8000-a{index:011}",
-                            "type": kind,
-                            "bookingStatus": "unbooked",
-                            "price": {
-                                "currency": "EUR",
-                                "finalCustomerMinor": 10000,
-                                "taxesMinor": 0,
-                                "feesMinor": 0,
-                            },
-                        }
-                    }
-                    for index, kind in enumerate(["flight", "accommodation"], 1)
-                ]
-            }
+            return await super().search(request, query)
 
     source = RouteSources()
     snapshot = cast(dict[str, object], source.trip["snapshot"])
@@ -263,34 +206,13 @@ def test_ai_estimate_proposes_origin_aware_order_for_review_without_changing_sav
 
 
 def test_unavailable_baseline_does_not_hide_a_supported_departure_alternative():
-    import asyncio
-    from typing import cast
-
-    class PartialSources(Sources):
+    class PartialSources(QuotedSources):
         async def search(
             self, request: CreateAgentRunRequest, query: dict[str, object]
         ) -> dict[str, object]:
             if query.get("departurePlaceId") != "ams":
                 return {"offers": []}
-            return {
-                "offers": [
-                    {
-                        "component": {
-                            **complete_component_facts(kind, query),
-                            "id": f"a0000000-a000-4000-8000-a{index:011}",
-                            "type": kind,
-                            "bookingStatus": "unbooked",
-                            "price": {
-                                "currency": "EUR",
-                                "finalCustomerMinor": 10000,
-                                "taxesMinor": 0,
-                                "feesMinor": 0,
-                            },
-                        }
-                    }
-                    for index, kind in enumerate(["flight", "accommodation"], 1)
-                ]
-            }
+            return await super().search(request, query)
 
     source = PartialSources()
     snapshot = cast(dict[str, object], source.trip["snapshot"])
@@ -306,32 +228,6 @@ def test_unavailable_baseline_does_not_hide_a_supported_departure_alternative():
 
 
 def test_unavailable_advisory_model_still_returns_the_deterministic_estimate():
-    import asyncio
-
-    class QuotedSources(Sources):
-        async def search(
-            self, request: CreateAgentRunRequest, query: dict[str, object]
-        ) -> dict[str, object]:
-            return {
-                "offers": [
-                    {
-                        "component": {
-                            **complete_component_facts(kind, query),
-                            "id": f"a0000000-a000-4000-8000-a{index:011}",
-                            "type": kind,
-                            "bookingStatus": "unbooked",
-                            "price": {
-                                "currency": "EUR",
-                                "finalCustomerMinor": 10000,
-                                "taxesMinor": 0,
-                                "feesMinor": 0,
-                            },
-                        }
-                    }
-                    for index, kind in enumerate(["flight", "accommodation"], 1)
-                ]
-            }
-
     class UnavailableModel:
         async def complete(self, messages: list[dict[str, str]]) -> str:
             raise TimeoutError()
@@ -345,36 +241,15 @@ def test_unavailable_advisory_model_still_returns_the_deterministic_estimate():
 
 
 def test_started_window_plans_the_remaining_days_instead_of_past_dates():
-    import asyncio
-    from typing import cast
-
-    class QuotedSources(Sources):
+    class RemainingWindowSources(QuotedSources):
         async def search(
             self, request: CreateAgentRunRequest, query: dict[str, object]
         ) -> dict[str, object]:
             assert str(query["startDate"]) >= "2030-05-15"
-            return {
-                "offers": [
-                    {
-                        "component": {
-                            **complete_component_facts(kind, query),
-                            "id": f"a0000000-a000-4000-8000-a{index:011}",
-                            "type": kind,
-                            "bookingStatus": "unbooked",
-                            "price": {
-                                "currency": "EUR",
-                                "finalCustomerMinor": 10000,
-                                "taxesMinor": 0,
-                                "feesMinor": 0,
-                            },
-                        }
-                    }
-                    for index, kind in enumerate(["flight", "accommodation"], 1)
-                ]
-            }
+            return await super().search(request, query)
 
     result = asyncio.run(
-        estimate(request(), QuotedSources(), now=datetime(2030, 5, 15, tzinfo=UTC))
+        estimate(request(), RemainingWindowSources(), now=datetime(2030, 5, 15, tzinfo=UTC))
     ).root
     assert result.kind == "proposal"
     routed = cast(
@@ -392,8 +267,6 @@ def test_started_window_plans_the_remaining_days_instead_of_past_dates():
 
 
 def test_passed_window_asks_for_future_dates_before_searching():
-    import asyncio
-
     sources = Sources()
     result = asyncio.run(estimate(request(), sources, now=datetime(2030, 7, 1, tzinfo=UTC))).root
     assert result.kind == "clarification"
@@ -402,8 +275,6 @@ def test_passed_window_asks_for_future_dates_before_searching():
 
 
 def test_incomplete_live_pricing_reports_research_instead_of_failing():
-    import asyncio
-
     class IncompleteSources(Sources):
         async def search(
             self, request: CreateAgentRunRequest, query: dict[str, object]

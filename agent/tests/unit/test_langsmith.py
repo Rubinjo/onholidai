@@ -1,3 +1,5 @@
+import pytest
+
 from onholidai_agent.config import Settings
 from onholidai_agent.telemetry.langsmith import SafeLangSmithSink
 
@@ -12,16 +14,49 @@ class Sink:
         self.runs.append({"name": name, "inputs": inputs, "run_type": run_type, **kwargs})
 
 
-def test_export_is_allowlisted_before_ingestion():
+def test_export_contains_only_allowlisted_redacted_metadata():
     client = Sink()
-    sink = SafeLangSmithSink(client, Settings())
-    sink.emit("refinement", "proposal", 42)
-    sink.emit("raw traveller prompt", "proposal", 42)
-    sink.emit("refinement", "supplier margin password", 42)
+    sink = SafeLangSmithSink(
+        client,
+        Settings(
+            _env_file=None,  # pyright: ignore[reportCallIssue]
+            langsmith_agent_id="onholidai",
+            langsmith_agent_environment="local",
+        ),
+    )
+    sink.emit("refinement", "proposal", 12.5)
     assert len(client.runs) == 1
-    assert client.runs[0]["inputs"] == {}
-    assert client.runs[0]["outputs"] == {
-        "purpose": "refinement",
-        "outcome": "proposal",
-        "duration_ms": 42,
+    run = client.runs[0]
+    assert set(run) == {
+        "name",
+        "inputs",
+        "run_type",
+        "id",
+        "address",
+        "start_time",
+        "end_time",
+        "outputs",
+        "extra",
     }
+    assert run["name"] == "onholidai.planning"
+    assert run["inputs"] == {}
+    assert run["outputs"] == {"purpose": "refinement", "outcome": "proposal", "duration_ms": 12.5}
+    assert run["extra"] == {"metadata": {"agent_id": "onholidai", "agent_environment": "local"}}
+
+
+@pytest.mark.parametrize(
+    "purpose,outcome,elapsed_ms",
+    [
+        ("raw traveller prompt", "proposal", 42),
+        ("refinement", "supplier margin password", 42),
+        ("refinement", "supplier margin", 12.5),
+        ("refinement", "proposal", -1),
+    ],
+)
+def test_invalid_metadata_is_rejected_before_ingestion(
+    purpose: str, outcome: str, elapsed_ms: float
+):
+    client = Sink()
+    sink = SafeLangSmithSink(client, Settings(_env_file=None))  # pyright: ignore[reportCallIssue]
+    sink.emit(purpose, outcome, elapsed_ms)
+    assert client.runs == []

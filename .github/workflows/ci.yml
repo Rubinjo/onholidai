@@ -48,18 +48,7 @@ jobs:
           SERVICE_TOKEN_SECRET: build-only-service-secret-000000000000
           PRICING_DIAGNOSTIC_SECRET: build-only-pricing-secret-000000000000
         run: pnpm --filter @onholidai/web build
-      - name: Detect Vitest suites
-        id: vitest
-        shell: bash
-        run: |
-          if find web/tests -type f \( -name '*.test.ts' -o -name '*.test.tsx' \) -print -quit | grep -q .; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "Vitest suites are not implemented yet; skipping."
-          fi
       - name: Run Vitest suites
-        if: steps.vitest.outputs.available == 'true'
         run: pnpm --dir web exec vitest run tests/unit
 
   foundation:
@@ -138,22 +127,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Detect contract suites
-        id: suites
-        shell: bash
-        run: |
-          if find web/tests/contract -type f -name '*.test.ts' -print -quit 2>/dev/null | grep -q .; then
-            echo "web=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "web=false" >> "$GITHUB_OUTPUT"
-            echo "Web contract suites are not implemented yet; skipping."
-          fi
-          if find agent/tests/contract -type f -name 'test_*.py' -print -quit 2>/dev/null | grep -q .; then
-            echo "agent=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "agent=false" >> "$GITHUB_OUTPUT"
-            echo "Agent contract suites are not implemented yet; skipping."
-          fi
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -169,23 +142,18 @@ jobs:
           pnpm --dir web agent:contracts:check
           node scripts/validate-contracts.mjs
       - name: Test web contracts
-        if: steps.suites.outputs.web == 'true'
         run: pnpm --filter @onholidai/web test:contracts
       - name: Set up Python for agent contracts
-        if: steps.suites.outputs.agent == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: agent/.python-version
       - name: Set up uv for agent contracts
-        if: steps.suites.outputs.agent == 'true'
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version: ${{ env.UV_VERSION }}
       - name: Install locked agent dependencies
-        if: steps.suites.outputs.agent == 'true'
         run: uv sync --project agent --frozen
       - name: Test agent contracts
-        if: steps.suites.outputs.agent == 'true'
         run: |
           uv run --project agent python agent/scripts/export_contracts.py --check
           uv run --project agent pytest agent/tests/contract
@@ -200,13 +168,9 @@ jobs:
       matrix:
         include:
           - name: Playwright browser suite
-            probe: web/tests/e2e
-            probe-type: playwright
             command: pnpm test:e2e
             install-browsers: true
           - name: Temporal workflow suite
-            probe: web/tests/integration/booking-workflows.test.ts
-            probe-type: file
             command: pnpm --dir web test:temporal
             install-browsers: false
     services:
@@ -238,39 +202,18 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Detect implemented capability
-        id: capability
-        shell: bash
-        env:
-          PROBE: ${{ matrix.probe }}
-          PROBE_TYPE: ${{ matrix.probe-type }}
-          SUITE_NAME: ${{ matrix.name }}
-        run: |
-          available=false
-          if [[ "$PROBE_TYPE" == "file" && -f "$PROBE" ]]; then
-            available=true
-          elif [[ "$PROBE_TYPE" == "playwright" && -d "$PROBE" ]] && find "$PROBE" -type f -name '*.spec.ts' -print -quit | grep -q .; then
-            available=true
-          fi
-          echo "available=$available" >> "$GITHUB_OUTPUT"
-          if [[ "$available" == "false" ]]; then
-            echo "$SUITE_NAME is not implemented yet; skipping."
-          fi
       - name: Set up Node.js
-        if: steps.capability.outputs.available == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
       - name: Enable pinned pnpm
-        if: steps.capability.outputs.available == 'true'
         run: |
           corepack enable
           corepack prepare "pnpm@${PNPM_VERSION}" --activate
       - name: Install locked Node.js dependencies
-        if: steps.capability.outputs.available == 'true'
         run: pnpm install --frozen-lockfile
       - name: Provision isolated browser database
-        if: steps.capability.outputs.available == 'true' && matrix.install-browsers
+        if: matrix.install-browsers
         env:
           PGPASSWORD: synthetic-admin
         run: |
@@ -283,24 +226,24 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d onholidai_e2e -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS postgis"
           pnpm --dir web db:migrate
       - name: Set up Python for browser planning
-        if: steps.capability.outputs.available == 'true' && matrix.install-browsers
+        if: matrix.install-browsers
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: agent/.python-version
       - name: Set up uv for browser planning
-        if: steps.capability.outputs.available == 'true' && matrix.install-browsers
+        if: matrix.install-browsers
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version: ${{ env.UV_VERSION }}
       - name: Install locked browser agent dependencies
-        if: steps.capability.outputs.available == 'true' && matrix.install-browsers
+        if: matrix.install-browsers
         run: uv sync --project agent --frozen
       - name: Build browser application
-        if: steps.capability.outputs.available == 'true' && matrix.install-browsers
+        if: matrix.install-browsers
         timeout-minutes: 5
         run: pnpm --dir web build
       - name: Create disposable browser TLS certificate
-        if: steps.capability.outputs.available == 'true' && matrix.install-browsers
+        if: matrix.install-browsers
         run: |
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=localhost" \
             -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
@@ -309,10 +252,9 @@ jobs:
             -in "$RUNNER_TEMP/browser.crt" -out "$RUNNER_TEMP/browser.pfx" -passout pass:
           echo "PLAYWRIGHT_TLS_CERTIFICATE=$RUNNER_TEMP/browser.pfx" >> "$GITHUB_ENV"
       - name: Install Playwright browsers
-        if: steps.capability.outputs.available == 'true' && matrix.install-browsers
+        if: matrix.install-browsers
         run: pnpm --dir web exec playwright install --with-deps
       - name: Run suite
-        if: steps.capability.outputs.available == 'true'
         timeout-minutes: 15
         run: ${{ matrix.command }}
       - name: Upload browser failure diagnostics

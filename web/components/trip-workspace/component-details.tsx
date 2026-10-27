@@ -60,8 +60,8 @@ export function ComponentDetails({
           )}
           {component.type === "activity" && (
             <p>
-              Activity duration {component.details?.durationMinutes ?? "Unavailable"} minutes. Directions:{" "}
-              {component.details?.directions ?? "Unavailable"}
+              Activity duration {component.details?.durationMinutes ?? "Unavailable"} minutes.
+              Directions: {component.details?.directions ?? "Unavailable"}
             </p>
           )}
           {component.type === "rail" && (

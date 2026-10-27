@@ -34,11 +34,7 @@
               },
               "kind": {
                 "type": "string",
-                "enum": [
-                  "transport",
-                  "accommodation",
-                  "activity"
-                ]
+                "enum": ["transport", "accommodation", "activity"]
               },
               "sourceRefs": {
                 "minItems": 1,
@@ -91,23 +87,12 @@
                       }
                     }
                   },
-                  "required": [
-                    "code",
-                    "message",
-                    "relatedIds"
-                  ],
+                  "required": ["code", "message", "relatedIds"],
                   "additionalProperties": false
                 }
               }
             },
-            "required": [
-              "requirementId",
-              "kind",
-              "sourceRefs",
-              "componentIds",
-              "state",
-              "issues"
-            ],
+            "required": ["requirementId", "kind", "sourceRefs", "componentIds", "state", "issues"],
             "additionalProperties": false
           }
         },
@@ -132,11 +117,7 @@
                 }
               }
             },
-            "required": [
-              "code",
-              "message",
-              "relatedIds"
-            ],
+            "required": ["code", "message", "relatedIds"],
             "additionalProperties": false
           }
         },
@@ -184,10 +165,7 @@
               ]
             }
           },
-          "required": [
-            "currency",
-            "minorUnits"
-          ],
+          "required": ["currency", "minorUnits"],
           "additionalProperties": false
         }
       },
@@ -248,11 +226,7 @@
                   },
                   "kind": {
                     "type": "string",
-                    "enum": [
-                      "transport",
-                      "accommodation",
-                      "activity"
-                    ]
+                    "enum": ["transport", "accommodation", "activity"]
                   },
                   "sourceRefs": {
                     "minItems": 1,
@@ -305,11 +279,7 @@
                           }
                         }
                       },
-                      "required": [
-                        "code",
-                        "message",
-                        "relatedIds"
-                      ],
+                      "required": ["code", "message", "relatedIds"],
                       "additionalProperties": false
                     }
                   }
@@ -346,11 +316,7 @@
                     }
                   }
                 },
-                "required": [
-                  "code",
-                  "message",
-                  "relatedIds"
-                ],
+                "required": ["code", "message", "relatedIds"],
                 "additionalProperties": false
               }
             },
@@ -398,10 +364,7 @@
                   ]
                 }
               },
-              "required": [
-                "currency",
-                "minorUnits"
-              ],
+              "required": ["currency", "minorUnits"],
               "additionalProperties": false
             }
           },
@@ -441,12 +404,7 @@
                 },
                 "status": {
                   "type": "string",
-                  "enum": [
-                    "accepted",
-                    "running",
-                    "completed",
-                    "failed"
-                  ]
+                  "enum": ["accepted", "running", "completed", "failed"]
                 },
                 "outcomes": {
                   "maxItems": 32,
@@ -461,22 +419,14 @@
                       },
                       "outcome": {
                         "type": "string",
-                        "enum": [
-                          "unchanged",
-                          "changed",
-                          "unavailable",
-                          "unknown"
-                        ]
+                        "enum": ["unchanged", "changed", "unavailable", "unknown"]
                       },
                       "safeReason": {
                         "type": "string",
                         "maxLength": 500
                       }
                     },
-                    "required": [
-                      "componentId",
-                      "outcome"
-                    ],
+                    "required": ["componentId", "outcome"],
                     "additionalProperties": false
                   }
                 },
@@ -503,10 +453,7 @@
                               "properties": {
                                 "kind": {
                                   "type": "string",
-                                  "enum": [
-                                    "city",
-                                    "airport"
-                                  ]
+                                  "enum": ["city", "airport"]
                                 },
                                 "placeId": {
                                   "type": "string",
@@ -572,18 +519,12 @@
                                         "maximum": 17
                                       }
                                     },
-                                    "required": [
-                                      "id",
-                                      "ageAtTripStart"
-                                    ],
+                                    "required": ["id", "ageAtTripStart"],
                                     "additionalProperties": false
                                   }
                                 }
                               },
-                              "required": [
-                                "adults",
-                                "children"
-                              ],
+                              "required": ["adults", "children"],
                               "additionalProperties": false
                             },
                             "components": {
@@ -654,10 +595,7 @@
                                   },
                                   "disposition": {
                                     "type": "string",
-                                    "enum": [
-                                      "already_confirmed",
-                                      "to_book"
-                                    ]
+                                    "enum": ["already_confirmed", "to_book"]
                                   },
                                   "service": {
                                     "type": "object",
@@ -804,11 +742,7 @@
                                                 "maximum": 10
                                               }
                                             },
-                                            "required": [
-                                              "adults",
-                                              "childAges",
-                                              "rooms"
-                                            ],
+                                            "required": ["adults", "childAges", "rooms"],
                                             "additionalProperties": false
                                           },
                                           {
@@ -838,23 +772,14 @@
                                     "properties": {
                                       "travellers": {
                                         "type": "string",
-                                        "enum": [
-                                          "ready",
-                                          "missing"
-                                        ]
+                                        "enum": ["ready", "missing"]
                                       },
                                       "payment": {
                                         "type": "string",
-                                        "enum": [
-                                          "ready",
-                                          "missing"
-                                        ]
+                                        "enum": ["ready", "missing"]
                                       }
                                     },
-                                    "required": [
-                                      "travellers",
-                                      "payment"
-                                    ],
+                                    "required": ["travellers", "payment"],
                                     "additionalProperties": false
                                   }
                                 },
@@ -890,10 +815,7 @@
                                   "maximum": 9007199254740991
                                 }
                               },
-                              "required": [
-                                "currency",
-                                "minorUnits"
-                              ],
+                              "required": ["currency", "minorUnits"],
                               "additionalProperties": false
                             },
                             "nonReversibleActions": {
@@ -943,11 +865,7 @@
                                       },
                                       "kind": {
                                         "type": "string",
-                                        "enum": [
-                                          "transport",
-                                          "accommodation",
-                                          "activity"
-                                        ]
+                                        "enum": ["transport", "accommodation", "activity"]
                                       },
                                       "sourceRefs": {
                                         "minItems": 1,
@@ -1000,11 +918,7 @@
                                               }
                                             }
                                           },
-                                          "required": [
-                                            "code",
-                                            "message",
-                                            "relatedIds"
-                                          ],
+                                          "required": ["code", "message", "relatedIds"],
                                           "additionalProperties": false
                                         }
                                       }
@@ -1041,11 +955,7 @@
                                         }
                                       }
                                     },
-                                    "required": [
-                                      "code",
-                                      "message",
-                                      "relatedIds"
-                                    ],
+                                    "required": ["code", "message", "relatedIds"],
                                     "additionalProperties": false
                                   }
                                 },
@@ -1093,10 +1003,7 @@
                                       ]
                                     }
                                   },
-                                  "required": [
-                                    "currency",
-                                    "minorUnits"
-                                  ],
+                                  "required": ["currency", "minorUnits"],
                                   "additionalProperties": false
                                 }
                               },
@@ -1161,10 +1068,7 @@
                               "properties": {
                                 "kind": {
                                   "type": "string",
-                                  "enum": [
-                                    "city",
-                                    "airport"
-                                  ]
+                                  "enum": ["city", "airport"]
                                 },
                                 "placeId": {
                                   "type": "string",
@@ -1230,18 +1134,12 @@
                                         "maximum": 17
                                       }
                                     },
-                                    "required": [
-                                      "id",
-                                      "ageAtTripStart"
-                                    ],
+                                    "required": ["id", "ageAtTripStart"],
                                     "additionalProperties": false
                                   }
                                 }
                               },
-                              "required": [
-                                "adults",
-                                "children"
-                              ],
+                              "required": ["adults", "children"],
                               "additionalProperties": false
                             },
                             "components": {
@@ -1312,10 +1210,7 @@
                                   },
                                   "disposition": {
                                     "type": "string",
-                                    "enum": [
-                                      "already_confirmed",
-                                      "to_book"
-                                    ]
+                                    "enum": ["already_confirmed", "to_book"]
                                   },
                                   "service": {
                                     "type": "object",
@@ -1462,11 +1357,7 @@
                                                 "maximum": 10
                                               }
                                             },
-                                            "required": [
-                                              "adults",
-                                              "childAges",
-                                              "rooms"
-                                            ],
+                                            "required": ["adults", "childAges", "rooms"],
                                             "additionalProperties": false
                                           },
                                           {
@@ -1496,23 +1387,14 @@
                                     "properties": {
                                       "travellers": {
                                         "type": "string",
-                                        "enum": [
-                                          "ready",
-                                          "missing"
-                                        ]
+                                        "enum": ["ready", "missing"]
                                       },
                                       "payment": {
                                         "type": "string",
-                                        "enum": [
-                                          "ready",
-                                          "missing"
-                                        ]
+                                        "enum": ["ready", "missing"]
                                       }
                                     },
-                                    "required": [
-                                      "travellers",
-                                      "payment"
-                                    ],
+                                    "required": ["travellers", "payment"],
                                     "additionalProperties": false
                                   }
                                 },
@@ -1544,10 +1426,7 @@
                                   "maximum": 9007199254740991
                                 }
                               },
-                              "required": [
-                                "currency",
-                                "minorUnits"
-                              ],
+                              "required": ["currency", "minorUnits"],
                               "additionalProperties": false
                             },
                             "nonReversibleActions": {
@@ -1632,11 +1511,7 @@
                           },
                           "kind": {
                             "type": "string",
-                            "enum": [
-                              "transport",
-                              "accommodation",
-                              "activity"
-                            ]
+                            "enum": ["transport", "accommodation", "activity"]
                           },
                           "sourceRefs": {
                             "minItems": 1,
@@ -1689,11 +1564,7 @@
                                   }
                                 }
                               },
-                              "required": [
-                                "code",
-                                "message",
-                                "relatedIds"
-                              ],
+                              "required": ["code", "message", "relatedIds"],
                               "additionalProperties": false
                             }
                           }
@@ -1730,11 +1601,7 @@
                             }
                           }
                         },
-                        "required": [
-                          "code",
-                          "message",
-                          "relatedIds"
-                        ],
+                        "required": ["code", "message", "relatedIds"],
                         "additionalProperties": false
                       }
                     },
@@ -1782,10 +1649,7 @@
                           ]
                         }
                       },
-                      "required": [
-                        "currency",
-                        "minorUnits"
-                      ],
+                      "required": ["currency", "minorUnits"],
                       "additionalProperties": false
                     }
                   },
@@ -1843,11 +1707,7 @@
                 },
                 "operation": {
                   "type": "string",
-                  "enum": [
-                    "book_trip",
-                    "reschedule_component",
-                    "cancel_component"
-                  ]
+                  "enum": ["book_trip", "reschedule_component", "cancel_component"]
                 },
                 "componentId": {
                   "anyOf": [
@@ -1867,13 +1727,7 @@
                 },
                 "status": {
                   "type": "string",
-                  "enum": [
-                    "pending",
-                    "authorized",
-                    "invalidated",
-                    "expired",
-                    "consumed"
-                  ]
+                  "enum": ["pending", "authorized", "invalidated", "expired", "consumed"]
                 },
                 "authorizedAt": {
                   "type": "string",
@@ -1938,11 +1792,7 @@
                 },
                 "operation": {
                   "type": "string",
-                  "enum": [
-                    "book_trip",
-                    "reschedule_component",
-                    "cancel_component"
-                  ]
+                  "enum": ["book_trip", "reschedule_component", "cancel_component"]
                 },
                 "status": {
                   "type": "string",
@@ -2004,12 +1854,7 @@
                         ]
                       }
                     },
-                    "required": [
-                      "componentId",
-                      "status",
-                      "providerReference",
-                      "safeReason"
-                    ],
+                    "required": ["componentId", "status", "providerReference", "safeReason"],
                     "additionalProperties": false
                   }
                 },
@@ -2037,12 +1882,7 @@
                 },
                 "executionStatus": {
                   "type": "string",
-                  "enum": [
-                    "active",
-                    "invalidated",
-                    "expired",
-                    "completed"
-                  ]
+                  "enum": ["active", "invalidated", "expired", "completed"]
                 },
                 "tripVersion": {
                   "type": "integer",
@@ -2136,11 +1976,7 @@
                 },
                 "operation": {
                   "type": "string",
-                  "enum": [
-                    "book_trip",
-                    "reschedule_component",
-                    "cancel_component"
-                  ]
+                  "enum": ["book_trip", "reschedule_component", "cancel_component"]
                 },
                 "status": {
                   "type": "string",
@@ -2202,12 +2038,7 @@
                         ]
                       }
                     },
-                    "required": [
-                      "componentId",
-                      "status",
-                      "providerReference",
-                      "safeReason"
-                    ],
+                    "required": ["componentId", "status", "providerReference", "safeReason"],
                     "additionalProperties": false
                   }
                 },
@@ -2235,12 +2066,7 @@
                 },
                 "executionStatus": {
                   "type": "string",
-                  "enum": [
-                    "active",
-                    "invalidated",
-                    "expired",
-                    "completed"
-                  ]
+                  "enum": ["active", "invalidated", "expired", "completed"]
                 },
                 "tripVersion": {
                   "type": "integer",
@@ -2335,11 +2161,7 @@
               },
               "operation": {
                 "type": "string",
-                "enum": [
-                  "book_trip",
-                  "reschedule_component",
-                  "cancel_component"
-                ]
+                "enum": ["book_trip", "reschedule_component", "cancel_component"]
               },
               "status": {
                 "type": "string",
@@ -2401,12 +2223,7 @@
                       ]
                     }
                   },
-                  "required": [
-                    "componentId",
-                    "status",
-                    "providerReference",
-                    "safeReason"
-                  ],
+                  "required": ["componentId", "status", "providerReference", "safeReason"],
                   "additionalProperties": false
                 }
               },
@@ -2434,12 +2251,7 @@
               },
               "executionStatus": {
                 "type": "string",
-                "enum": [
-                  "active",
-                  "invalidated",
-                  "expired",
-                  "completed"
-                ]
+                "enum": ["active", "invalidated", "expired", "completed"]
               },
               "tripVersion": {
                 "type": "integer",
@@ -2606,10 +2418,7 @@
               "properties": {
                 "kind": {
                   "type": "string",
-                  "enum": [
-                    "city",
-                    "airport"
-                  ]
+                  "enum": ["city", "airport"]
                 },
                 "placeId": {
                   "type": "string",
@@ -2641,14 +2450,7 @@
                   ]
                 }
               },
-              "required": [
-                "kind",
-                "placeId",
-                "name",
-                "countryCode",
-                "timezone",
-                "airportCode"
-              ],
+              "required": ["kind", "placeId", "name", "countryCode", "timezone", "airportCode"],
               "additionalProperties": false
             },
             "travellerParty": {
@@ -2675,18 +2477,12 @@
                         "maximum": 17
                       }
                     },
-                    "required": [
-                      "id",
-                      "ageAtTripStart"
-                    ],
+                    "required": ["id", "ageAtTripStart"],
                     "additionalProperties": false
                   }
                 }
               },
-              "required": [
-                "adults",
-                "children"
-              ],
+              "required": ["adults", "children"],
               "additionalProperties": false
             },
             "components": {
@@ -2757,23 +2553,14 @@
                   },
                   "disposition": {
                     "type": "string",
-                    "enum": [
-                      "already_confirmed",
-                      "to_book"
-                    ]
+                    "enum": ["already_confirmed", "to_book"]
                   },
                   "service": {
                     "type": "object",
                     "properties": {
                       "type": {
                         "type": "string",
-                        "enum": [
-                          "flight",
-                          "accommodation",
-                          "activity",
-                          "rail",
-                          "transfer"
-                        ]
+                        "enum": ["flight", "accommodation", "activity", "rail", "transfer"]
                       },
                       "title": {
                         "type": "string",
@@ -2907,11 +2694,7 @@
                                 "maximum": 10
                               }
                             },
-                            "required": [
-                              "adults",
-                              "childAges",
-                              "rooms"
-                            ],
+                            "required": ["adults", "childAges", "rooms"],
                             "additionalProperties": false
                           },
                           {
@@ -2941,23 +2724,14 @@
                     "properties": {
                       "travellers": {
                         "type": "string",
-                        "enum": [
-                          "ready",
-                          "missing"
-                        ]
+                        "enum": ["ready", "missing"]
                       },
                       "payment": {
                         "type": "string",
-                        "enum": [
-                          "ready",
-                          "missing"
-                        ]
+                        "enum": ["ready", "missing"]
                       }
                     },
-                    "required": [
-                      "travellers",
-                      "payment"
-                    ],
+                    "required": ["travellers", "payment"],
                     "additionalProperties": false
                   }
                 },
@@ -2993,10 +2767,7 @@
                   "maximum": 9007199254740991
                 }
               },
-              "required": [
-                "currency",
-                "minorUnits"
-              ],
+              "required": ["currency", "minorUnits"],
               "additionalProperties": false
             },
             "nonReversibleActions": {
@@ -3046,11 +2817,7 @@
                       },
                       "kind": {
                         "type": "string",
-                        "enum": [
-                          "transport",
-                          "accommodation",
-                          "activity"
-                        ]
+                        "enum": ["transport", "accommodation", "activity"]
                       },
                       "sourceRefs": {
                         "minItems": 1,
@@ -3103,11 +2870,7 @@
                               }
                             }
                           },
-                          "required": [
-                            "code",
-                            "message",
-                            "relatedIds"
-                          ],
+                          "required": ["code", "message", "relatedIds"],
                           "additionalProperties": false
                         }
                       }
@@ -3144,11 +2907,7 @@
                         }
                       }
                     },
-                    "required": [
-                      "code",
-                      "message",
-                      "relatedIds"
-                    ],
+                    "required": ["code", "message", "relatedIds"],
                     "additionalProperties": false
                   }
                 },
@@ -3196,10 +2955,7 @@
                       ]
                     }
                   },
-                  "required": [
-                    "currency",
-                    "minorUnits"
-                  ],
+                  "required": ["currency", "minorUnits"],
                   "additionalProperties": false
                 }
               },
@@ -3264,10 +3020,7 @@
               "properties": {
                 "kind": {
                   "type": "string",
-                  "enum": [
-                    "city",
-                    "airport"
-                  ]
+                  "enum": ["city", "airport"]
                 },
                 "placeId": {
                   "type": "string",
@@ -3299,14 +3052,7 @@
                   ]
                 }
               },
-              "required": [
-                "kind",
-                "placeId",
-                "name",
-                "countryCode",
-                "timezone",
-                "airportCode"
-              ],
+              "required": ["kind", "placeId", "name", "countryCode", "timezone", "airportCode"],
               "additionalProperties": false
             },
             "travellerParty": {
@@ -3333,18 +3079,12 @@
                         "maximum": 17
                       }
                     },
-                    "required": [
-                      "id",
-                      "ageAtTripStart"
-                    ],
+                    "required": ["id", "ageAtTripStart"],
                     "additionalProperties": false
                   }
                 }
               },
-              "required": [
-                "adults",
-                "children"
-              ],
+              "required": ["adults", "children"],
               "additionalProperties": false
             },
             "components": {
@@ -3415,23 +3155,14 @@
                   },
                   "disposition": {
                     "type": "string",
-                    "enum": [
-                      "already_confirmed",
-                      "to_book"
-                    ]
+                    "enum": ["already_confirmed", "to_book"]
                   },
                   "service": {
                     "type": "object",
                     "properties": {
                       "type": {
                         "type": "string",
-                        "enum": [
-                          "flight",
-                          "accommodation",
-                          "activity",
-                          "rail",
-                          "transfer"
-                        ]
+                        "enum": ["flight", "accommodation", "activity", "rail", "transfer"]
                       },
                       "title": {
                         "type": "string",
@@ -3565,11 +3296,7 @@
                                 "maximum": 10
                               }
                             },
-                            "required": [
-                              "adults",
-                              "childAges",
-                              "rooms"
-                            ],
+                            "required": ["adults", "childAges", "rooms"],
                             "additionalProperties": false
                           },
                           {
@@ -3599,23 +3326,14 @@
                     "properties": {
                       "travellers": {
                         "type": "string",
-                        "enum": [
-                          "ready",
-                          "missing"
-                        ]
+                        "enum": ["ready", "missing"]
                       },
                       "payment": {
                         "type": "string",
-                        "enum": [
-                          "ready",
-                          "missing"
-                        ]
+                        "enum": ["ready", "missing"]
                       }
                     },
-                    "required": [
-                      "travellers",
-                      "payment"
-                    ],
+                    "required": ["travellers", "payment"],
                     "additionalProperties": false
                   }
                 },
@@ -3647,10 +3365,7 @@
                   "maximum": 9007199254740991
                 }
               },
-              "required": [
-                "currency",
-                "minorUnits"
-              ],
+              "required": ["currency", "minorUnits"],
               "additionalProperties": false
             },
             "nonReversibleActions": {
@@ -3698,10 +3413,7 @@
           "properties": {
             "kind": {
               "type": "string",
-              "enum": [
-                "city",
-                "airport"
-              ]
+              "enum": ["city", "airport"]
             },
             "placeId": {
               "type": "string",
@@ -3733,14 +3445,7 @@
               ]
             }
           },
-          "required": [
-            "kind",
-            "placeId",
-            "name",
-            "countryCode",
-            "timezone",
-            "airportCode"
-          ],
+          "required": ["kind", "placeId", "name", "countryCode", "timezone", "airportCode"],
           "additionalProperties": false
         },
         "travellerParty": {
@@ -3767,18 +3472,12 @@
                     "maximum": 17
                   }
                 },
-                "required": [
-                  "id",
-                  "ageAtTripStart"
-                ],
+                "required": ["id", "ageAtTripStart"],
                 "additionalProperties": false
               }
             }
           },
-          "required": [
-            "adults",
-            "children"
-          ],
+          "required": ["adults", "children"],
           "additionalProperties": false
         },
         "components": {
@@ -3849,23 +3548,14 @@
               },
               "disposition": {
                 "type": "string",
-                "enum": [
-                  "already_confirmed",
-                  "to_book"
-                ]
+                "enum": ["already_confirmed", "to_book"]
               },
               "service": {
                 "type": "object",
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "flight",
-                      "accommodation",
-                      "activity",
-                      "rail",
-                      "transfer"
-                    ]
+                    "enum": ["flight", "accommodation", "activity", "rail", "transfer"]
                   },
                   "title": {
                     "type": "string",
@@ -3999,11 +3689,7 @@
                             "maximum": 10
                           }
                         },
-                        "required": [
-                          "adults",
-                          "childAges",
-                          "rooms"
-                        ],
+                        "required": ["adults", "childAges", "rooms"],
                         "additionalProperties": false
                       },
                       {
@@ -4033,23 +3719,14 @@
                 "properties": {
                   "travellers": {
                     "type": "string",
-                    "enum": [
-                      "ready",
-                      "missing"
-                    ]
+                    "enum": ["ready", "missing"]
                   },
                   "payment": {
                     "type": "string",
-                    "enum": [
-                      "ready",
-                      "missing"
-                    ]
+                    "enum": ["ready", "missing"]
                   }
                 },
-                "required": [
-                  "travellers",
-                  "payment"
-                ],
+                "required": ["travellers", "payment"],
                 "additionalProperties": false
               }
             },
@@ -4085,10 +3762,7 @@
               "maximum": 9007199254740991
             }
           },
-          "required": [
-            "currency",
-            "minorUnits"
-          ],
+          "required": ["currency", "minorUnits"],
           "additionalProperties": false
         },
         "nonReversibleActions": {
@@ -4138,11 +3812,7 @@
                   },
                   "kind": {
                     "type": "string",
-                    "enum": [
-                      "transport",
-                      "accommodation",
-                      "activity"
-                    ]
+                    "enum": ["transport", "accommodation", "activity"]
                   },
                   "sourceRefs": {
                     "minItems": 1,
@@ -4195,11 +3865,7 @@
                           }
                         }
                       },
-                      "required": [
-                        "code",
-                        "message",
-                        "relatedIds"
-                      ],
+                      "required": ["code", "message", "relatedIds"],
                       "additionalProperties": false
                     }
                   }
@@ -4236,11 +3902,7 @@
                     }
                   }
                 },
-                "required": [
-                  "code",
-                  "message",
-                  "relatedIds"
-                ],
+                "required": ["code", "message", "relatedIds"],
                 "additionalProperties": false
               }
             },
@@ -4288,10 +3950,7 @@
                   ]
                 }
               },
-              "required": [
-                "currency",
-                "minorUnits"
-              ],
+              "required": ["currency", "minorUnits"],
               "additionalProperties": false
             }
           },
@@ -4369,11 +4028,7 @@
         },
         "operation": {
           "type": "string",
-          "enum": [
-            "book_trip",
-            "reschedule_component",
-            "cancel_component"
-          ]
+          "enum": ["book_trip", "reschedule_component", "cancel_component"]
         },
         "componentId": {
           "anyOf": [
@@ -4393,13 +4048,7 @@
         },
         "status": {
           "type": "string",
-          "enum": [
-            "pending",
-            "authorized",
-            "invalidated",
-            "expired",
-            "consumed"
-          ]
+          "enum": ["pending", "authorized", "invalidated", "expired", "consumed"]
         },
         "authorizedAt": {
           "type": "string",
@@ -4458,11 +4107,7 @@
         },
         "operation": {
           "type": "string",
-          "enum": [
-            "book_trip",
-            "reschedule_component",
-            "cancel_component"
-          ]
+          "enum": ["book_trip", "reschedule_component", "cancel_component"]
         },
         "status": {
           "type": "string",
@@ -4524,12 +4169,7 @@
                 ]
               }
             },
-            "required": [
-              "componentId",
-              "status",
-              "providerReference",
-              "safeReason"
-            ],
+            "required": ["componentId", "status", "providerReference", "safeReason"],
             "additionalProperties": false
           }
         },
@@ -4557,12 +4197,7 @@
         },
         "executionStatus": {
           "type": "string",
-          "enum": [
-            "active",
-            "invalidated",
-            "expired",
-            "completed"
-          ]
+          "enum": ["active", "invalidated", "expired", "completed"]
         },
         "tripVersion": {
           "type": "integer",
@@ -4650,12 +4285,7 @@
         },
         "status": {
           "type": "string",
-          "enum": [
-            "accepted",
-            "running",
-            "completed",
-            "failed"
-          ]
+          "enum": ["accepted", "running", "completed", "failed"]
         },
         "outcomes": {
           "maxItems": 32,
@@ -4670,22 +4300,14 @@
               },
               "outcome": {
                 "type": "string",
-                "enum": [
-                  "unchanged",
-                  "changed",
-                  "unavailable",
-                  "unknown"
-                ]
+                "enum": ["unchanged", "changed", "unavailable", "unknown"]
               },
               "safeReason": {
                 "type": "string",
                 "maxLength": 500
               }
             },
-            "required": [
-              "componentId",
-              "outcome"
-            ],
+            "required": ["componentId", "outcome"],
             "additionalProperties": false
           }
         },
@@ -4712,10 +4334,7 @@
                       "properties": {
                         "kind": {
                           "type": "string",
-                          "enum": [
-                            "city",
-                            "airport"
-                          ]
+                          "enum": ["city", "airport"]
                         },
                         "placeId": {
                           "type": "string",
@@ -4781,18 +4400,12 @@
                                 "maximum": 17
                               }
                             },
-                            "required": [
-                              "id",
-                              "ageAtTripStart"
-                            ],
+                            "required": ["id", "ageAtTripStart"],
                             "additionalProperties": false
                           }
                         }
                       },
-                      "required": [
-                        "adults",
-                        "children"
-                      ],
+                      "required": ["adults", "children"],
                       "additionalProperties": false
                     },
                     "components": {
@@ -4863,23 +4476,14 @@
                           },
                           "disposition": {
                             "type": "string",
-                            "enum": [
-                              "already_confirmed",
-                              "to_book"
-                            ]
+                            "enum": ["already_confirmed", "to_book"]
                           },
                           "service": {
                             "type": "object",
                             "properties": {
                               "type": {
                                 "type": "string",
-                                "enum": [
-                                  "flight",
-                                  "accommodation",
-                                  "activity",
-                                  "rail",
-                                  "transfer"
-                                ]
+                                "enum": ["flight", "accommodation", "activity", "rail", "transfer"]
                               },
                               "title": {
                                 "type": "string",
@@ -5013,11 +4617,7 @@
                                         "maximum": 10
                                       }
                                     },
-                                    "required": [
-                                      "adults",
-                                      "childAges",
-                                      "rooms"
-                                    ],
+                                    "required": ["adults", "childAges", "rooms"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -5047,23 +4647,14 @@
                             "properties": {
                               "travellers": {
                                 "type": "string",
-                                "enum": [
-                                  "ready",
-                                  "missing"
-                                ]
+                                "enum": ["ready", "missing"]
                               },
                               "payment": {
                                 "type": "string",
-                                "enum": [
-                                  "ready",
-                                  "missing"
-                                ]
+                                "enum": ["ready", "missing"]
                               }
                             },
-                            "required": [
-                              "travellers",
-                              "payment"
-                            ],
+                            "required": ["travellers", "payment"],
                             "additionalProperties": false
                           }
                         },
@@ -5099,10 +4690,7 @@
                           "maximum": 9007199254740991
                         }
                       },
-                      "required": [
-                        "currency",
-                        "minorUnits"
-                      ],
+                      "required": ["currency", "minorUnits"],
                       "additionalProperties": false
                     },
                     "nonReversibleActions": {
@@ -5152,11 +4740,7 @@
                               },
                               "kind": {
                                 "type": "string",
-                                "enum": [
-                                  "transport",
-                                  "accommodation",
-                                  "activity"
-                                ]
+                                "enum": ["transport", "accommodation", "activity"]
                               },
                               "sourceRefs": {
                                 "minItems": 1,
@@ -5209,11 +4793,7 @@
                                       }
                                     }
                                   },
-                                  "required": [
-                                    "code",
-                                    "message",
-                                    "relatedIds"
-                                  ],
+                                  "required": ["code", "message", "relatedIds"],
                                   "additionalProperties": false
                                 }
                               }
@@ -5250,11 +4830,7 @@
                                 }
                               }
                             },
-                            "required": [
-                              "code",
-                              "message",
-                              "relatedIds"
-                            ],
+                            "required": ["code", "message", "relatedIds"],
                             "additionalProperties": false
                           }
                         },
@@ -5302,10 +4878,7 @@
                               ]
                             }
                           },
-                          "required": [
-                            "currency",
-                            "minorUnits"
-                          ],
+                          "required": ["currency", "minorUnits"],
                           "additionalProperties": false
                         }
                       },
@@ -5370,10 +4943,7 @@
                       "properties": {
                         "kind": {
                           "type": "string",
-                          "enum": [
-                            "city",
-                            "airport"
-                          ]
+                          "enum": ["city", "airport"]
                         },
                         "placeId": {
                           "type": "string",
@@ -5439,18 +5009,12 @@
                                 "maximum": 17
                               }
                             },
-                            "required": [
-                              "id",
-                              "ageAtTripStart"
-                            ],
+                            "required": ["id", "ageAtTripStart"],
                             "additionalProperties": false
                           }
                         }
                       },
-                      "required": [
-                        "adults",
-                        "children"
-                      ],
+                      "required": ["adults", "children"],
                       "additionalProperties": false
                     },
                     "components": {
@@ -5521,23 +5085,14 @@
                           },
                           "disposition": {
                             "type": "string",
-                            "enum": [
-                              "already_confirmed",
-                              "to_book"
-                            ]
+                            "enum": ["already_confirmed", "to_book"]
                           },
                           "service": {
                             "type": "object",
                             "properties": {
                               "type": {
                                 "type": "string",
-                                "enum": [
-                                  "flight",
-                                  "accommodation",
-                                  "activity",
-                                  "rail",
-                                  "transfer"
-                                ]
+                                "enum": ["flight", "accommodation", "activity", "rail", "transfer"]
                               },
                               "title": {
                                 "type": "string",
@@ -5671,11 +5226,7 @@
                                         "maximum": 10
                                       }
                                     },
-                                    "required": [
-                                      "adults",
-                                      "childAges",
-                                      "rooms"
-                                    ],
+                                    "required": ["adults", "childAges", "rooms"],
                                     "additionalProperties": false
                                   },
                                   {
@@ -5705,23 +5256,14 @@
                             "properties": {
                               "travellers": {
                                 "type": "string",
-                                "enum": [
-                                  "ready",
-                                  "missing"
-                                ]
+                                "enum": ["ready", "missing"]
                               },
                               "payment": {
                                 "type": "string",
-                                "enum": [
-                                  "ready",
-                                  "missing"
-                                ]
+                                "enum": ["ready", "missing"]
                               }
                             },
-                            "required": [
-                              "travellers",
-                              "payment"
-                            ],
+                            "required": ["travellers", "payment"],
                             "additionalProperties": false
                           }
                         },
@@ -5753,10 +5295,7 @@
                           "maximum": 9007199254740991
                         }
                       },
-                      "required": [
-                        "currency",
-                        "minorUnits"
-                      ],
+                      "required": ["currency", "minorUnits"],
                       "additionalProperties": false
                     },
                     "nonReversibleActions": {
@@ -5841,11 +5380,7 @@
                   },
                   "kind": {
                     "type": "string",
-                    "enum": [
-                      "transport",
-                      "accommodation",
-                      "activity"
-                    ]
+                    "enum": ["transport", "accommodation", "activity"]
                   },
                   "sourceRefs": {
                     "minItems": 1,
@@ -5898,11 +5433,7 @@
                           }
                         }
                       },
-                      "required": [
-                        "code",
-                        "message",
-                        "relatedIds"
-                      ],
+                      "required": ["code", "message", "relatedIds"],
                       "additionalProperties": false
                     }
                   }
@@ -5939,11 +5470,7 @@
                     }
                   }
                 },
-                "required": [
-                  "code",
-                  "message",
-                  "relatedIds"
-                ],
+                "required": ["code", "message", "relatedIds"],
                 "additionalProperties": false
               }
             },
@@ -5991,10 +5518,7 @@
                   ]
                 }
               },
-              "required": [
-                "currency",
-                "minorUnits"
-              ],
+              "required": ["currency", "minorUnits"],
               "additionalProperties": false
             }
           },
@@ -6046,11 +5570,7 @@
         },
         "operation": {
           "type": "string",
-          "enum": [
-            "book_trip",
-            "reschedule_component",
-            "cancel_component"
-          ]
+          "enum": ["book_trip", "reschedule_component", "cancel_component"]
         },
         "status": {
           "type": "string",
@@ -6112,12 +5632,7 @@
                 ]
               }
             },
-            "required": [
-              "componentId",
-              "status",
-              "providerReference",
-              "safeReason"
-            ],
+            "required": ["componentId", "status", "providerReference", "safeReason"],
             "additionalProperties": false
           }
         },
@@ -6145,12 +5660,7 @@
         },
         "executionStatus": {
           "type": "string",
-          "enum": [
-            "active",
-            "invalidated",
-            "expired",
-            "completed"
-          ]
+          "enum": ["active", "invalidated", "expired", "completed"]
         },
         "tripVersion": {
           "type": "integer",

@@ -5,18 +5,14 @@ import Link from "next/link";
 import { BrandLink } from "@/components/brand-link";
 import { AuthForm } from "@/components/auth/auth-form";
 import { getApplication } from "@/server/application";
-import { getSession, signOut } from "@/server/auth/auth";
+import { getSession } from "@/server/auth/auth";
+import { signOutAction } from "@/server/auth/actions";
 import { planningContext } from "@/server/api";
 import { continuationReference } from "@/server/auth/continuation-reference";
 import { safeAuthDestination } from "@/components/auth/safe-destination";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
-async function signOutAction() {
-  "use server";
-  await signOut(getApplication().auth, await headers());
-  redirect("/sign-in");
-}
 export default async function SignInPage({
   searchParams,
 }: {
@@ -26,7 +22,7 @@ export default async function SignInPage({
     application = getApplication(),
     requestHeaders = await headers();
   const session = await getSession(application.auth, requestHeaders);
-  let returnPath = "/trips/new";
+  let returnPath = safeAuthDestination(undefined, params.redirectTo ?? "/trips/new");
   if (params.intentId) {
     try {
       returnPath = (

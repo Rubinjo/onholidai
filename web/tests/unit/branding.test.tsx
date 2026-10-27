@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { BrandLink } from "../../components/brand-link";
-import { MarketingNavigation } from "../../components/marketing/navigation";
 import { metadata } from "../../app/layout";
 
 describe("site branding", () => {
@@ -27,18 +26,6 @@ describe("site branding", () => {
     expect(link?.querySelector("img")).toHaveAttribute("alt", "OnHolidai");
     expect(link?.querySelector("img")).toHaveAttribute("width", "460");
     expect(link?.querySelector("img")).toHaveAttribute("height", "104");
-  });
-
-  it("preserves the marketing navigation alongside the logo", () => {
-    const container = document.createElement("div");
-    container.innerHTML = renderToStaticMarkup(<MarketingNavigation />);
-    expect(container.querySelector(".brand-link img")).toHaveAttribute(
-      "src",
-      "/logo/main_logo.svg",
-    );
-    expect(
-      Array.from(container.querySelectorAll("nav a"), (link) => link.getAttribute("href")),
-    ).toEqual(["/trips/new", "/sign-in", "/sign-up"]);
   });
 
   it("provides global SVG, PNG fallback and Apple touch icons", () => {

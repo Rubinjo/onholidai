@@ -114,8 +114,9 @@ def test_frozen_refinement_and_ambiguity_corpus():
     assert len(corpus["ambiguities"]) == 20
 
 
-def test_scoped_retrieval_recovers_a_unique_rejected_destination_or_asks_once():
-    async def exercise(count: int):
+@pytest.mark.parametrize("count", [0, 1, 2], ids=["none", "unique", "ambiguous"])
+def test_scoped_retrieval_recovers_a_unique_rejected_destination_or_asks_once(count: int):
+    async def exercise():
         fixture = RefinementSource()
         requested: list[str] = []
 
@@ -170,5 +171,4 @@ def test_scoped_retrieval_recovers_a_unique_rejected_destination_or_asks_once():
                 assert result.root.kind == "clarification"
                 assert result.root.clarification.question.count("?") == 1
 
-    for count in (0, 1, 2):
-        asyncio.run(exercise(count))
+    asyncio.run(exercise())

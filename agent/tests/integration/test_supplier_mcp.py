@@ -438,7 +438,7 @@ def test_nuitee_multi_room_evidence_through_all_four_read_tools(outcome: str):
             "queryFingerprint": None,
             "partyFingerprint": None,
         }
-        responses = {
+        responses: dict[str, dict[str, object]] = {
             "planning-search": {
                 "offers": [offer],
                 "outcomes": [

@@ -1,3 +1,5 @@
+import pytest
+
 from onholidai_agent.graph.route_policy import arrange_destinations
 
 
@@ -12,10 +14,15 @@ def distance(first: dict[str, object], second: dict[str, object]) -> float:
     return 2 * asin(min(1, sqrt(sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2)))
 
 
-def test_manual_order_and_incomplete_geometry_are_preserved():
-    stops: list[dict[str, object]] = [{"id": "a"}, {"id": "b"}]
-    assert arrange_destinations(stops, "manual") == stops
-    assert arrange_destinations(stops, "ai") == stops
+@pytest.mark.parametrize(
+    "policy,count", [("manual", 3), ("ai", 2), ("ai", 9)], ids=["manual", "too-few", "too-many"]
+)
+def test_policy_and_stop_count_preserve_the_confirmed_order(policy: str, count: int):
+    stops: list[dict[str, object]] = [
+        {"id": str(index), "location": {"latitude": 0, "longitude": index}}
+        for index in range(count)
+    ]
+    assert arrange_destinations(stops, policy) == stops
 
 
 def test_ai_can_propose_a_shorter_geographic_circuit_without_mutating_input():
@@ -26,6 +33,13 @@ def test_ai_can_propose_a_shorter_geographic_circuit_without_mutating_input():
     result = arrange_destinations(stops, "ai")
     assert {entry["id"] for entry in result} == {"a", "b", "c", "d"}
     assert result != stops
+
+    def circuit_length(route: list[dict[str, object]]) -> float:
+        return sum(
+            distance(stop, route[(index + 1) % len(route)]) for index, stop in enumerate(route)
+        )
+
+    assert circuit_length(result) < circuit_length(stops)
     assert stops[1]["id"] == "c"
 
 
@@ -64,4 +78,19 @@ def test_manual_and_missing_geography_keep_the_confirmed_order():
         {"placeId": "home-east", "location": None},
     ]
     assert arrange_destinations(stops, "manual", origins) == stops
+    assert arrange_destinations(stops, "ai", origins) == stops
+
+
+@pytest.mark.parametrize(
+    "origins",
+    [[], [{"placeId": "home"}], [{"location": {"latitude": 91, "longitude": 0}}]],
+    ids=["empty", "missing-coordinates", "invalid-coordinates"],
+)
+def test_missing_departure_geometry_preserves_a_fully_located_route(
+    origins: list[dict[str, object]],
+):
+    stops: list[dict[str, object]] = [
+        {"id": str(index), "location": {"latitude": 0, "longitude": longitude}}
+        for index, longitude in enumerate([0, 20, 10])
+    ]
     assert arrange_destinations(stops, "ai", origins) == stops

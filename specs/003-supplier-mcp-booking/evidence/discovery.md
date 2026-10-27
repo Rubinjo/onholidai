@@ -31,14 +31,14 @@ separate migrated browser database; the agent explicitly disabled environment
 file loading. Restricted environment files and the application database were
 not inspected or modified.
 
-| Check | Final result |
-| --- | --- |
-| All web contracts plus supplier research access, offer research, workspace propagation and current config/application/provider fixture units | 281 passed / 24 files; zero skips |
-| `pnpm test:contracts` | 226 web contracts and 41 Python contracts passed; zero skips; canonical exporters, snapshot and 16 shared supply cases passed |
-| `pnpm --dir web test:foundation` | 44 passed / 4 files; zero skips or unhandled errors |
-| `uv run --no-sync --project agent pytest agent/tests/integration/test_supplier_mcp.py agent/tests/contract/test_contract_export.py -q` | 45 passed; actual in-process four-tool MCP protocol and public exports |
-| `pnpm --dir web exec playwright test tests/e2e/supplier-search.spec.ts --workers=1` | 10 passed; Chromium, Firefox, WebKit, mobile Chromium and mobile WebKit; no skips |
-| Web typecheck, targeted ESLint and final changed-source Prettier | Passed |
+| Check                                                                                                                                        | Final result                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| All web contracts plus supplier research access, offer research, workspace propagation and current config/application/provider fixture units | 281 passed / 24 files; zero skips                                                                                             |
+| `pnpm test:contracts`                                                                                                                        | 226 web contracts and 41 Python contracts passed; zero skips; canonical exporters, snapshot and 16 shared supply cases passed |
+| `pnpm --dir web test:foundation`                                                                                                             | 44 passed / 4 files; zero skips or unhandled errors                                                                           |
+| `uv run --no-sync --project agent pytest agent/tests/integration/test_supplier_mcp.py agent/tests/contract/test_contract_export.py -q`       | 45 passed; actual in-process four-tool MCP protocol and public exports                                                        |
+| `pnpm --dir web exec playwright test tests/e2e/supplier-search.spec.ts --workers=1`                                                          | 10 passed; Chromium, Firefox, WebKit, mobile Chromium and mobile WebKit; no skips                                             |
+| Web typecheck, targeted ESLint and final changed-source Prettier                                                                             | Passed                                                                                                                        |
 
 The first browser case is an actual web-to-agent-to-MCP-to-persisted-research
 journey. It verifies current product attribution, mixed and rail-only outcomes,

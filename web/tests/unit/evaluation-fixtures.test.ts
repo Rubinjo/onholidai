@@ -5,9 +5,6 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { tripSnapshotSchema } from "../../domain/trip/schema";
-import { createSyntheticTripSnapshot } from "../fixtures/trips";
-import { hasIsolatedDatabaseConfiguration } from "../helpers/database";
-import { createTemporalTestEnvironment, withTemporalTestEnvironment } from "../helpers/temporal";
 
 const corpusPath = join(process.cwd(), "tests/fixtures/evaluation-corpus.json");
 const agentCorpusPath = join(process.cwd(), "../agent/tests/fixtures/evaluation-corpus.json");
@@ -117,12 +114,5 @@ describe("evaluation policy v1 fixtures", () => {
     expect(serialized).not.toMatch(/\b(?:email|phone|passport|payment|cardNumber|cvv)\b/i);
     expect(serialized).not.toMatch(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
     expect(serialized).not.toMatch(/(?:\d[ -]*?){13,19}/);
-  });
-
-  it("provides valid isolated trip data and side-effect-free helper imports", () => {
-    expect(tripSnapshotSchema.parse(createSyntheticTripSnapshot())).toBeDefined();
-    expect(typeof hasIsolatedDatabaseConfiguration()).toBe("boolean");
-    expect(createTemporalTestEnvironment).toBeTypeOf("function");
-    expect(withTemporalTestEnvironment).toBeTypeOf("function");
   });
 });

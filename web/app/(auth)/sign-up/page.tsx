@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 
 import { AuthForm } from "@/components/auth/auth-form";
+import { safeAuthDestination } from "@/components/auth/safe-destination";
 import { BrandLink } from "@/components/brand-link";
 import { getApplication } from "@/server/application";
 import { planningContext } from "@/server/api";
@@ -15,7 +16,7 @@ export default async function SignUpPage({
 }) {
   const params = await searchParams,
     application = getApplication();
-  let returnPath = "/trips/new";
+  let returnPath = safeAuthDestination(undefined, params.redirectTo ?? "/trips/new");
   if (params.intentId) {
     const request = new Request(application.config.BETTER_AUTH_URL, { headers: await headers() });
     try {

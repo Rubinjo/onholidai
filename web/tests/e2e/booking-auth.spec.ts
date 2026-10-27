@@ -26,6 +26,15 @@ test("Book trip continues from a draft through free sign-up and same-trip linkin
     timeout: 35000,
   });
   await expect(savedVersion(page, 1)).toBeVisible();
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(navigation.getByRole("link", { name: "Home", exact: true })).toHaveAttribute(
+    "href",
+    "/",
+  );
+  await expect(navigation.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+    "href",
+    `/sign-in?redirectTo=${encodeURIComponent(new URL(page.url()).pathname)}`,
+  );
   await expect(page.getByRole("heading", { name: "Finalization review" })).toHaveCount(0);
   const tripId = new URL(page.url()).pathname.split("/")[2],
     before = await (await page.request.get(`/api/v1/trips/${tripId}`)).json();
@@ -63,13 +72,11 @@ test("Book trip continues from a draft through free sign-up and same-trip linkin
     page.getByText("You can plan your visit without creating an account.", { exact: false }),
   ).toHaveCount(0);
   // Signing out removes account authority; the old guest cookie cannot recover a linked trip.
-  const origin = new URL(page.url()).origin;
-  expect(
-    (await page.request.post("/api/auth/sign-out", { headers: { origin }, data: {} })).ok(),
-  ).toBe(true);
-  await page.reload();
+  await navigation.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/sign-in$/);
+  await page.goto(`/trips/${tripId}`);
   await expect(page.getByRole("heading", { name: "Private plan unavailable" })).toBeVisible();
-  await page.goto(`/sign-in?redirectTo=${encodeURIComponent(`/trips/${tripId}`)}`);
+  await navigation.getByRole("link", { name: "Sign in", exact: true }).click();
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

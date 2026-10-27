@@ -157,9 +157,7 @@ export function PlaceSearch({
       </div>
       {open && (
         <div className="place-search__dropdown">
-          <p role="status">
-            {resolving ? "Resolving destination…" : busy ? "Searching…" : error}
-          </p>
+          <p role="status">{resolving ? "Resolving destination…" : busy ? "Searching…" : error}</p>
           <ul
             ref={list}
             id={`${id}-results`}
@@ -190,10 +188,7 @@ export function PlaceSearch({
                       setQuery("");
                       input.current?.focus();
                     };
-                    if (
-                      place.kind === "airport" ||
-                      place.providerPlaceIds?.["viator:destination"]
-                    )
+                    if (place.kind === "airport" || place.providerPlaceIds?.["viator:destination"])
                       return apply(place);
                     setResolving(true);
                     void withSupplierIdentity(place)

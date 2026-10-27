@@ -123,7 +123,7 @@ def test_explicit_rail_deferral_continues_supported_planning_without_waiving_the
         async def search(
             self, request: CreateAgentRunRequest, query: dict[str, object]
         ) -> dict[str, object]:
-            values = []
+            values: list[dict[str, object]] = []
             for kind in ("flight", "accommodation"):
                 value = offer(kind)
                 cast(dict[str, object], value["component"]).update(
@@ -184,7 +184,8 @@ def test_unknown_supplier_fee_lines_keep_the_authoritative_total_proposable():
     # Live suppliers publish an authoritative payable total but not always a fee
     # breakdown. The breakdown stays null (backend record) while the offer is usable.
     offer_without_breakdown = offer()
-    price = cast(dict[str, object], offer_without_breakdown["component"]["price"])
+    component = cast(dict[str, object], offer_without_breakdown["component"])
+    price = cast(dict[str, object], component["price"])
     price["taxesMinor"] = None
     price["feesMinor"] = None
     assert select_quotes([offer_without_breakdown], 50) == [offer_without_breakdown]
@@ -201,11 +202,12 @@ def test_unknown_supplier_fee_lines_keep_the_authoritative_total_proposable():
         [],
     )
     assert result.root.kind == "proposal"
-    stored = cast(dict[str, object], result.root.proposal.operations[0].value)[0]
+    stored = cast(list[dict[str, object]], result.root.proposal.operations[0].value)[0]
     # The draft contract omits an unknown breakdown instead of carrying a null, so the
     # saved component keeps only the authoritative total.
-    assert "feesMinor" not in cast(dict[str, object], stored["price"])
-    assert cast(dict[str, object], stored["price"])["finalCustomerMinor"] == 10000
+    stored_price = cast(dict[str, object], stored["price"])
+    assert "feesMinor" not in stored_price
+    assert stored_price["finalCustomerMinor"] == 10000
 
 
 def test_discovery_offer_with_bounded_facts_and_unverified_terms_is_proposable():

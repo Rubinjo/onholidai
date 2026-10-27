@@ -84,7 +84,8 @@ describe("Trip and TripVersion schemas", () => {
     for (const minorUnits of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, Infinity, NaN]) {
       expect(moneySchema.safeParse({ currency: "GBP", minorUnits }).success).toBe(false);
     }
-    for (const currency of ["gbp", "ZZZ", "GBP ", "GB"]) {
+    expect(moneySchema.safeParse({ currency: "EUR", minorUnits: 100 }).success).toBe(true);
+    for (const currency of ["gbp", "ZZZ", "XYZ", "GBP ", "GB"]) {
       expect(moneySchema.safeParse({ currency, minorUnits: 100 }).success).toBe(false);
     }
   });
@@ -142,60 +143,53 @@ describe("Trip and TripVersion schemas", () => {
 
   it("keeps an unverified price breakdown explicit while the payable total stays authoritative", () => {
     const total = { currency: "USD", minorUnits: 12000 };
-    expect(
-      componentPriceSchema.safeParse({
-        supplierAmount: null,
-        platformMargin: null,
-        customerPayableTaxes: null,
-        customerPayableFees: null,
-        finalCustomerAmount: total,
-        status: "estimated",
-        source: "duffel",
-        checkedAt: timestamp,
-        expiresAt: null,
-      }).success,
-    ).toBe(true);
-    // A part that is present must still reconcile with the total.
-    expect(
-      componentPriceSchema.safeParse({
-        supplierAmount: { currency: "USD", minorUnits: 9000 },
-        platformMargin: { currency: "USD", minorUnits: 0 },
-        customerPayableTaxes: { currency: "USD", minorUnits: 1000 },
-        customerPayableFees: null,
-        finalCustomerAmount: total,
-        status: "estimated",
-        source: "duffel",
-        checkedAt: timestamp,
-        expiresAt: null,
-      }).success,
-    ).toBe(true);
-    expect(
-      componentPriceSchema.safeParse({
-        supplierAmount: { currency: "USD", minorUnits: 9000 },
-        platformMargin: { currency: "USD", minorUnits: 0 },
-        customerPayableTaxes: { currency: "USD", minorUnits: 1000 },
-        customerPayableFees: { currency: "USD", minorUnits: 0 },
-        finalCustomerAmount: total,
-        status: "estimated",
-        source: "duffel",
-        checkedAt: timestamp,
-        expiresAt: null,
-      }).success,
-    ).toBe(false);
-    // An unknown part cannot use a different currency from the payable total.
-    expect(
-      componentPriceSchema.safeParse({
-        supplierAmount: { currency: "GBP", minorUnits: 9000 },
-        platformMargin: null,
-        customerPayableTaxes: null,
-        customerPayableFees: null,
-        finalCustomerAmount: total,
-        status: "estimated",
-        source: "duffel",
-        checkedAt: timestamp,
-        expiresAt: null,
-      }).success,
-    ).toBe(false);
+    const price = {
+      finalCustomerAmount: total,
+      status: "estimated",
+      source: "duffel",
+      checkedAt: timestamp,
+      expiresAt: null,
+    };
+    const partialBreakdown = {
+      supplierAmount: { currency: "USD", minorUnits: 9000 },
+      platformMargin: { currency: "USD", minorUnits: 0 },
+      customerPayableTaxes: { currency: "USD", minorUnits: 1000 },
+      customerPayableFees: null,
+    };
+    const cases = [
+      {
+        name: "unknown breakdown",
+        breakdown: {
+          supplierAmount: null,
+          platformMargin: null,
+          customerPayableTaxes: null,
+          customerPayableFees: null,
+        },
+        valid: true,
+      },
+      { name: "partial breakdown", breakdown: partialBreakdown, valid: true },
+      {
+        name: "complete breakdown with mismatched total",
+        breakdown: {
+          ...partialBreakdown,
+          customerPayableFees: { currency: "USD", minorUnits: 0 },
+        },
+        valid: false,
+      },
+      {
+        name: "partial breakdown with mismatched currency",
+        breakdown: {
+          ...partialBreakdown,
+          supplierAmount: { currency: "GBP", minorUnits: 9000 },
+          platformMargin: null,
+          customerPayableTaxes: null,
+        },
+        valid: false,
+      },
+    ];
+    for (const { name, breakdown, valid } of cases) {
+      expect(componentPriceSchema.safeParse({ ...price, ...breakdown }).success, name).toBe(valid);
+    }
   });
 
   it("accepts a complete current snapshot and immutable root metadata", () => {

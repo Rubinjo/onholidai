@@ -16,14 +16,11 @@ interface ItineraryCase {
 
 interface HardConflictCase {
   id: string;
-  kind: string;
   input: unknown;
   expectedCode: string;
-  expected: { disclosed: boolean; finalizationBlocked: boolean; disposition: string };
 }
 
 interface EvaluationCorpus {
-  metadata: { corpusVersion: string; policyVersion: string; seed: string; corpusHash: string };
   itineraryDays: ItineraryCase[];
   hardConflicts: HardConflictCase[];
 }
@@ -36,7 +33,7 @@ async function readCorpus(): Promise<EvaluationCorpus> {
 
 // An item passes when the feasibility policy raises no blocking issue against it.
 function scoreItems(snapshot: TripSnapshot) {
-  const report = evaluateFeasibility(snapshot);
+  const report = evaluateFeasibility(snapshot, new Date("2029-01-01T00:00:00Z"));
   const failed = new Set(report.blocking.flatMap((issue) => issue.relatedIds));
   const items = snapshot.itineraryDays.flatMap((day) => day.items);
   return {
@@ -64,41 +61,30 @@ describe("finalization evaluation corpus", () => {
     expect(passingItems).toBeGreaterThanOrEqual(475);
 
     // The frozen per-item labels are the reviewed oracle for this corpus revision.
-    const deviations = scored
-      .filter(
-        ({ entry, outcomes }) =>
-          JSON.stringify(outcomes) !== JSON.stringify(entry.expectedItemResults),
-      )
-      .map(({ entry, outcomes }) => ({
-        id: entry.id,
-        expected: entry.expectedItemResults,
-        scored: outcomes,
-      }));
-    expect(deviations).toEqual([]);
+    for (const { entry, items, outcomes, report } of scored) {
+      expect(outcomes, entry.id).toEqual(entry.expectedItemResults);
+      expect(report.totalItems, entry.id).toBe(items.length);
+      expect(report.verifiedItems, entry.id).toBe(entry.expectedPassingItems);
+    }
+    expect(
+      scored.reduce((total, { report }) => total + report.verifiedItems, 0),
+    ).toBeGreaterThanOrEqual(475);
   });
 
   it("blocks and discloses every frozen hard-conflict case", async () => {
     const corpus = await readCorpus();
-    const results = corpus.hardConflicts.map((entry) => {
+    expect(corpus.hardConflicts).toHaveLength(20);
+    for (const entry of corpus.hardConflicts) {
       // The policy also guards stored/legacy state, so it is evaluated on the raw case input.
       const report = evaluateFeasibility(entry.input as TripSnapshot);
-      return {
-        id: entry.id,
-        kind: entry.kind,
-        expectedCode: entry.expectedCode,
-        codes: report.blocking.map((issue) => issue.code),
-        disclosed: report.blocking.every((issue) => issue.message.trim().length > 0),
-        storable: tripSnapshotSchema.safeParse(entry.input).success,
-      };
-    });
-
-    expect(corpus.hardConflicts).toHaveLength(20);
-    expect(results.every((result) => result.codes.includes(result.expectedCode))).toBe(true);
-    expect(results.every((result) => result.disclosed)).toBe(true);
-    // finalizeTrip never commits a version while any blocking issue exists.
-    expect(results.every((result) => result.codes.length > 0)).toBe(true);
-    // Every conflict, including the date-window violation, is a storable snapshot that the
-    // policy reports rather than one the schema rejects before review.
-    expect(results.every((result) => result.storable)).toBe(true);
+      expect(
+        report.blocking.map((issue) => issue.code),
+        entry.id,
+      ).toContain(entry.expectedCode);
+      for (const issue of report.blocking) {
+        expect(issue.message.trim(), entry.id).not.toBe("");
+      }
+      expect(tripSnapshotSchema.safeParse(entry.input).success, entry.id).toBe(true);
+    }
   });
 });

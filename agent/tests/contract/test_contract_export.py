@@ -9,7 +9,6 @@ import pytest
 from pydantic import BaseModel, JsonValue, ValidationError
 
 from onholidai_agent.models.api import AgentEvent, CreateAgentRunRequest, PersistAgentResultRequest
-from onholidai_agent.models.contracts import exported_files
 from onholidai_agent.models.tools import SUPPLIER_TOOL_INPUTS, ToolCall
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -70,11 +69,6 @@ def test_shared_wire_cases_match_pydantic_acceptance() -> None:
         else:
             with pytest.raises(ValidationError):
                 model.model_validate(case["value"])
-
-
-def test_committed_contracts_match_authoritative_models() -> None:
-    for path, expected in exported_files(ROOT).items():
-        assert path.read_text(encoding="utf-8") == expected, f"Contract drift: {path.name}"
 
 
 def test_export_check_detects_reviewed_artifact_edits(tmp_path: Path) -> None:

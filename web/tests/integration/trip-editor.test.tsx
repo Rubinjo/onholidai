@@ -25,16 +25,18 @@ function envelope() {
   };
 }
 
+const paceInput = () => screen.getByLabelText<HTMLInputElement>("Pace: relaxed to full days");
+
 describe("trip editor impact review", () => {
   it("shows discard only for unsaved changes and restores saved values without a request", () => {
     render(<TripEditor trip={envelope()} onCommit={() => {}} />);
     expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reload current trip details" })).toBeNull();
-    const pace = screen.getByLabelText("Pace", { exact: false });
-    const savedValue = (pace as HTMLInputElement).value;
+    const pace = paceInput();
+    const savedValue = pace.value;
     fireEvent.change(pace, { target: { value: "7" } });
     fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
-    expect((pace as HTMLInputElement).value).toBe(savedValue);
+    expect(pace.value).toBe(savedValue);
     expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
     expect(api.preview).not.toHaveBeenCalled();
   });
@@ -43,8 +45,8 @@ describe("trip editor impact review", () => {
     const trip = envelope();
     trip.snapshot.preferences.pace = 100;
     render(<TripEditor trip={trip} onCommit={() => {}} />);
-    const pace = screen.getByLabelText("Pace", { exact: false });
-    const savedValue = (pace as HTMLInputElement).value;
+    const pace = paceInput();
+    const savedValue = pace.value;
     fireEvent.change(pace, { target: { value: "7" } });
     expect(screen.getByRole("button", { name: "Discard changes" })).toBeTruthy();
     fireEvent.change(pace, { target: { value: savedValue } });
@@ -54,7 +56,7 @@ describe("trip editor impact review", () => {
   it("discards to the latest saved version after a background update", () => {
     const trip = envelope();
     const { rerender } = render(<TripEditor trip={trip} onCommit={() => {}} />);
-    fireEvent.change(screen.getByLabelText("Pace", { exact: false }), { target: { value: "7" } });
+    fireEvent.change(paceInput(), { target: { value: "7" } });
     const latest = {
       ...trip,
       version: 3,
@@ -62,7 +64,7 @@ describe("trip editor impact review", () => {
     };
     rerender(<TripEditor trip={latest} onCommit={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
-    expect((screen.getByLabelText("Pace", { exact: false }) as HTMLInputElement).value).toBe("10");
+    expect(paceInput().value).toBe("10");
     expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
     expect(screen.queryByText(/The trip changed while you were editing/)).toBeNull();
     expect(api.preview).not.toHaveBeenCalled();
@@ -77,7 +79,7 @@ describe("trip editor impact review", () => {
       snapshot: { ...trip.snapshot, preferences: { ...trip.snapshot.preferences, pace: 100 } },
     };
     rerender(<TripEditor trip={latest} onCommit={() => {}} />);
-    expect((screen.getByLabelText("Pace", { exact: false }) as HTMLInputElement).value).toBe("10");
+    expect(paceInput().value).toBe("10");
     expect(screen.queryByRole("button", { name: "Discard changes" })).toBeNull();
     expect(screen.queryByText(/The trip changed while you were editing/)).toBeNull();
   });
@@ -99,7 +101,7 @@ describe("trip editor impact review", () => {
     api.preview.mockResolvedValue(saved);
     const onCommit = vi.fn();
     render(<TripEditor trip={trip} onCommit={onCommit} />);
-    fireEvent.change(screen.getByLabelText("Pace", { exact: false }), { target: { value: "7" } });
+    fireEvent.change(paceInput(), { target: { value: "7" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(onCommit).toHaveBeenCalledWith(saved));
     expect(api.preview).toHaveBeenCalledTimes(1);
@@ -119,13 +121,13 @@ describe("trip editor impact review", () => {
   it("preserves edits after a failed save and reuses the request when retried", async () => {
     api.preview.mockRejectedValue(new Error("Unavailable"));
     render(<TripEditor trip={envelope()} onCommit={() => {}} />);
-    fireEvent.change(screen.getByLabelText("Pace", { exact: false }), { target: { value: "7" } });
+    fireEvent.change(paceInput(), { target: { value: "7" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
     expect(await screen.findByText("Safe failure")).toBeTruthy();
     const original = api.preview.mock.calls[0][1];
     fireEvent.click(screen.getByRole("button", { name: "Apply changes" }));
     await waitFor(() => expect(api.preview).toHaveBeenCalledTimes(2));
     expect(api.preview.mock.calls[1][1]).toEqual(original);
-    expect((screen.getByLabelText("Pace", { exact: false }) as HTMLInputElement).value).toBe("7");
+    expect(paceInput().value).toBe("7");
   });
 });

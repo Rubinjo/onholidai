@@ -44,10 +44,10 @@ describe("country to city route selection", () => {
       kind: "place",
       providerPlaceIds: { lookup: "ourairports:2513", "duffel:flight": "AMS" },
     });
-    const [savedCity] = selectDestination(
-      [],
-      { ...tokyo, providerPlaceIds: { "viator:destination": "334" } },
-    );
+    const [savedCity] = selectDestination([], {
+      ...tokyo,
+      providerPlaceIds: { "viator:destination": "334" },
+    });
     expect(savedCity.providerPlaceIds).toEqual({
       lookup: "tokyo",
       "viator:destination": "334",

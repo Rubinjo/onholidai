@@ -165,8 +165,11 @@ def select_quotes(
             continue
         raw_evidence = offer.get("evidence")
         if isinstance(raw_evidence, dict):
-            evidence = cast(dict[str, object], raw_evidence)
-            if evidence.get("status") == "expired" or evidence.get("availability") != "available":
+            raw_evidence = cast(dict[str, object], raw_evidence)
+            if (
+                raw_evidence.get("status") == "expired"
+                or raw_evidence.get("availability") != "available"
+            ):
                 continue
         component = cast(dict[str, object], offer["component"])
         kind = str(component["type"])

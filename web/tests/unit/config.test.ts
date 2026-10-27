@@ -456,61 +456,54 @@ describe("deployment configuration validation", () => {
     ).toBe("unconfigured");
   });
 
-  it.each(["flight"] as const)(
-    "isolates Duffel %s readiness and does not inherit legacy flight evidence into Stays",
-    (product) => {
-      const environment = {
-        PROVIDER_MODE: "live",
-        DUFFEL_READ_SECRET: "synthetic-read-canary",
-        SUPPLIER_PROVIDERS: JSON.stringify({
-          duffel: {
-            readSecretRef: "DUFFEL_READ_SECRET",
-            products: {
-              [product]: {
-                operations: {
-                  search: {
-                    support: "supported",
-                    access: "verified",
-                    evidenceRef: `synthetic-${product}-approval`,
-                    verifiedAt: "2026-10-19T00:00:00Z",
-                  },
+  it("isolates Duffel flight readiness and does not inherit legacy flight evidence into Stays", () => {
+    const environment = {
+      PROVIDER_MODE: "live",
+      DUFFEL_READ_SECRET: "synthetic-read-canary",
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        duffel: {
+          readSecretRef: "DUFFEL_READ_SECRET",
+          products: {
+            flight: {
+              operations: {
+                search: {
+                  support: "supported",
+                  access: "verified",
+                  evidenceRef: "synthetic-flight-approval",
+                  verifiedAt: "2026-10-19T00:00:00Z",
                 },
               },
             },
           },
-        }),
-      };
-      const readiness = deriveProviderReadiness(loadServerConfig(environment), environment);
-      const other = product === "flight" ? "accommodation" : "flight";
-      expect(readiness.duffel.products[product].operations.search.access).toBe("verified");
-      expect(readiness.duffel.products[other].operations.search).toMatchObject({
-        support: "unsupported",
-        access: "blocked",
-      });
-      const legacyEnvironment = {
-        ...environment,
-        SUPPLIER_PROVIDERS: JSON.stringify({
-          duffel: {
-            readSecretRef: "DUFFEL_READ_SECRET",
-            operations: {
-              search: {
-                support: "supported",
-                access: "verified",
-                evidenceRef: "synthetic-flight-only",
-                verifiedAt: "2026-10-19T00:00:00Z",
-              },
+        },
+      }),
+    };
+    const readiness = deriveProviderReadiness(loadServerConfig(environment), environment);
+    expect(readiness.duffel.products.flight.operations.search.access).toBe("verified");
+    expect(readiness.duffel.products.accommodation.operations.search).toMatchObject({
+      support: "unsupported",
+      access: "blocked",
+    });
+    const legacyEnvironment = {
+      ...environment,
+      SUPPLIER_PROVIDERS: JSON.stringify({
+        duffel: {
+          readSecretRef: "DUFFEL_READ_SECRET",
+          operations: {
+            search: {
+              support: "supported",
+              access: "verified",
+              evidenceRef: "synthetic-flight-only",
+              verifiedAt: "2026-10-19T00:00:00Z",
             },
           },
-        }),
-      };
-      const legacy = deriveProviderReadiness(
-        loadServerConfig(legacyEnvironment),
-        legacyEnvironment,
-      );
-      expect(legacy.duffel.products.flight.operations.search.access).toBe("verified");
-      expect(legacy.duffel.products.accommodation.operations.search.access).not.toBe("verified");
-    },
-  );
+        },
+      }),
+    };
+    const legacy = deriveProviderReadiness(loadServerConfig(legacyEnvironment), legacyEnvironment);
+    expect(legacy.duffel.products.flight.operations.search.access).toBe("verified");
+    expect(legacy.duffel.products.accommodation.operations.search.access).not.toBe("verified");
+  });
 
   it("does not let provider-level evidence override a blocked product declaration", () => {
     const environment = {

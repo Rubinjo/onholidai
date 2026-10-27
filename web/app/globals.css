@@ -326,6 +326,20 @@ summary {
 /* Final workspace: the outer panels scroll independently, the middle column owns the
    route, map, price and booking, and the price bar is placed there by grid area so it
    can stay last in the DOM for the documented focus order. */
+.trip-page-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.trip-page-shell > .marketing-nav {
+  flex: 0 0 auto;
+  padding-inline: clamp(0.75rem, 2vw, 1.5rem);
+}
+.trip-page-shell > .planning-workspace {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
 .planning-workspace {
   display: flex;
   flex-direction: column;
@@ -2236,6 +2250,10 @@ summary {
   }
 }
 @media (max-width: 70rem) {
+  .trip-page-shell {
+    height: auto;
+    min-height: 100dvh;
+  }
   .planning-workspace {
     height: auto;
     min-height: 100dvh;

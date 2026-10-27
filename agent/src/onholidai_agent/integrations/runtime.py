@@ -38,13 +38,15 @@ class EstimateSources:
                 )
                 data = cast(dict[str, object], response.structured_content)
                 offer = data.get("offer")
+                if not isinstance(offer, dict):
+                    raise ValueError("selected_offer_unavailable")
+                offer = cast(dict[str, object], offer)
                 if (
-                    not isinstance(offer, dict)
-                    or offer.get("offerRef") != selected.offer_ref
+                    offer.get("offerRef") != selected.offer_ref
                     or offer.get("revision") != selected.revision
                 ):
                     raise ValueError("selected_offer_unavailable")
-                offers.append(cast(dict[str, object], offer))
+                offers.append(offer)
         return offers
 
     async def search(

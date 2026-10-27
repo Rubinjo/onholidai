@@ -77,9 +77,7 @@ export function createViatorDestinationDirectory(
           body: JSON.stringify({
             searchTerm: term.trim().slice(0, 200),
             currency: LOOKUP_CURRENCY,
-            searchTypes: [
-              { searchType: "DESTINATIONS", pagination: { start: 1, count: 10 } },
-            ],
+            searchTypes: [{ searchType: "DESTINATIONS", pagination: { start: 1, count: 10 } }],
           }),
           signal: controller.signal,
           redirect: "error",

@@ -136,13 +136,13 @@ Setup no longer has to persist an IATA code for a country or city selection.
 through `GET https://api.duffel.com/places/suggestions?query=<name>` with the
 same read token, so Duffel itself decides which airport it serves.
 
-| Query | HTTP | Latency | Resolved |
-| ----- | ---- | ------- | -------- |
-| `Japan` | 200 | 61 ms | city `Tokyo` -> `HND` (then `NRT`) |
-| `Netherlands` | 200 | 63 ms | `AMS` (then `RTM`, `EIN`) |
-| `Tokyo` | 200 | 56 ms | city `Tokyo` -> `HND`, `NRT`, `OKO` |
-| `Amsterdam` | 200 | 169 ms | `AMS` |
-| `Portugal` | 200 | 58 ms | `LIS` (then `OPO`, `FAO`) |
+| Query         | HTTP | Latency | Resolved                            |
+| ------------- | ---- | ------- | ----------------------------------- |
+| `Japan`       | 200  | 61 ms   | city `Tokyo` -> `HND` (then `NRT`)  |
+| `Netherlands` | 200  | 63 ms   | `AMS` (then `RTM`, `EIN`)           |
+| `Tokyo`       | 200  | 56 ms   | city `Tokyo` -> `HND`, `NRT`, `OKO` |
+| `Amsterdam`   | 200  | 169 ms  | `AMS`                               |
+| `Portugal`    | 200  | 58 ms   | `LIS` (then `OPO`, `FAO`)           |
 
 A stored `providerPlaceIds["duffel:flight"]` still wins when present. A failed,
 malformed or ambiguous lookup yields no airport (source stays `unsupported`), so

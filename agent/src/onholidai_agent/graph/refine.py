@@ -473,16 +473,18 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
     elif re.search(r"\bremove\b", message):
         if len(matches) != 1 or len(destinations) <= 1:
             return question("Which destination should be removed while keeping at least one stop?")
+        # Clear old date allocation so web reallocates the existing ideal duration.
         routed = [
-            {**entry, "routePosition": index}
+            {
+                **entry,
+                "routePosition": index,
+                "arrivalDate": None,
+                "departureDate": None,
+                "plannedNights": 0,
+            }
             for index, entry in enumerate(
                 entry for entry in destinations if entry is not matches[0]
             )
-        ]
-        # Clear old date allocation so web reallocates the existing ideal duration.
-        routed = [
-            {**entry, "arrivalDate": None, "departureDate": None, "plannedNights": 0}
-            for entry in routed
         ]
         operations.append({"operation": "replace", "target": "/destinations", "value": routed})
         rationale = (

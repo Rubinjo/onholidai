@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 import { vi } from "vitest";
@@ -23,29 +22,6 @@ import type { TripSnapshot } from "../../domain/trip/schema";
 vi.mock("server-only", () => ({}));
 
 describe("feasibility policy v1", () => {
-  it("scores every frozen scheduled item and discloses all concrete hard-conflict cases", async () => {
-    const corpus = JSON.parse(await readFile("tests/fixtures/evaluation-corpus.json", "utf8")) as {
-      itineraryDays: { input: TripSnapshot; expectedPassingItems: number }[];
-      hardConflicts: { input: TripSnapshot; expectedCode: string }[];
-    };
-    let passing = 0,
-      total = 0;
-    for (const entry of corpus.itineraryDays) {
-      const report = evaluateFeasibility(entry.input, new Date("2029-01-01T00:00:00Z"));
-      expect(report.verifiedItems).toBe(entry.expectedPassingItems);
-      passing += report.verifiedItems;
-      total += report.totalItems;
-    }
-    expect(total).toBe(500);
-    expect(passing).toBeGreaterThanOrEqual(475);
-    for (const entry of corpus.hardConflicts) {
-      expect(
-        evaluateFeasibility(entry.input).blocking.some(
-          (issue) => issue.code === entry.expectedCode,
-        ),
-      ).toBe(true);
-    }
-  });
   it("rejects ambiguous/nonexistent DST local times and evaluates offsets as instants", () => {
     expect(qualifiedInstant("2030-10-27T01:30", "Europe/London")).toBeNull();
     expect(qualifiedInstant("2030-03-31T01:30", "Europe/London")).toBeNull();

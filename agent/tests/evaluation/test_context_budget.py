@@ -6,7 +6,6 @@ import httpx
 import pytest
 
 from onholidai_agent.api.store import WebRunStore
-from onholidai_agent.config import Settings
 from onholidai_agent.context.build import READ_ONLY_TOOLS, STABLE_INSTRUCTIONS, build_context
 from onholidai_agent.context.compact import compact_context
 from onholidai_agent.graph.refine import refine
@@ -18,7 +17,6 @@ from onholidai_agent.models.api import (
     ConversationSummary,
     CreateAgentRunRequest,
 )
-from onholidai_agent.telemetry.langsmith import SafeLangSmithSink
 from onholidai_agent.tools.retrieve_relevant_context import retrieve_relevant_context
 from tests.contract.test_refinement_tools import RefinementSource, refinement_request
 
@@ -93,19 +91,24 @@ def test_stable_system_and_tool_prefix_is_byte_identical_across_trip_versions():
     changed = build_context(request(2), trip(2, "Kyoto"))
     assert unchanged[0] == {"role": "system", "content": STABLE_PREFIX}
     assert changed[0] == unchanged[0]
-    assert changed[0]["content"].encode("utf-8") == unchanged[0]["content"].encode("utf-8")
     # The dynamic section is genuinely version-bound, so the equality is not vacuous.
     assert changed[1]["content"] != unchanged[1]["content"]
 
 
-def test_context_compacts_at_the_documented_threshold_and_stays_within_budget():
+@pytest.mark.parametrize(
+    "count,size,maximum_tokens,expected",
+    [(6, 100, 1000, False), (7, 100, 1000, True), (100, 1, 1_000_000, True)],
+    ids=["below-token-threshold", "at-token-threshold", "at-message-threshold"],
+)
+def test_context_compacts_at_the_documented_threshold(
+    count: int, size: int, maximum_tokens: int, expected: bool
+):
     summary = ConversationSummary.model_validate({"sourceTripVersion": 1})
-    _, _, below = compact_context(summary, messages(6, 100), 1000)
-    _, _, at_threshold = compact_context(summary, messages(7, 100), 1000)
-    _, _, too_many = compact_context(summary, messages(100, 1), 1_000_000)
-    assert below is False
-    assert at_threshold is True
-    assert too_many is True
+    _, _, compacted = compact_context(summary, messages(count, size), maximum_tokens)
+    assert compacted is expected
+
+
+def test_context_stays_within_budget_without_truncating_authoritative_facts():
     dynamic = build_context(request(1, [], 24000), trip(1))[1]["content"]
     assert len(dynamic.encode("utf-8")) <= min(32768, 24000 * 2)
     with pytest.raises(ValueError, match="context_budget_exceeded"):
@@ -247,45 +250,3 @@ def test_measured_120_turn_context_bytes_and_token_estimate(capsys: pytest.Captu
             f"messages={len(recent)} compacted={compacted} prompt={prefix_bytes + dynamic_bytes}B "
             f"prefix={prefix_bytes}B token_estimate~{estimated_tokens}"
         )
-
-
-class TraceClient:
-    def __init__(self) -> None:
-        self.runs: list[dict[str, object]] = []
-
-    def create_run(
-        self, name: str, inputs: dict[str, object], run_type: str, **kwargs: object
-    ) -> None:
-        self.runs.append({"name": name, "inputs": inputs, "run_type": run_type, **kwargs})
-
-
-def test_langsmith_receives_only_allowlisted_redacted_metadata():
-    client = TraceClient()
-    sink = SafeLangSmithSink(
-        client,
-        Settings(
-            langsmith_agent_id="onholidai",
-            langsmith_agent_environment="local",
-            service_token_secret="synthetic-local-service-secret-000000000",
-        ),
-    )
-    sink.emit("refinement", "proposal", 12.5)
-    sink.emit("raw traveller prompt", "proposal", 12.5)
-    sink.emit("refinement", "supplier margin", 12.5)
-    assert len(client.runs) == 1
-    run = client.runs[0]
-    assert set(run) == {
-        "name",
-        "inputs",
-        "run_type",
-        "id",
-        "address",
-        "start_time",
-        "end_time",
-        "outputs",
-        "extra",
-    }
-    assert run["name"] == "onholidai.planning"
-    assert run["inputs"] == {}
-    assert run["outputs"] == {"purpose": "refinement", "outcome": "proposal", "duration_ms": 12.5}
-    assert run["extra"] == {"metadata": {"agent_id": "onholidai", "agent_environment": "local"}}

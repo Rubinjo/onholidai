@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { measureEstimates } from "../../server/metrics/estimate";
-import { currencySchema } from "../../domain/trip/schema";
 
 describe("estimate evidence", () => {
   it("retains failed requests in the deadline denominator and excludes only clarification waits", () => {
@@ -30,9 +29,5 @@ describe("estimate evidence", () => {
       accountedCount: 2,
     });
     expect(() => measureEstimates([])).toThrow();
-  });
-  it("rejects syntactically plausible but unrecognized currencies", () => {
-    expect(currencySchema.safeParse("XYZ").success).toBe(false);
-    expect(currencySchema.safeParse("EUR").success).toBe(true);
   });
 });

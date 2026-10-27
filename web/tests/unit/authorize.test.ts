@@ -1,16 +1,10 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import * as authorization from "../../server/auth/authorize";
 
 import type { AuthorizationSession } from "../../server/auth/authorize";
 
 vi.mock("server-only", () => ({}));
-
-type AuthorizationModule = typeof import("../../server/auth/authorize");
-
-let authorization: AuthorizationModule;
-
-beforeAll(async () => {
-  authorization = await import("../../server/auth/authorize");
-});
 
 function session(userId: string, internalTeamRole?: unknown) {
   return {
