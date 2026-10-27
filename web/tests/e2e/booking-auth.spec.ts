@@ -22,10 +22,7 @@ test("Book trip continues from a draft through free sign-up and same-trip linkin
 }) => {
   test.setTimeout(120000);
   await completeSetup(page, { title: "Same-trip account continuation" });
-  await expect(page.getByRole("group", { name: /Clarification needed/ })).toBeVisible({
-    timeout: 35000,
-  });
-  await expect(savedVersion(page, 1)).toBeVisible();
+  await expect(savedVersion(page, 2)).toBeVisible({ timeout: 35000 });
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await expect(navigation.getByRole("link", { name: "Home", exact: true })).toHaveAttribute(
     "href",

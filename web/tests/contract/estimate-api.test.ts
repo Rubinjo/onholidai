@@ -25,6 +25,19 @@ describe("initial trip contracts", () => {
     expect(snapshot.warnings.map((warning) => warning.code)).toContain("estimate_pending");
   });
 
+  it("rejects pre-populated itineraries when creating a draft", () => {
+    const input = initialRequest();
+    input.snapshot.itineraryDays = projectCustomerSnapshot(
+      createSyntheticTripSnapshot(),
+    ).itineraryDays;
+    const result = createTripRequestSchema.safeParse(input);
+    expect(result.success).toBe(false);
+    if (!result.success)
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({ path: ["snapshot", "itineraryDays"] }),
+      );
+  });
+
   it("rejects currency mismatch, forged pricing, inconsistent duration and missing origin", () => {
     const input = initialRequest();
     expect(createTripRequestSchema.safeParse({ ...input, currency: "EUR" }).success).toBe(false);

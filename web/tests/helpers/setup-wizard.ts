@@ -13,6 +13,7 @@ export async function enterValue(field: Locator, value: string): Promise<void> {
   if ((await section.count()) && (await section.getAttribute("open")) === null)
     await section.locator("summary").first().click();
   if ((await field.getAttribute("type")) === "range") {
+    await expect(field).toBeEnabled();
     await field.focus();
     const step = Number((await field.getAttribute("step")) ?? 1);
     const difference = Math.round((Number(value) - Number(await field.inputValue())) / step);
@@ -63,6 +64,8 @@ export async function searchDestinations(page: Page, name: string): Promise<void
 export async function addDestination(page: Page, name: string, countryCode: string): Promise<void> {
   await searchDestinations(page, name);
   await page.getByRole("option", { name: new RegExp(`${name}.*${countryCode}`) }).click();
+  await expect(page.getByRole("button", { name: `Remove ${name}`, exact: true })).toBeVisible();
+  await expect(page.getByRole("listbox", { name: "Destination matches" })).toHaveCount(0);
 }
 
 export async function confirmOrigin(
@@ -79,18 +82,34 @@ export async function confirmOrigin(
   await page
     .getByRole("option", { name: new RegExp("^" + originLabel.replace(", ", " ") + "\\b") })
     .click();
+  await expect(
+    page.getByRole("button", { name: `Remove departure ${origin}`, exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("listbox", { name: "Departure matches" })).toHaveCount(0);
 }
 
 export async function calendarDate(page: Page, date: string): Promise<Locator> {
   const [year, month] = date.split("-");
-  await page.getByLabel("Choose the Year").selectOption(year);
-  await page.getByLabel("Choose the Month").selectOption(String(Number(month) - 1));
-  return page.locator(`[data-calendar-date="${date}"]`);
+  const yearSelect = page.getByLabel("Choose the Year");
+  const monthSelect = page.getByLabel("Choose the Month");
+  const monthValue = String(Number(month) - 1);
+  if ((await yearSelect.inputValue()) !== year) await yearSelect.selectOption(year);
+  await expect(yearSelect).toHaveValue(year);
+  if ((await monthSelect.inputValue()) !== monthValue) await monthSelect.selectOption(monthValue);
+  await expect(monthSelect).toHaveValue(monthValue);
+  const day = page.locator(`[data-calendar-date="${date}"]`);
+  await expect(day).toBeVisible();
+  await expect(day).toBeEnabled();
+  return day;
 }
 export async function selectAvailability(page: Page, start: string, end: string): Promise<void> {
-  await page.getByRole("button", { name: "Add dates", exact: true }).click();
-  await (await calendarDate(page, start)).click();
-  await (await calendarDate(page, end)).click();
+  await page.getByRole("button", { name: "Add dates", exact: true }).press("Enter");
+  // Keyboard activation avoids native calendar focus scrolling between pointer
+  // down/up. Pointer acknowledgement has its own coverage in platform-ux.
+  await (await calendarDate(page, start)).press("Enter");
+  await expect(page.locator(".rdp-footer")).toContainText("Choose an end date");
+  await (await calendarDate(page, end)).press("Enter");
+  await expect(page.locator(".calendar-feedback")).toContainText("Dates added.");
 }
 
 // Walks the steps after destinations, which callers may already have arranged.

@@ -25,6 +25,7 @@ test("internal research preserves evidence and access checks without a customer 
   });
   await expect(account).toBeOK();
   const snapshot = projectCustomerSnapshot(createSyntheticTripSnapshot());
+  snapshot.itineraryDays = [];
   const created = await page.request.post("/api/v1/trips", {
     headers,
     data: {
@@ -111,12 +112,32 @@ test("internal research preserves evidence and access checks without a customer 
     `/api/v1/trips/${trip.tripId}/planning-offers/${stay.offerRef}?version=1&revision=${stay.revision}`,
   );
   await expect(details).toBeOK();
+  const inspected = await details.json();
+  expect(inspected.offer).toMatchObject({
+    offerRef: stay.offerRef,
+    revision: stay.revision + 1,
+  });
   const rechecked = await page.request.post(
     `/api/v1/trips/${trip.tripId}/planning-offers/${stay.offerRef}/revalidations?version=1`,
-    { headers, data: { revision: stay.revision } },
+    { headers, data: { revision: inspected.offer.revision } },
   );
   await expect(rechecked).toBeOK();
-  expect((await rechecked.json()).outcome).toBe("unchanged");
+  expect(await rechecked.json()).toMatchObject({
+    outcome: "unsupported",
+    offer: { offerRef: stay.offerRef, revision: inspected.offer.revision },
+  });
+  const flight = latest.offers.find(
+    (offer: { component: { type: string } }) => offer.component.type === "flight",
+  );
+  const recheckedFlight = await page.request.post(
+    `/api/v1/trips/${trip.tripId}/planning-offers/${flight.offerRef}/revalidations?version=1`,
+    { headers, data: { revision: flight.revision } },
+  );
+  await expect(recheckedFlight).toBeOK();
+  expect(await recheckedFlight.json()).toMatchObject({
+    outcome: "unchanged",
+    offer: { offerRef: flight.offerRef, revision: flight.revision + 1 },
+  });
   expect(await (await page.request.get(`/api/v1/trips/${trip.tripId}`)).json()).toEqual(trip);
   expect(
     (

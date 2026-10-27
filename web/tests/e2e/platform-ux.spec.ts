@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import { mockSetup } from "../helpers/mock-setup";
 import {
   addDestination,
+  calendarDate,
   confirmOrigin,
   continueStep,
   enterValue,
@@ -44,30 +45,40 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
   test(`setup acknowledges deterministic inputs within one second (${reducedMotion})`, async ({
     page,
   }) => {
+    await page.clock.setFixedTime(new Date("2026-10-27T12:00:00Z"));
     await page.emulateMedia({ reducedMotion });
+    const unmockedRequests: string[] = [];
+    await page.route("**/api/**", (route) => {
+      const path = new URL(route.request().url()).pathname;
+      unmockedRequests.push(path);
+      return route.fulfill({
+        status: 501,
+        json: { title: `Missing deterministic setup mock: ${path}` },
+      });
+    });
     await mockSetup(page);
     await openBuilder(page);
     const samples: InputTiming[] = [];
     await page.getByLabel("Destination search").fill("Tokyo");
     await acknowledge(
-      page,
       samples,
       "destination search",
-      () => page.getByLabel("Destination search").press("Enter"),
+      { target: page.getByLabel("Destination search"), key: "Enter" },
+      { selector: '[role="listbox"][aria-label="Destination matches"]' },
       () => expect(page.getByRole("listbox", { name: "Destination matches" })).toBeVisible(),
     );
     await acknowledge(
-      page,
       samples,
       "select destination",
-      () => page.getByRole("option", { name: /Tokyo.*JP/ }).click(),
+      { target: page.getByRole("option", { name: /Tokyo.*JP/ }) },
+      { selector: 'button[aria-label="Remove Tokyo"]' },
       () => expect(page.getByRole("button", { name: "Remove Tokyo" })).toBeVisible(),
     );
     await acknowledge(
-      page,
       samples,
       "reset destinations",
-      () => page.getByRole("button", { name: "Reset destinations" }).click(),
+      { target: page.getByRole("button", { name: "Reset destinations" }) },
+      { selector: '[role="status"]', text: "Destinations cleared." },
       () =>
         expect(
           page.getByRole("list", { name: "Selected destinations" }).getByRole("listitem"),
@@ -78,20 +89,20 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     const handle = page.getByRole("button", { name: "Reorder Kyoto; use arrow keys" });
     await handle.focus();
     await acknowledge(
-      page,
       samples,
       "reorder destination",
-      () => handle.press("ArrowUp"),
+      { target: handle, key: "ArrowUp" },
+      { selector: '[aria-label="Selected destinations"] > li:first-child', text: "Kyoto" },
       () =>
         expect(
           page.getByRole("list", { name: "Selected destinations" }).getByRole("listitem").first(),
         ).toContainText("Kyoto"),
     );
     await acknowledge(
-      page,
       samples,
       "order mode",
-      () => page.getByRole("button", { name: "Let AI arrange" }).click(),
+      { target: page.getByRole("button", { name: "Let AI arrange" }) },
+      { selector: 'button[aria-pressed="true"]', text: "Let AI arrange" },
       () =>
         expect(page.getByRole("button", { name: "Let AI arrange" })).toHaveAttribute(
           "aria-pressed",
@@ -99,36 +110,40 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
         ),
     );
     await acknowledge(
-      page,
       samples,
       "step navigation",
-      () => continueStep(page),
+      { target: page.getByRole("button", { name: "Continue", exact: true }) },
+      { selector: '[aria-label="Departure search"]' },
       () => expect(page.getByLabel("Departure search")).toBeVisible(),
     );
     await confirmOrigin(page);
     await continueStep(page);
-    const days = page.locator(".rdp-day_button");
+    const start = await calendarDate(page, "2030-05-02");
     await acknowledge(
-      page,
       samples,
       "calendar range start",
-      () => days.nth(1).click(),
+      { target: start },
+      { selector: ".rdp-footer", text: "Choose an end date" },
       () => expect(page.locator(".rdp-footer")).toContainText("Choose an end date"),
     );
+    const end = await calendarDate(page, "2030-05-16");
     await acknowledge(
-      page,
       samples,
       "calendar range end",
-      () => days.nth(15).click(),
-      () => expect(page.locator(".availability-window").first()).not.toContainText("Choose dates"),
+      { target: end },
+      { selector: ".availability-window", text: "16 May 2030" },
+      () =>
+        expect(page.locator(".availability-window").first()).toContainText(
+          /2 May 2030.*16 May 2030/,
+        ),
     );
     const minimum = page.getByRole("slider", { name: "Minimum days" });
     await minimum.focus();
     await acknowledge(
-      page,
       samples,
       "duration handle",
-      () => minimum.press("ArrowRight"),
+      { target: minimum, key: "ArrowRight" },
+      { selector: 'input[aria-label="Minimum days"]', value: "2" },
       () => expect(minimum).toHaveValue("2"),
     );
     await page.getByRole("button", { name: "Reset calendar" }).click();
@@ -142,12 +157,13 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await pace.focus();
     await expect(pace).toHaveValue("5");
     await acknowledge(
-      page,
       samples,
       "travel preference",
-      () => pace.press("ArrowRight"),
+      { target: pace, key: "ArrowRight" },
+      { selector: 'input[id$="-pace"]', value: "6" },
       () => expect(pace).toHaveValue("6"),
     );
+    expect(unmockedRequests, "All timing-test API inputs must be deterministic").toEqual([]);
     await test.info().attach("input-timings.json", {
       body: JSON.stringify({ reducedMotion, samples }),
       contentType: "application/json",

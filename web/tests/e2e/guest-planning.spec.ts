@@ -44,10 +44,10 @@ for (const reducedMotion of ["no-preference", "reduce"] as const)
         response.request().method() === "POST" && response.url().endsWith("/agent-runs"),
     );
     await acknowledge(
-      page,
       timings,
       "chat send",
-      () => page.getByRole("button", { name: "Send message" }).click(),
+      { target: page.getByRole("button", { name: "Send message" }) },
+      { selector: '[role="status"]', text: "Sending your request" },
       () =>
         expect(page.getByRole("status").filter({ hasText: "Sending your request" })).toBeVisible(),
     );

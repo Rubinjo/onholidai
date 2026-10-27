@@ -101,5 +101,8 @@ export async function mockSetup(page: Page) {
       },
     });
   });
+  await page.route("**/api/v1/places/viator-destination?**", (route) =>
+    route.fulfill({ json: { destinationId: "10001" } }),
+  );
   return { draft: () => draft };
 }

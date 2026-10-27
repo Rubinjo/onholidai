@@ -183,6 +183,8 @@ The [Playwright configuration](../web/playwright.config.ts) defines five desktop
 
 Browser preflight checks real guest-session and database access as well as agent mode. A healthy web process is not enough. Fix failed preflight dependencies before increasing timeouts. Review local failure artifacts in [test results](../web/test-results/) when present.
 
+Input-feedback tests enforce a 1,000 ms budget from the browser input event to visible feedback; Playwright actionability waits and assertion overhead are excluded. Run timing checks without concurrent builds or test suites competing for CPU/GPU. Use explicit future dates in calendar fixtures, and do not retry non-idempotent actions to mask missed input.
+
 For the existing Temporal workflow suite:
 
 ```bash

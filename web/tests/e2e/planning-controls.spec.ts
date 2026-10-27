@@ -93,8 +93,11 @@ for (const width of [320, 390, 768, 1440])
     await addDestination(page, "Tokyo", "JP");
     await expect(page.getByRole("button", { name: "Remove Japan" })).toHaveCount(0);
     await addDestination(page, "Kyoto", "JP");
-    await page.getByRole("button", { name: "My order" }).click();
+    const manualOrder = page.getByRole("button", { name: "My order", exact: true });
+    await manualOrder.press("Enter");
+    await expect(manualOrder).toHaveAttribute("aria-pressed", "true");
     const handle = page.getByRole("button", { name: "Reorder Kyoto; use arrow keys" });
+    await expect(handle).toBeEnabled();
     await handle.focus();
     await handle.press("ArrowUp");
     await expect(
