@@ -9,6 +9,7 @@ import { ProblemError } from "@/server/errors";
 import { redactConversation } from "@/server/db/conversation-repository";
 import { rawConversationExpiry } from "@/server/privacy/retention";
 import { checkGuestResearch } from "@/server/metrics/guest-planning";
+import { AGENT_LEASE_MS, CLARIFICATION_IDLE_MS } from "@/server/agent-client/run-lifecycle";
 import { lockPlanningAccess } from "@/server/db/planning-access";
 import { planningProblems } from "@/server/errors";
 import { lockServiceGrant } from "@/server/auth/planning-resource";
@@ -110,7 +111,7 @@ export async function revokePrincipalRuns(
         .execute();
   }
 }
-const lease = (now: Date) => new Date(now.getTime() + 90_000);
+const lease = (now: Date) => new Date(now.getTime() + AGENT_LEASE_MS);
 export function runContext(run: AgentRun & { ownerUserId: string }): ServiceTokenContext {
   return {
     userId: run.ownerUserId,
@@ -177,11 +178,14 @@ export class RunRepository {
       runConflict();
   }
   private async interrupt(transaction: Transaction<Database>, row: Selectable<AgentRunTable>) {
-    if (
+    const expiredLease =
       ["queued", "running"].includes(row.status) &&
-      row.leaseExpiresAt &&
-      row.leaseExpiresAt <= this.now()
-    ) {
+      row.leaseExpiresAt !== null &&
+      row.leaseExpiresAt <= this.now();
+    const abandonedClarification =
+      row.status === "awaiting_clarification" &&
+      row.phaseStartedAt.getTime() + CLARIFICATION_IDLE_MS <= this.now().getTime();
+    if (expiredLease || abandonedClarification) {
       const cursor = row.eventCursor + 1;
       const event = AgentEventSchema.parse({
         version: "1",
@@ -190,7 +194,7 @@ export class RunRepository {
         occurredAt: this.now().toISOString(),
         type: "failed",
         status: "failed",
-        safeErrorCode: "lease_expired",
+        safeErrorCode: expiredLease ? "lease_expired" : "clarification_expired",
       });
       await transaction
         .insertInto("agentRunEvents")
@@ -693,7 +697,7 @@ export class RunRepository {
     const input = AnswerClarificationRequestSchema.parse(raw),
       hash = fingerprint(input);
     return inTransaction(this.database, async (transaction) => {
-      const row = await this.lock(transaction, userId, runId);
+      const row = await this.interrupt(transaction, await this.lock(transaction, userId, runId));
       if (row.planningAccessRevokedAt) throw planningProblems.planningRunAccessRevoked();
       const previous = await transaction
         .selectFrom("agentRunResumes")

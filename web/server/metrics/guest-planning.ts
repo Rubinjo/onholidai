@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 
 import { sql, type Transaction } from "kysely";
 
+import { CLARIFICATION_IDLE_MS } from "@/server/agent-client/run-lifecycle";
 import { planningProblems } from "@/server/errors";
 
 import type { Database } from "@/server/db/database";
@@ -48,6 +49,7 @@ export async function checkGuestResearch(
   now = new Date(),
 ): Promise<void> {
   const cutoff = new Date(now.getTime() - 3600000);
+  const clarificationCutoff = new Date(now.getTime() - CLARIFICATION_IDLE_MS);
   await transaction
     .deleteFrom("guestResearchRequests")
     .where("guestSessionId", "=", sessionId)
@@ -68,8 +70,15 @@ export async function checkGuestResearch(
     .where("agentRuns.status", "in", ["queued", "running", "awaiting_clarification"])
     .where((eb) =>
       eb.or([
-        eb("agentRuns.status", "=", "awaiting_clarification"),
-        eb("agentRuns.leaseExpiresAt", ">", now),
+        // An unanswered question stops holding the slot once it is abandoned.
+        eb.and([
+          eb("agentRuns.status", "=", "awaiting_clarification"),
+          eb("agentRuns.phaseStartedAt", ">", clarificationCutoff),
+        ]),
+        eb.and([
+          eb("agentRuns.status", "in", ["queued", "running"]),
+          eb("agentRuns.leaseExpiresAt", ">", now),
+        ]),
       ]),
     )
     .execute();

@@ -1,0 +1,28 @@
+# Local-build override for installations without a container registry.
+#
+# deploy-vps.sh appends this file when called with --build, which is how the
+# first deployment runs. Registry deployments pull immutable digests instead.
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: web/Dockerfile
+    image: onholidai-web:local
+
+  booking-worker:
+    build:
+      context: ../..
+      dockerfile: web/Dockerfile
+    image: onholidai-web:local
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: web/Dockerfile
+    image: onholidai-web:local
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: agent/Dockerfile
+    image: onholidai-agent:local

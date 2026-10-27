@@ -39,7 +39,13 @@ export function selectDestination(
     name: place.name,
     countryCode: place.countryCode,
     timezone: place.timezone,
-    providerPlaceIds: { lookup: place.placeId },
+    providerPlaceIds: {
+      lookup: place.placeId,
+      ...place.providerPlaceIds,
+      ...(place.kind === "airport" && place.airportCode
+        ? { "duffel:flight": place.airportCode }
+        : {}),
+    },
     location: place.location,
     routePosition: previous?.routePosition ?? list.length,
     arrivalDate: null,

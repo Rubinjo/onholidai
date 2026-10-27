@@ -37,8 +37,6 @@ def offer(kind: str = "flight") -> dict[str, object]:
         "cancellationTerms",
         "price",
         "price.finalCustomerMinor",
-        "price.taxesMinor",
-        "price.feesMinor",
     ],
 )
 def test_incomplete_discovery_facts_are_not_selected_or_proposed(field: str):
@@ -180,3 +178,61 @@ def test_expired_quotes_and_missing_component_dates_are_not_materialized():
     missing = offer()
     del cast(dict[str, object], missing["component"])["serviceStart"]
     assert select_quotes([expired, missing], 50) == []
+
+
+def test_unknown_supplier_fee_lines_keep_the_authoritative_total_proposable():
+    # Live suppliers publish an authoritative payable total but not always a fee
+    # breakdown. The breakdown stays null (backend record) while the offer is usable.
+    offer_without_breakdown = offer()
+    price = cast(dict[str, object], offer_without_breakdown["component"]["price"])
+    price["taxesMinor"] = None
+    price["feesMinor"] = None
+    assert select_quotes([offer_without_breakdown], 50) == [offer_without_breakdown]
+    result = propose_trip_changes(
+        request().model_copy(update={"purpose": "refinement"}),
+        [
+            {
+                "operation": "replace",
+                "target": "/components",
+                "value": [offer_without_breakdown["component"]],
+            }
+        ],
+        "Live totals with an unverified fee breakdown",
+        [],
+    )
+    assert result.root.kind == "proposal"
+    stored = cast(dict[str, object], result.root.proposal.operations[0].value)[0]
+    # The draft contract omits an unknown breakdown instead of carrying a null, so the
+    # saved component keeps only the authoritative total.
+    assert "feesMinor" not in cast(dict[str, object], stored["price"])
+    assert cast(dict[str, object], stored["price"])["finalCustomerMinor"] == 10000
+
+
+def test_discovery_offer_with_bounded_facts_and_unverified_terms_is_proposable():
+    # Live discovery offers keep `details` empty and carry the sourced facts in
+    # planningDetails; unverified terms/fees stay recorded in unverifiedFacts.
+    discovery = offer()
+    component = cast(dict[str, object], discovery["component"])
+    component["details"] = None
+    component["cancellationTerms"] = None
+    component["planningDetails"] = {
+        "locationName": "Tokyo",
+        "timezone": None,
+        "airportNames": [],
+        "airlines": [],
+        "flightDirection": None,
+        "durationMinutes": None,
+        "layovers": [],
+        "fareConditions": '{"segmentCount":2}',
+        "accommodationType": None,
+        "travelFromStayMinutes": None,
+        "eligibility": "unverified",
+        "accessibility": "unverified",
+        "availability": "unverified",
+        "constraintEvidence": [],
+        "source": "Duffel Flights",
+        "checkedAt": "2030-04-01T00:00:00Z",
+        "unavailableFacts": ["Complete service details"],
+    }
+    discovery["unverifiedFacts"] = ["terms", "fees"]
+    assert select_quotes([discovery], 50) == [discovery]

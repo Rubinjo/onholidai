@@ -146,12 +146,25 @@ function parseCsv(text) {
   );
 }
 
+function normalizeName(value) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
 function airportsFromCsv(text, cities) {
   const byCountry = new Map();
+  // Airport rank drives gateway selection, so it uses the population of the city
+  // the airport actually serves instead of the nearest settlement by coordinates.
+  const populationByPlaceName = new Map();
   for (const city of cities) {
     const bucket = byCountry.get(city.countryCode) ?? [];
     bucket.push(city);
     byCountry.set(city.countryCode, bucket);
+    const key = `${city.countryCode}|${normalizeName(city.name)}`;
+    populationByPlaceName.set(key, Math.max(populationByPlaceName.get(key) ?? 0, city.rank));
   }
   const airports = [];
   for (const port of parseCsv(text)) {
@@ -184,6 +197,10 @@ function airportsFromCsv(text, cities) {
       }
     }
     if (!nearest) continue;
+    const municipality = port.municipality.trim().slice(0, 120);
+    const served = municipality
+      ? populationByPlaceName.get(`${countryCode}|${normalizeName(municipality)}`)
+      : undefined;
     airports.push({
       placeId: `ourairports:${port.id}`,
       kind: "airport",
@@ -192,8 +209,9 @@ function airportsFromCsv(text, cities) {
       timezone: nearest.timezone,
       airportCode: port.iata_code,
       location,
-      city: port.municipality.trim().slice(0, 120),
-      rank: port.type === "large_airport" ? nearest.rank : Math.floor(nearest.rank / 4),
+      city: municipality,
+      airportClass: port.type === "large_airport" ? "large" : "medium",
+      rank: served ?? nearest.rank,
     });
   }
   return airports;

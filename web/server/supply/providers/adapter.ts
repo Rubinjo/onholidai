@@ -21,6 +21,7 @@ export interface ReadOfferClient {
 const hitSchema = z
   .object({
     selectionGroup: z.string().min(1).max(120).optional(),
+    termsUnverified: z.boolean().optional(),
     currency: currencySchema,
     offerId: z.string().min(1).max(MAX_SUPPLIER_ID_LENGTH),
     supplierMinor: z.number().int().nonnegative().nullable(),
@@ -147,7 +148,7 @@ export function createReadAdapter(
             ? "unsupported"
             : "unverified",
       attribution: { provider, sourceUrl: null },
-      unverifiedFacts: hit.terms === null ? ["terms"] : [],
+      unverifiedFacts: hit.terms === null || hit.termsUnverified === true ? ["terms"] : [],
     });
   }
   return {

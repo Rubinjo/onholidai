@@ -40,6 +40,24 @@ def propose_trip_changes(
                     },
                 }
             )
+        # The draft contract carries unknown fee or tax lines as absent values. The
+        # research record keeps null so the unverified breakdown stays visible there.
+        operation["value"] = [
+            cast(
+                object,
+                {
+                    **cast(dict[str, object], component),
+                    "price": {
+                        key: amount
+                        for key, amount in cast(
+                            dict[str, object], cast(dict[str, object], component)["price"]
+                        ).items()
+                        if not (key in ("taxesMinor", "feesMinor") and amount is None)
+                    },
+                },
+            )
+            for component in components
+        ]
     timestamp = now or datetime.now(UTC)
     return AgentResult.model_validate(
         {

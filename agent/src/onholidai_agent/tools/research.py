@@ -35,7 +35,17 @@ def complete_planning_component(value: object) -> bool:
     except (ValueError, TypeError):
         return False
     details, terms = component.get("details"), component.get("cancellationTerms")
-    if not isinstance(details, dict) or not isinstance(terms, str) or not terms.strip():
+    planning_details = component.get("planningDetails")
+    # Discovery offers carry their bounded supplier facts in planningDetails and keep
+    # the raw details object empty by design. Either form proves the offer is sourced;
+    # missing terms stay recorded in the offer's unverified facts.
+    sourced = (isinstance(details, dict) and isinstance(terms, str) and bool(terms.strip())) or (
+        details is None
+        and isinstance(planning_details, dict)
+        and isinstance(cast(dict[str, object], planning_details).get("fareConditions"), str)
+        and bool(str(cast(dict[str, object], planning_details)["fareConditions"]).strip())
+    )
+    if not sourced:
         return False
     raw_price = component.get("price")
     if not isinstance(raw_price, dict):
@@ -46,9 +56,16 @@ def complete_planning_component(value: object) -> bool:
     currency = price.get("currency")
     if not isinstance(currency, str) or re.fullmatch("[A-Z]{3}", currency) is None:
         return False
-    for field in ("finalCustomerMinor", "taxesMinor", "feesMinor"):
+    total = price.get("finalCustomerMinor")
+    if type(total) is not int or not 0 <= total <= 9007199254740991:
+        return False
+    # Supplier fee and tax lines stay null when the offer does not establish them.
+    # The total the traveller pays remains authoritative, so an unknown breakdown
+    # line does not hide inventory from a priced proposal; the null field is the
+    # machine-readable record that the breakdown is unverified.
+    for field in ("taxesMinor", "feesMinor"):
         amount = price.get(field)
-        if type(amount) is not int or not 0 <= amount <= 9007199254740991:
+        if amount is not None and (type(amount) is not int or not 0 <= amount <= 9007199254740991):
             return False
     return True
 
@@ -56,6 +73,9 @@ def complete_planning_component(value: object) -> bool:
 async def research(
     reader: ResearchReader, request: CreateAgentRunRequest, query: dict[str, object]
 ) -> dict[str, object]:
-    async with asyncio.timeout(8):
+    # Web bounds each supplier read to eight seconds and the whole research
+    # request to twelve, so this client must allow the documented request bound
+    # rather than cutting off a source that is already enforcing its own deadline.
+    async with asyncio.timeout(12):
         result = await reader.search(request, query)
     return result

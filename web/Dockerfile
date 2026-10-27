@@ -31,6 +31,10 @@ ENV NODE_ENV=production
 
 COPY --from=build /workspace /workspace
 
+# pnpm's launcher fetches its platform binary on first use. Warm that cache while
+# the build still has registry access so production containers start offline.
+RUN pnpm --version
+
 EXPOSE 3000
 
 CMD ["pnpm", "--filter", "@onholidai/web", "start"]

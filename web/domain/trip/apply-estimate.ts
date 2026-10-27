@@ -245,6 +245,7 @@ export function priceEstimate(
     });
   }
   const currency = base.price.currency;
+  // A part the suppliers did not establish stays null rather than being reported as zero.
   const sum = (
     field:
       | "supplierAmount"
@@ -253,20 +254,24 @@ export function priceEstimate(
       | "customerPayableFees"
       | "finalCustomerAmount",
   ) => {
+    if (candidate.components.some((component) => component.price[field] === null)) return null;
     const minorUnits = candidate.components.reduce(
-      (total, component) => total + component.price[field].minorUnits,
+      (total, component) => total + (component.price[field]?.minorUnits ?? 0),
       0,
     );
     if (!Number.isSafeInteger(minorUnits)) throw new Error("Price overflow");
     return { currency, minorUnits };
   };
+  const finalTotal = sum("finalCustomerAmount");
+  // Every draft component carries a payable total, so this cannot be unknown.
+  if (finalTotal === null) throw new Error("Missing component payable total");
   candidate.price = {
     currency,
     supplierTotal: sum("supplierAmount"),
     platformMarginTotal: sum("platformMargin"),
     customerPayableTaxesTotal: sum("customerPayableTaxes"),
     customerPayableFeesTotal: sum("customerPayableFees"),
-    finalCustomerTotal: sum("finalCustomerAmount"),
+    finalCustomerTotal: finalTotal,
     status: "estimated",
     checkedAt: now.toISOString(),
     conversionDisclosures: [],
@@ -342,17 +347,30 @@ export async function recordEstimate(
   for (const component of candidate.components) {
     const record = records.find((entry) => entry.componentId === component.id);
     const query = record?.query;
-    if (
-      !query ||
-      query.currency !== candidate.price.currency ||
-      query.startDate !== startDate ||
-      query.endDate !== endDate ||
-      fingerprint(query.departureOrigin) !== fingerprint(candidate.departureOrigin) ||
-      fingerprint(query.travellerParty) !== fingerprint(candidate.travellerParty) ||
-      fingerprint(query.destinationIds) !==
-        fingerprint(candidate.destinations.map((destination) => destination.id))
-    )
-      runConflict();
+    // This evidence must describe the same search the traveller's dates, party and route
+    // imply. A mismatch means the proposal cannot be priced from the recorded research.
+    const mismatch = !query
+      ? "missing_evidence"
+      : query.currency !== candidate.price.currency
+        ? "currency"
+        : query.startDate !== startDate
+          ? "start_date"
+          : query.endDate !== endDate
+            ? "end_date"
+            : fingerprint(query.departureOrigin) !== fingerprint(candidate.departureOrigin)
+              ? "departure_origin"
+              : fingerprint(query.travellerParty) !== fingerprint(candidate.travellerParty)
+                ? "traveller_party"
+                : fingerprint(query.destinationIds) !==
+                    fingerprint(candidate.destinations.map((destination) => destination.id))
+                  ? "destinations"
+                  : null;
+    if (mismatch)
+      throw new ProblemError({
+        title: "Estimate evidence does not match the proposed trip",
+        status: 409,
+        code: `estimate_evidence_${mismatch}`,
+      });
   }
   const snapshot = projectCustomerSnapshot(candidate),
     total = snapshot.price.finalCustomerMinor;

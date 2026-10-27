@@ -41,17 +41,24 @@ export function Availability({
   duration,
   onChange,
   timezone = "UTC",
+  blockPastDates = false,
 }: {
   windows: TripSnapshot["availabilityWindows"];
   duration: TripSnapshot["duration"];
   onChange: (value: AvailabilityValue) => void;
   timezone?: string;
+  blockPastDates?: boolean;
 }) {
   const [mode, setMode] = useState<"add" | "remove">("add");
   const [start, setStart] = useState<string | null>(null);
   const [removal, setRemoval] = useState<{ start: string; base: AvailabilityValue } | null>(null);
   const [notice, setNotice] = useState(""),
     [error, setError] = useState("");
+  const [earliestDay] = useState(() => {
+    const value = new Date();
+    value.setHours(0, 0, 0, 0);
+    return value;
+  });
   const normalized = useMemo(() => {
     try {
       return { windows: normalizeAvailability(windows), error: "" };
@@ -109,6 +116,10 @@ export function Availability({
     const date = format(day, "yyyy-MM-dd");
     if (mode === "remove") {
       remove(date);
+      return;
+    }
+    if (blockPastDates && date < format(earliestDay, "yyyy-MM-dd")) {
+      setError("Choose today or a later date. Past dates cannot be planned.");
       return;
     }
     setRemoval(null);
@@ -223,6 +234,7 @@ export function Availability({
           navLayout="after"
           startMonth={new Date(1900, 0)}
           endMonth={new Date(2200, 11)}
+          disabled={blockPastDates ? { before: earliestDay } : undefined}
           components={{ DayButton: CalendarDay }}
           defaultMonth={
             windows.find(completeWindow)?.startDate

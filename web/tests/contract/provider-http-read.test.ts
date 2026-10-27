@@ -30,7 +30,8 @@ function client(transport: typeof fetch, timeoutMs = 8000) {
 describe("bounded read HTTP and decimal mapping", () => {
   it("enforces exact endpoint AND method allowlists before invoking fetch", async () => {
     const allowed = [
-      "POST https://api.duffel.com/air/offer_requests?return_offers=true",
+      "POST https://api.duffel.com/air/offer_requests?return_offers=false",
+      "GET https://api.duffel.com/air/offers?offer_request_id=orq_synthetic1&limit=32&sort=total_amount",
       "GET https://api.duffel.com/air/offers/off_synthetic1",
       "POST https://api.duffel.com/stays/search",
       "POST https://api.duffel.com/stays/search_results/srr_synthetic1/actions/fetch_all_rates",

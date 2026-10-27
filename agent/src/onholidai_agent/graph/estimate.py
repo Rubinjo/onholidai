@@ -330,41 +330,15 @@ def select_quotes(
                 options = relaxed
 
         def terms(offer: dict[str, object]) -> str:
-            component = facts(offer["component"])
-            return json.dumps(
-                {
-                    **{
-                        key: component.get(key)
-                        for key in (
-                            "type",
-                            "serviceStart",
-                            "serviceEnd",
-                            "details",
-                            "cancellationTerms",
-                        )
-                    },
-                    "planningDetails": {
-                        key: value
-                        for key, value in facts(component.get("planningDetails")).items()
-                        if key not in ("checkedAt", "source", "constraintEvidence")
-                    },
-                    **{
-                        key: offer.get(key)
-                        for key in ("eligibility", "occupancy", "accessibility", "unverifiedFacts")
-                    },
-                    "rooms": {
-                        key: value
-                        for key, value in facts(offer.get("supplierReferences")).items()
-                        if key in ("accommodationId", "roomId", "roomIds")
-                    },
-                },
-                sort_keys=True,
-            )
+            # Only the offered conditions are a material trade-off. Schedules, hotel names
+            # and provider fare strings differ across every sourced option, and asking
+            # about them would force a question the policy resolves by total instead.
+            return json.dumps(facts(offer["component"]).get("cancellationTerms"), sort_keys=True)
 
         if len({terms(option) for option in options}) > 1:
             raise MaterialChoice(
-                "The current options have different schedules or source terms. "
-                "Which matters more for this choice: the lower total or the alternative terms?",
+                "The sourced options differ in their cancellation terms. "
+                "Which matters more for this choice: the lower total or those terms?",
                 "experience",
             )
         # Spend is willingness, not evidence of quality or an invented monetary budget.
@@ -463,7 +437,11 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         # Model output is advisory only: no tool or operation from free text is ever executed.
         from onholidai_agent.telemetry.redaction import redact_for_langsmith
 
-        advice = redact_for_langsmith(await sources.model.complete(context), production=False)
+        try:
+            advice = redact_for_langsmith(await sources.model.complete(context), production=False)
+        except (ValueError, TimeoutError, KeyError, httpx.HTTPError):
+            # The deterministic estimate never depends on the advisory summary.
+            advice = ""
         model_advice = advice[:1000]
     snapshot = cast(dict[str, object], trip["snapshot"])
     origin_value = snapshot.get("departureOrigin")
@@ -485,18 +463,42 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
     origin = cast(dict[str, object], origin_value)
     duration = cast(dict[str, int], snapshot["duration"])
     windows = cast(list[dict[str, str]], snapshot["availabilityWindows"])
+    # Suppliers reject departures in the past, so a window that has already begun only
+    # offers the days that remain. At least the minimum duration must still fit.
+    today = now.date()
     feasible = [
-        window
+        (window, max(date.fromisoformat(window["startDate"]), today))
         for window in windows
-        if (date.fromisoformat(window["endDate"]) - date.fromisoformat(window["startDate"])).days
-        + 1
-        >= duration["idealDays"]
+        if date.fromisoformat(window["endDate"])
+        >= today + timedelta(days=duration["minimumDays"] - 1)
     ]
     if not feasible:
-        raise ValueError("infeasible_duration")
-    window = next((item for item in feasible if item["preference"] == "preferred"), feasible[0])
-    start = date.fromisoformat(window["startDate"])
-    end = start + timedelta(days=duration["idealDays"] - 1)
+        return AgentResult.model_validate(
+            {
+                "kind": "clarification",
+                "message": (
+                    "Your saved travel dates are in the past, so there are no days left to plan."
+                ),
+                "clarification": {
+                    "id": str(uuid4()),
+                    "question": (
+                        "Your saved travel dates are in the past, so there are no days left to "
+                        f"plan. Which future dates can you travel for at least "
+                        f"{duration['minimumDays']} days? Update your dates and duration in "
+                        "setup, then retry the estimate."
+                    ),
+                    "materialReason": "feasibility",
+                },
+            }
+        )
+    window, start = next(
+        (entry for entry in feasible if entry[0]["preference"] == "preferred"), feasible[0]
+    )
+    ideal_days = duration["idealDays"]
+    available_days = (date.fromisoformat(window["endDate"]) - start).days + 1
+    planned_days = min(ideal_days, available_days)
+    duration = {**duration, "idealDays": planned_days}
+    end = start + timedelta(days=planned_days - 1)
     destinations = cast(list[dict[str, object]], snapshot["destinations"])
     # Country selections define scope, not additional overnight stops where specific cities exist.
     city_countries = {
@@ -513,10 +515,9 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         if len(matches) == 1 and len(destinations) > 1:
             destinations = [place for place in destinations if place is not matches[0]]
     if request.message.lower().strip() == "use maximum duration":
-        duration = {**duration, "idealDays": duration["maximumDays"]}
-        end = start + timedelta(days=duration["idealDays"] - 1)
-        if end > date.fromisoformat(window["endDate"]):
-            raise ValueError("infeasible_duration")
+        planned_days = min(duration["maximumDays"], available_days)
+        duration = {**duration, "idealDays": planned_days}
+        end = start + timedelta(days=planned_days - 1)
     raw_alternatives = snapshot.get("departureOrigins")
     alternatives = (
         cast(list[dict[str, object]], raw_alternatives)
@@ -553,13 +554,13 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
     except (ValueError, TimeoutError, httpx.HTTPError):
         if len(alternatives) <= 1:
             raise
-    offers = cast(list[dict[str, object]], found.get("offers", []))
-    if not offers and len(alternatives) <= 1:
+    sourced = cast(list[dict[str, object]], found.get("offers", []))
+    if not sourced and len(alternatives) <= 1:
         raise ValueError("source_unavailable")
     preferences = cast(dict[str, int], snapshot["preferences"])
     try:
         offers = select_quotes(
-            offers,
+            sourced,
             preferences.get("spend", 50),
             snapshot=snapshot,
             query=query,
@@ -649,6 +650,26 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         duration["idealDays"] > 1 and "accommodation" not in types
     ):
         if not offers:
+            if sourced:
+                # Inventory exists but no offer established a complete customer price.
+                # Report that instead of failing as if the sources had nothing.
+                researched = sorted(
+                    {
+                        str(cast(dict[str, object], offer["component"]).get("type"))
+                        for offer in sourced
+                    }
+                )
+                return AgentResult.model_validate(
+                    {
+                        "kind": "answer",
+                        "message": "Supplier research returned "
+                        f"{len(sourced)} offer(s) for {', '.join(researched)}, but none "
+                        "established a complete customer price with verified fees and terms. "
+                        "No incomplete component or zero-cost trip was proposed. Review the "
+                        "unresolved price and eligibility facts before booking; no inventory "
+                        "was reserved.",
+                    }
+                )
             raise ValueError("source_unavailable")
         return AgentResult.model_validate(
             {
@@ -680,6 +701,11 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
     warnings = [
         "Source eligibility, occupancy, accessibility and cancellation facts require verification."
     ]
+    if planned_days < ideal_days:
+        warnings.append(
+            f"Your availability window no longer has {ideal_days} days left, so the plan starts "
+            f"{start} and uses the {planned_days} remaining days. Update your dates to change this."
+        )
     if required_rail_question(snapshot):
         warnings.append(
             "Required rail remains unresolved and unchanged. Only supported parts were planned; "
@@ -724,7 +750,11 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         + (
             "reviewed maximum duration to give the requested stops enough time "
             if request.message.lower().strip() == "use maximum duration"
-            else "ideal duration "
+            else (
+                "remaining availability window days "
+                if planned_days < ideal_days
+                else "ideal duration "
+            )
         )
         + "without changing your duration preferences "
         "and preserves all availability windows. Return defaults to your confirmed origin."
@@ -753,14 +783,17 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
             )
             for fact in source_facts[:3]
         )
-    flexible = [item for item in feasible if item["preference"] == "flexible"]
+    flexible = [entry for entry in feasible if entry[0]["preference"] == "flexible"]
     if flexible:
         rationale += (
             " Flexible-date windows remain alternatives; no cheaper fare is claimed "
             "without comparable supplier evidence."
         )
-        alternative_start = date.fromisoformat(flexible[0]["startDate"])
-        alternative_end = alternative_start + timedelta(days=duration["idealDays"] - 1)
+        alternative_start = flexible[0][1]
+        alternative_end = min(
+            alternative_start + timedelta(days=duration["idealDays"] - 1),
+            date.fromisoformat(flexible[0][0]["endDate"]),
+        )
         try:
             alternative = await research(
                 sources,

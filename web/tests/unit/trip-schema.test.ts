@@ -140,6 +140,64 @@ describe("Trip and TripVersion schemas", () => {
     ).toBe(false);
   });
 
+  it("keeps an unverified price breakdown explicit while the payable total stays authoritative", () => {
+    const total = { currency: "USD", minorUnits: 12000 };
+    expect(
+      componentPriceSchema.safeParse({
+        supplierAmount: null,
+        platformMargin: null,
+        customerPayableTaxes: null,
+        customerPayableFees: null,
+        finalCustomerAmount: total,
+        status: "estimated",
+        source: "duffel",
+        checkedAt: timestamp,
+        expiresAt: null,
+      }).success,
+    ).toBe(true);
+    // A part that is present must still reconcile with the total.
+    expect(
+      componentPriceSchema.safeParse({
+        supplierAmount: { currency: "USD", minorUnits: 9000 },
+        platformMargin: { currency: "USD", minorUnits: 0 },
+        customerPayableTaxes: { currency: "USD", minorUnits: 1000 },
+        customerPayableFees: null,
+        finalCustomerAmount: total,
+        status: "estimated",
+        source: "duffel",
+        checkedAt: timestamp,
+        expiresAt: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      componentPriceSchema.safeParse({
+        supplierAmount: { currency: "USD", minorUnits: 9000 },
+        platformMargin: { currency: "USD", minorUnits: 0 },
+        customerPayableTaxes: { currency: "USD", minorUnits: 1000 },
+        customerPayableFees: { currency: "USD", minorUnits: 0 },
+        finalCustomerAmount: total,
+        status: "estimated",
+        source: "duffel",
+        checkedAt: timestamp,
+        expiresAt: null,
+      }).success,
+    ).toBe(false);
+    // An unknown part cannot use a different currency from the payable total.
+    expect(
+      componentPriceSchema.safeParse({
+        supplierAmount: { currency: "GBP", minorUnits: 9000 },
+        platformMargin: null,
+        customerPayableTaxes: null,
+        customerPayableFees: null,
+        finalCustomerAmount: total,
+        status: "estimated",
+        source: "duffel",
+        checkedAt: timestamp,
+        expiresAt: null,
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts a complete current snapshot and immutable root metadata", () => {
     const snapshot = snapshotFixture();
     const decoded = decodeTripSnapshot(1, snapshot);

@@ -7,6 +7,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
@@ -109,29 +110,42 @@ class RunService:
         self.sources = sources or store
         self.tasks: dict[str, asyncio.Task[None]] = {}
         self.lock = asyncio.Lock()
+        self.emit_lock = asyncio.Lock()
         self.telemetry = telemetry
 
     async def emit(
         self, request: CreateAgentRunRequest, run_id: str, fields: dict[str, object]
     ) -> int:
-        run = await self.store.read(request, run_id)
-        event = AgentEvent.model_validate(
-            {
-                "version": "1",
-                "runId": run_id,
-                "cursor": run.next_event_cursor + 1,
-                "occurredAt": timestamp(),
-                **fields,
-            }
-        )
-        receipt = await self.store.event(request, event)
-        if (
-            receipt.run_id != run_id
-            or receipt.request_id != request.request_id
-            or receipt.accepted_cursor != event.root.cursor
-        ):
+        # Progress renewal and the final result run as separate tasks, so cursor
+        # allocation must be serialized: two concurrent appends would claim the same
+        # cursor and the loser's 409 would fail the whole run.
+        async with self.emit_lock:
+            for attempt in range(3):
+                run = await self.store.read(request, run_id)
+                event = AgentEvent.model_validate(
+                    {
+                        "version": "1",
+                        "runId": run_id,
+                        "cursor": run.next_event_cursor + 1,
+                        "occurredAt": timestamp(),
+                        **fields,
+                    }
+                )
+                try:
+                    receipt = await self.store.event(request, event)
+                except httpx.HTTPStatusError as error:
+                    if error.response.status_code == 409 and attempt < 2:
+                        await asyncio.sleep(0.05 * (attempt + 1))
+                        continue
+                    raise
+                if (
+                    receipt.run_id != run_id
+                    or receipt.request_id != request.request_id
+                    or receipt.accepted_cursor != event.root.cursor
+                ):
+                    raise ValueError("invalid_callback_receipt")
+                return event.root.cursor
             raise ValueError("invalid_callback_receipt")
-        return event.root.cursor
 
     async def start(self, request: CreateAgentRunRequest, run_id: str) -> AgentRun:
         async with self.lock:
@@ -235,6 +249,8 @@ class RunService:
         except asyncio.CancelledError:
             raise
         except Exception as error:
+            # Container logs only: the public event keeps a fixed category, never this detail.
+            logging.getLogger(__name__).exception("Estimate run failed")
             # No raw exception, source response or personal prompt escapes into a public event.
             try:
                 renewal.cancel()

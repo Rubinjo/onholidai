@@ -54,32 +54,34 @@ export function projectPublicComponent(component: Component, now = new Date()): 
     expiresAt: component.expiresAt,
     bookingStatus: component.bookingStatus,
     details:
-      component.type === "flight"
-        ? {
-            legs: component.details.legs.map(publicSupplierText),
-            baggage: component.details.baggage.map(publicSupplierText),
-          }
-        : component.type === "accommodation"
+      component.details === null
+        ? null
+        : component.type === "flight"
           ? {
-              occupancy: publicSupplierText(component.details.occupancy),
-              amenities: component.details.amenities.map(publicSupplierText),
+              legs: component.details.legs.map(publicSupplierText),
+              baggage: component.details.baggage.map(publicSupplierText),
             }
-          : component.type === "activity"
+          : component.type === "accommodation"
             ? {
-                durationMinutes: component.details.durationMinutes,
-                directions: publicSupplierText(component.details.directions),
+                occupancy: publicSupplierText(component.details.occupancy),
+                amenities: component.details.amenities.map(publicSupplierText),
               }
-            : component.type === "rail"
+            : component.type === "activity"
               ? {
-                  originStation: publicSupplierText(component.details.originStation),
-                  destinationStation: publicSupplierText(component.details.destinationStation),
-                  route: publicSupplierText(component.details.route),
+                  durationMinutes: component.details.durationMinutes,
+                  directions: publicSupplierText(component.details.directions),
                 }
-              : {
-                  origin: publicSupplierText(component.details.origin),
-                  destination: publicSupplierText(component.details.destination),
-                  route: publicSupplierText(component.details.route),
-                },
+              : component.type === "rail"
+                ? {
+                    originStation: publicSupplierText(component.details.originStation),
+                    destinationStation: publicSupplierText(component.details.destinationStation),
+                    route: publicSupplierText(component.details.route),
+                  }
+                : {
+                    origin: publicSupplierText(component.details.origin),
+                    destination: publicSupplierText(component.details.destination),
+                    route: publicSupplierText(component.details.route),
+                  },
     ...(component.planningDetails
       ? {
           planningDetails: {
@@ -120,8 +122,8 @@ export function projectPublicComponent(component: Component, now = new Date()): 
     price: publicTripPriceSchema.parse({
       currency: component.price.finalCustomerAmount.currency,
       finalCustomerMinor: component.price.finalCustomerAmount.minorUnits,
-      taxesMinor: component.price.customerPayableTaxes.minorUnits,
-      feesMinor: component.price.customerPayableFees.minorUnits,
+      taxesMinor: component.price.customerPayableTaxes?.minorUnits ?? null,
+      feesMinor: component.price.customerPayableFees?.minorUnits ?? null,
       status:
         component.price.status !== "confirmed" &&
         component.price.expiresAt !== null &&
@@ -180,8 +182,8 @@ function projectValidatedSnapshot(
     price: publicTripPriceSchema.parse({
       currency: snapshot.price.currency,
       finalCustomerMinor: snapshot.price.finalCustomerTotal.minorUnits,
-      taxesMinor: snapshot.price.customerPayableTaxesTotal.minorUnits,
-      feesMinor: snapshot.price.customerPayableFeesTotal.minorUnits,
+      taxesMinor: snapshot.price.customerPayableTaxesTotal?.minorUnits ?? null,
+      feesMinor: snapshot.price.customerPayableFeesTotal?.minorUnits ?? null,
       status: components.some((component) => component.price.status === "expired")
         ? "expired"
         : snapshot.price.status,

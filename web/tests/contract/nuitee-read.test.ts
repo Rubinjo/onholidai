@@ -101,8 +101,12 @@ describe("Nuitee safe hotel wire mappings", () => {
       });
       const [offer] = await provider.search(query, new AbortController().signal);
       const projected = projectPublicPlanningOffer(offer);
-      expect(projected.component.price.finalCustomerMinor).toBeNull();
-      expect(projected.unverifiedFacts).toContain("price");
+      // The enriched public total is published; the ambiguous property charge is not
+      // added twice and the fee breakdown stays unverified.
+      expect(projected.component.price.finalCustomerMinor).toBe(11020);
+      // An ambiguous property charge is not added to the enriched total, so the
+      // published figure can understate what is payable: keep flagging the evidence.
+      expect(projected.unverifiedFacts.length).toBeGreaterThan(0);
     },
   );
 
@@ -249,8 +253,8 @@ describe("Nuitee safe hotel wire mappings", () => {
     expect(offer.component.provider).toBe("nuitee");
     expect(offer.component.price.finalCustomerMinor).toBe(11520);
     expect(offer.component.price.status).toBe("estimated");
-    expect(offer.component.serviceStart).toBeNull();
-    expect(offer.component.serviceEnd).toBeNull();
+    expect(offer.component.serviceStart).toBe("2030-05-01T00:00:00Z");
+    expect(offer.component.serviceEnd).toBe("2030-05-08T00:00:00Z");
     expect(offer.component.expiresAt).toBeNull();
     expect(offer.supplierReferences).toMatchObject({
       accommodationId: "synthetic_hotel",
@@ -313,6 +317,98 @@ describe("Nuitee safe hotel wire mappings", () => {
     ).toBe(true);
   });
 
+  it.each([
+    ["a single inconsistent rate", 2, 1],
+    ["every inconsistent rate", 1, 0],
+  ])("handles %s on a multi-hotel page", async (_label, hotels, expected) => {
+    const wire = rates();
+    const original = wire.data[0];
+    const rounded = {
+      ...original,
+      hotelId: "synthetic_rounded",
+      roomTypes: [
+        {
+          ...original.roomTypes[0],
+          offerId: "synthetic_rounded_offer",
+          offerRetailRate: [{ amount: "100.11", currency: "GBP" }],
+        },
+      ],
+    };
+    const page = hotels === 2 ? { data: [rounded, original] } : { data: [rounded] };
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json(page));
+    const client = createNuiteeHttpClient({
+      apiKey: "synthetic-nuitee-secret",
+      environment: "sandbox",
+      fetch,
+      now: () => new Date("2030-04-01T00:00:00Z"),
+      resolveSearch: () => ({ ...selection, hotelIds: undefined, placeId: "synthetic_place" }),
+    });
+    const provider = createNuiteeReadProvider(client);
+    if (expected === 0) {
+      await expect(provider.search(query, new AbortController().signal)).rejects.toMatchObject({
+        status: "error",
+      });
+      return;
+    }
+    const offers = (await provider.search(query, new AbortController().signal)) as {
+      component: { supplierOfferId: string };
+    }[];
+    expect(offers).toHaveLength(1);
+    expect(offers[0].component.supplierOfferId).toBe("synthetic_offer");
+  });
+
+  it("states the party bounds implied by the sourced room capacity", async () => {
+    const wire = rates();
+    const sourcedRate = wire.data[0].roomTypes[0].rates[0] as { maxOccupancy?: number };
+    sourcedRate.maxOccupancy = 3;
+    const { client } = setup(wire);
+    const [hit] = await client.search(query, new AbortController().signal);
+    expect(hit.maximumAdults).toBe(3);
+    expect(hit.maximumChildren).toBe(1);
+    delete sourcedRate.maxOccupancy;
+    const { client: withoutCapacity } = setup(wire);
+    const [unknown] = await withoutCapacity.search(query, new AbortController().signal);
+    expect(unknown.maximumAdults).toBeNull();
+    expect(unknown.maximumChildren).toBeNull();
+  });
+  it("resolves a named destination to a supplier place before reading rates", async () => {
+    const calls: string[] = [];
+    const fetch = vi.fn<typeof globalThis.fetch>(async (url, init) => {
+      calls.push(`${init?.method ?? "GET"} ${String(url)}`);
+      if (String(url).includes("/data/places"))
+        return Response.json({
+          data: [
+            { placeId: "synthetic_other", displayName: "Japan Karate Institute" },
+            { placeId: "synthetic_japan", displayName: "Japan" },
+          ],
+        });
+      return Response.json(rates());
+    });
+    const client = createNuiteeHttpClient({
+      apiKey: "synthetic-nuitee-secret",
+      environment: "sandbox",
+      fetch,
+      now: () => new Date("2030-04-01T00:00:00Z"),
+      resolveSearch: () => ({
+        guestNationality: "GB",
+        occupancies: [{ adults: 2, children: [] }],
+        placeName: "japan",
+        countryCode: "JP",
+      }),
+    });
+    const provider = createNuiteeReadProvider(client);
+    await provider.search(query, new AbortController().signal);
+    expect(calls[0]).toBe(
+      "GET https://api.liteapi.travel/v3.0/data/places?textQuery=japan&countryCode=JP",
+    );
+    expect(calls[1]).toBe("POST https://api.liteapi.travel/v3.0/hotels/rates");
+    const body = JSON.parse(String((fetch.mock.calls[1][1] as RequestInit).body));
+    expect(body.placeId).toBe("synthetic_japan");
+    expect(body).not.toHaveProperty("placeName");
+    await provider.search(query, new AbortController().signal);
+    expect(calls.filter((call) => call.includes("/data/places"))).toHaveLength(1);
+  });
+
   it("requires exact trusted occupancy, nationality and a bounded location before calling suppliers", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>();
     for (const invalid of [
@@ -352,7 +448,7 @@ describe("Nuitee safe hotel wire mappings", () => {
     },
   );
 
-  it("keeps absent public pricing unknown and never substitutes net rate or guessed fees", async () => {
+  it("uses the supplier retail total when no public selling price is published", async () => {
     const wire = rates();
     const offer = { ...wire.data[0].roomTypes[0], suggestedSellingPrice: undefined };
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
@@ -369,7 +465,9 @@ describe("Nuitee safe hotel wire mappings", () => {
       }),
     );
     const offers = await provider.search(query, new AbortController().signal);
-    expect(projectPublicPlanningOffer(offers[0]).component.price.finalCustomerMinor).toBeNull();
+    // Retail rate plus the known payable property charge; the net supplier amount is
+    // never exposed as the customer total.
+    expect(projectPublicPlanningOffer(offers[0]).component.price.finalCustomerMinor).toBe(10510);
   });
 
   it("preserves exact multi-room allocation, room/rate identities, child ages and total arithmetic", async () => {
@@ -429,9 +527,13 @@ describe("Nuitee safe hotel wire mappings", () => {
     );
   });
 
-  it.each(["missing", "foreign", "package", "membership"])(
-    "does not claim a complete public total for %s charges or restrictions",
-    async (kind) => {
+  it.each([
+    ["missing", 11020, null, null],
+    ["foreign", 11020, null, null],
+    ["package", 11520, 1000, 500],
+  ])(
+    "publishes the supplier total while the %s charge breakdown is reported honestly",
+    async (kind, total, taxes, fees) => {
       const wire = rates();
       const offer = wire.data[0].roomTypes[0];
       if (kind === "foreign") offer.rates[0].retailRate.taxesAndFees[1].currency = "EUR";
@@ -468,9 +570,27 @@ describe("Nuitee safe hotel wire mappings", () => {
         resolveSearch: () => selection,
       });
       const [hit] = await client.search(query, new AbortController().signal);
-      expect(hit.customerMinor).toBeNull();
+      expect(hit.customerMinor).toBe(total);
+      expect(hit.taxesMinor).toBe(taxes);
+      expect(hit.feesMinor).toBe(fees);
     },
   );
+
+  it("does not publish a total for a membership-restricted rate", async () => {
+    const wire = rates();
+    const offer = { ...wire.data[0].roomTypes[0], loyaltyMembershipIdRequired: true };
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Response.json({ data: [{ ...wire.data[0], roomTypes: [offer] }] }),
+    );
+    const client = createNuiteeHttpClient({
+      apiKey: "synthetic-key",
+      environment: "sandbox",
+      fetch,
+      resolveSearch: () => selection,
+    });
+    const [hit] = await client.search(query, new AbortController().signal);
+    expect(hit.customerMinor).toBeNull();
+  });
 
   it("preserves numeric source precision before minor-unit validation", async () => {
     const wire = JSON.stringify(rates()).replace('"100.10"', "100.10000000000000001");

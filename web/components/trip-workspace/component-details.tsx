@@ -36,7 +36,7 @@ export function ComponentDetails({
             <>
               <p>
                 Outbound/return: {component.planningDetails?.flightDirection ?? "Unavailable"}; legs{" "}
-                {facts(component.details.legs)}.
+                {facts(component.details?.legs)}.
               </p>
               <p>
                 Airports: {facts(component.planningDetails?.airportNames)}. Airlines:{" "}
@@ -44,7 +44,7 @@ export function ComponentDetails({
               </p>
               <p>
                 Layovers: {facts(component.planningDetails?.layovers)}. Baggage:{" "}
-                {facts(component.details.baggage)}. Fare conditions:{" "}
+                {facts(component.details?.baggage)}. Fare conditions:{" "}
                 {component.planningDetails?.fareConditions ?? "Unavailable"}.
               </p>
             </>
@@ -53,27 +53,29 @@ export function ComponentDetails({
             <>
               <p>
                 Stay type: {component.planningDetails?.accommodationType ?? "Unavailable"};
-                occupancy: {component.details.occupancy}.
+                occupancy: {component.details?.occupancy ?? "Unavailable"}.
               </p>
-              <p>Amenities: {facts(component.details.amenities)}.</p>
+              <p>Amenities: {facts(component.details?.amenities)}.</p>
             </>
           )}
           {component.type === "activity" && (
             <p>
-              Activity duration {component.details.durationMinutes} minutes. Directions:{" "}
-              {component.details.directions}
+              Activity duration {component.details?.durationMinutes ?? "Unavailable"} minutes. Directions:{" "}
+              {component.details?.directions ?? "Unavailable"}
             </p>
           )}
           {component.type === "rail" && (
             <p>
-              {component.details.originStation} → {component.details.destinationStation};{" "}
-              {component.details.route}
+              {component.details?.originStation ?? "Unavailable"} →{" "}
+              {component.details?.destinationStation ?? "Unavailable"};{" "}
+              {component.details?.route ?? "Unavailable"}
             </p>
           )}
           {component.type === "transfer" && (
             <p>
-              {component.details.origin} → {component.details.destination};{" "}
-              {component.details.route}
+              {component.details?.origin ?? "Unavailable"} →{" "}
+              {component.details?.destination ?? "Unavailable"};{" "}
+              {component.details?.route ?? "Unavailable"}
             </p>
           )}
           <p>

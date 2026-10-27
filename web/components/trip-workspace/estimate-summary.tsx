@@ -261,12 +261,12 @@ export function EstimateSummary({
               {component.type}: {component.provider} — estimated; {component.serviceStart} to{" "}
               {component.serviceEnd}.{" "}
               {component.type === "flight"
-                ? component.details.legs.join("; ")
+                ? (component.details?.legs.join("; ") ?? "Flight details unverified")
                 : component.type === "accommodation"
-                  ? component.details.occupancy
+                  ? (component.details?.occupancy ?? "Stay details unverified")
                   : component.type === "activity"
-                    ? `${component.details.durationMinutes} minutes; ${component.details.directions}`
-                    : component.details.route}
+                    ? `${component.details?.durationMinutes ?? "Unverified"} minutes; ${component.details?.directions ?? "directions unverified"}`
+                    : (component.details?.route ?? "Route unverified")}
               . Travel times and supplier facts remain unverified.
             </li>
           ))}

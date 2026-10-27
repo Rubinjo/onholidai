@@ -24,6 +24,8 @@ import { readOwnedTripVersion } from "@/domain/trip/read";
 import { tripSnapshotSchema } from "@/domain/trip/schema";
 import { assertTrustedBookingPrerequisites } from "@/server/supply/payment";
 
+import { assertEstablishedPricing } from "./pricing-evidence";
+
 import type { Kysely } from "kysely";
 import type { Database } from "@/server/db/database";
 import type { BookingActor } from "@/server/auth/planning-actor";
@@ -110,6 +112,8 @@ export async function startBooking(
     const workflowId = `booking-${transactionId}`;
     const currentVersion = await readOwnedTripVersion(transaction, actor.planningOwnerId, tripId);
     const currentSnapshot = tripSnapshotSchema.parse(currentVersion.snapshot);
+    // A draft may show a total whose fees are unverified; charging requires established parts.
+    assertEstablishedPricing(currentSnapshot);
     if (authorization.operation === "book_trip") {
       if (!isWholeTripTerms(authorization.terms))
         throw new ProblemError({

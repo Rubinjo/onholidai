@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { format } from "date-fns";
 import { useState } from "react";
 import { afterEach, expect, it } from "vitest";
 
@@ -110,4 +111,40 @@ it("cycles five shades and uses text plus preference labels to identify windows"
   expect(rows[4]).toHaveClass("calendar-window--4");
   for (let index = 1; index <= 6; index++)
     expect(screen.getByLabelText(`Date preference ${index}`)).toBeTruthy();
+});
+
+it("blocks past dates in setup so a plan cannot start before today", () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const future = new Date(today);
+  future.setDate(future.getDate() + 10);
+  const window = {
+    id: "w",
+    startDate: format(future, "yyyy-MM-dd"),
+    endDate: format(future, "yyyy-MM-dd"),
+    timezone: "UTC",
+    preference: "preferred" as const,
+  };
+  render(
+    <Availability
+      windows={[window]}
+      duration={{ minimumDays: 1, idealDays: 1, maximumDays: 2 }}
+      onChange={() => {}}
+      blockPastDates
+    />,
+  );
+  const day = (date: Date) => {
+    const iso = format(date, "yyyy-MM-dd");
+    const shown = document.querySelector<HTMLButtonElement>(`[data-calendar-date="${iso}"]`);
+    if (shown) return shown;
+    fireEvent.click(screen.getByRole("button", { name: "Go to the Previous Month" }));
+    return document.querySelector<HTMLButtonElement>(`[data-calendar-date="${iso}"]`)!;
+  };
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  expect(day(yesterday)).toBeDisabled();
+  fireEvent.click(day(yesterday));
+  expect(screen.queryByText(/^Start:/)).toBeNull();
+  fireEvent.click(day(today));
+  expect(screen.getByText(new RegExp(`^Start: ${format(today, "d MMM yyyy")}`))).toBeTruthy();
 });

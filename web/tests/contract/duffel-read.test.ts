@@ -51,7 +51,13 @@ function offer() {
   };
 }
 function setup(payload: unknown = { data: { offers: [offer()] } }) {
-  const transport = vi.fn(async () => new Response(JSON.stringify(payload)));
+  const offers = (payload as { data?: { offers?: unknown[] } }).data?.offers ?? [];
+  const transport = vi.fn<typeof fetch>(async (url) => {
+    const href = String(url);
+    if (href.includes("/offer_requests?")) return Response.json({ data: { id: "orq_synthetic1" } });
+    if (href.includes("/offers?offer_request_id=")) return Response.json({ data: offers });
+    return Response.json({ data: offers[0] });
+  });
   const client = createDuffelFlightsHttpClient({
     readToken: "synthetic-read-key",
     fetch: transport,
@@ -59,6 +65,14 @@ function setup(payload: unknown = { data: { offers: [offer()] } }) {
     resolveDestination: () => "JFK",
   });
   return { client, transport };
+}
+function paged(offers: unknown[]) {
+  return vi.fn<typeof fetch>(async (url) => {
+    const href = String(url);
+    if (href.includes("/offer_requests?")) return Response.json({ data: { id: "orq_synthetic1" } });
+    if (href.includes("/offers?offer_request_id=")) return Response.json({ data: offers });
+    return Response.json({ data: offers[0] });
+  });
 }
 describe("Duffel Flights synthetic HTTP wire", () => {
   it("uses an explicitly reassigned discovery-only token for EUR offers without creating worker authority", async () => {
@@ -77,11 +91,7 @@ describe("Duffel Flights synthetic HTTP wire", () => {
       tax_currency: "EUR",
       total_currency: "EUR",
     };
-    const transport = vi.fn<typeof fetch>(async (url) =>
-      Response.json({
-        data: String(url).includes("/offer_requests?") ? { offers: [source] } : source,
-      }),
-    );
+    const transport = paged([source]);
     const [provider] = createConfiguredPlanningProviders(
       loadServerConfig(environment),
       environment,
@@ -100,7 +110,8 @@ describe("Duffel Flights synthetic HTTP wire", () => {
     );
     expect(selected.component.price).toMatchObject({
       currency: "EUR",
-      finalCustomerMinor: null,
+      finalCustomerMinor: 12030,
+      // The payable total is Duffel's offer total; the fee breakdown stays unverified.
       feesMinor: null,
     });
     for (const [, init] of transport.mock.calls) {
@@ -110,7 +121,8 @@ describe("Duffel Flights synthetic HTTP wire", () => {
       expect(JSON.stringify(init)).not.toContain(environment.DUFFEL_READ_SECRET);
     }
     expect(transport.mock.calls.map(([url, init]) => `${init?.method} ${url}`)).toEqual([
-      "POST https://api.duffel.com/air/offer_requests?return_offers=true",
+      "POST https://api.duffel.com/air/offer_requests?return_offers=false",
+      "GET https://api.duffel.com/air/offers?offer_request_id=orq_synthetic1&limit=32&sort=total_amount",
       "GET https://api.duffel.com/air/offers/off_synthetic1",
     ]);
     expect(JSON.stringify(selected)).not.toMatch(
@@ -143,7 +155,7 @@ describe("Duffel Flights synthetic HTTP wire", () => {
       await expect(client.detail(source.id, input, signal)).rejects.toMatchObject({
         status: "unsupported",
       });
-      expect(transport).toHaveBeenCalledTimes(1);
+      expect(transport).toHaveBeenCalledTimes(2);
     },
   );
 
@@ -158,7 +170,7 @@ describe("Duffel Flights synthetic HTTP wire", () => {
     await expect(client.search(query(), new AbortController().signal)).rejects.toMatchObject({
       status: "unsupported",
     });
-    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenCalledTimes(2);
   });
 
   it.each(["detail", "revalidate"] as const)(
@@ -180,7 +192,7 @@ describe("Duffel Flights synthetic HTTP wire", () => {
       await expect(client[operation]("off_synthetic1", query(), signal)).rejects.toMatchObject({
         status: "unsupported",
       });
-      expect(transport).toHaveBeenCalledTimes(2);
+      expect(transport).toHaveBeenCalledTimes(3);
     },
   );
 
@@ -196,11 +208,7 @@ describe("Duffel Flights synthetic HTTP wire", () => {
         },
       }),
     };
-    const transport = vi.fn<typeof fetch>(async (url) =>
-      Response.json({
-        data: String(url).includes("/offer_requests?") ? { offers: [offer()] } : offer(),
-      }),
-    );
+    const transport = paged([offer()]);
     const [provider] = createConfiguredPlanningProviders(
       loadServerConfig(environment),
       environment,
@@ -211,7 +219,8 @@ describe("Duffel Flights synthetic HTTP wire", () => {
     await provider.detail!("off_synthetic1", query(), signal);
     await provider.revalidate!("off_synthetic1", query(), signal);
     expect(transport.mock.calls.map(([url, init]) => `${init?.method} ${url}`)).toEqual([
-      "POST https://api.duffel.com/air/offer_requests?return_offers=true",
+      "POST https://api.duffel.com/air/offer_requests?return_offers=false",
+      "GET https://api.duffel.com/air/offers?offer_request_id=orq_synthetic1&limit=32&sort=total_amount",
       "GET https://api.duffel.com/air/offers/off_synthetic1",
       "GET https://api.duffel.com/air/offers/off_synthetic1",
     ]);
@@ -268,7 +277,7 @@ describe("Duffel Flights synthetic HTTP wire", () => {
     await expect(failure).rejects.not.toThrow("private-supplier-permission-canary");
     expect(transport).toHaveBeenCalledTimes(1);
     expect(transport.mock.calls[0][0]).toBe(
-      "https://api.duffel.com/air/offer_requests?return_offers=true",
+      "https://api.duffel.com/air/offer_requests?return_offers=false",
     );
   });
 
@@ -284,11 +293,11 @@ describe("Duffel Flights synthetic HTTP wire", () => {
       expiresAt: "2030-01-01T00:15:00.000Z",
       serviceStart: null,
       serviceEnd: null,
-      terms: null,
+      terms: expect.stringContaining("are not established by this read"),
     });
     expect(JSON.stringify(hits)).not.toContain("synthetic-private-marker");
     const call = transport.mock.calls[0] as unknown as [string, RequestInit];
-    expect(call[0]).toBe("https://api.duffel.com/air/offer_requests?return_offers=true");
+    expect(call[0]).toBe("https://api.duffel.com/air/offer_requests?return_offers=false");
     expect(call[1]).toMatchObject({
       method: "POST",
       redirect: "error",
@@ -428,14 +437,14 @@ describe("Duffel Flights synthetic HTTP wire", () => {
     await expect(
       client.revalidate("off_synthetic1", { ...query(), endDate: "2030-05-09" }, signal),
     ).rejects.toMatchObject({ status: "unsupported" });
-    const call = transport.mock.calls[1] as unknown as [string, RequestInit];
+    const call = transport.mock.calls[2] as unknown as [string, RequestInit];
     expect(call[0]).toBe("https://api.duffel.com/air/offers/off_synthetic1");
     expect(call[1].method).toBe("GET");
     expect(Object.keys(client).sort()).toEqual(["detail", "revalidate", "search"]);
     await expect(client.detail("../orders", query(), signal)).rejects.toMatchObject({
       status: "unsupported",
     });
-    expect(transport).toHaveBeenCalledTimes(2);
+    expect(transport).toHaveBeenCalledTimes(3);
   });
   it.each([
     { total_amount: "120.31" },

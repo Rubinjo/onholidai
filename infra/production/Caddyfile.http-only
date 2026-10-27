@@ -1,0 +1,30 @@
+# Temporary HTTP-only entry point for a bring-up before onholidai.nl resolves to
+# this host. Select it with CADDYFILE=./Caddyfile.http-only in .env.production and
+# switch back to the default Caddyfile once the A/AAAA records are live.
+{
+	auto_https off
+}
+
+http://{$APP_DOMAIN}, http://www.{$APP_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options SAMEORIGIN
+		-Server
+	}
+
+	handle {
+		reverse_proxy web:3000 {
+			health_uri /api/health
+			health_interval 30s
+			health_timeout 5s
+		}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

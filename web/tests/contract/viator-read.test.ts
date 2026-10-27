@@ -53,7 +53,7 @@ describe("Viator synthetic HTTP wire", () => {
       serviceStart: null,
       serviceEnd: null,
       expiresAt: null,
-      terms: null,
+      terms: expect.stringContaining("are not established by this read"),
       details: null,
     });
     expect(JSON.parse(hits[0].planningDetails.fareConditions!)).toMatchObject({
@@ -193,7 +193,7 @@ describe("Viator synthetic HTTP wire", () => {
     expect(JSON.stringify(hit)).not.toMatch(
       /private-|FULL_NAMES_FIRST|WEIGHT|bookingQuestionAnswers/,
     );
-    expect(hit.terms).toBeNull();
+    expect(hit.terms).toContain("are not established by this read");
   });
   it.each([0, 2])(
     "reports %s available options without choosing an arbitrary product option or inventing a complete price",

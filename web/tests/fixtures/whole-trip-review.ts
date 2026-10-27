@@ -216,7 +216,7 @@ export function wholeTripReviewFixture() {
     activity,
   ]);
   for (const field of ["supplierTotal", "finalCustomerTotal"] as const)
-    snapshot.price[field].minorUnits = 40000;
+    snapshot.price[field]!.minorUnits = 40000;
   snapshot.price.checkedAt = checkedAt;
   const requirementIds = [
     ["transport:outbound"],

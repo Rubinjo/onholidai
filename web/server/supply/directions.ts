@@ -35,7 +35,8 @@ export function componentDetails(component: TripSnapshot["components"][number]):
     airportNames: [],
     airlines: [],
     flightDirection: null,
-    durationMinutes: component.type === "activity" ? component.details.durationMinutes : null,
+    durationMinutes:
+      component.type === "activity" ? (component.details?.durationMinutes ?? null) : null,
     layovers: [],
     fareConditions: null,
     accommodationType: null,

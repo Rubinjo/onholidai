@@ -15,6 +15,11 @@ export const placeCandidateSchema = z
       .regex(/^[A-Z]{3}$/)
       .nullable(),
     location: geographyPointSchema.nullable(),
+    // Trusted supplier identities resolved for this place (for example an IATA
+    // code or a Viator destination ID). Absent when the lookup could not prove one.
+    providerPlaceIds: z
+      .record(z.string().trim().min(1).max(80), z.string().trim().min(1).max(256))
+      .optional(),
   })
   .strict()
   .superRefine((place, context) => {

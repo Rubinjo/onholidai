@@ -162,8 +162,8 @@ describe("observable planning controls", () => {
     fireEvent.change(search, { target: { value: "Tokyo" } });
     fireEvent.keyDown(search, { key: "Enter" });
     fireEvent.click(await screen.findByRole("option", { name: /Tokyo/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Remove Tokyo" })).toBeTruthy());
     expect(screen.queryByRole("button", { name: "Remove Japan" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Remove Tokyo" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Let AI arrange" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset destinations" }));
     expect(screen.getByRole("button", { name: "Let AI arrange" })).toHaveAttribute(
@@ -215,12 +215,14 @@ describe("observable planning controls", () => {
     const finish: ((value: unknown) => void)[] = [];
     api.read
       .mockResolvedValueOnce({ candidates: [tokyo] })
+      .mockResolvedValueOnce({ destinationId: null })
       .mockImplementation(() => new Promise((resolve) => finish.push(resolve)));
     render(<Route />);
     const search = screen.getByRole("combobox", { name: "Destination search" });
     fireEvent.change(search, { target: { value: "Tokyo" } });
     fireEvent.keyDown(search, { key: "Enter" });
     fireEvent.click(await screen.findByRole("option", { name: /Tokyo/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Remove Tokyo" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Japan on globe" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove Tokyo" }));
     await act(async () => {

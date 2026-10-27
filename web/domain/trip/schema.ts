@@ -313,10 +313,13 @@ export const travelSegmentSchema = z
   });
 
 export const componentPriceFields = {
-  supplierAmount: moneySchema,
-  platformMargin: moneySchema,
-  customerPayableTaxes: moneySchema,
-  customerPayableFees: moneySchema,
+  // A live supplier often publishes only a payable total. Each internal part is
+  // null when the source did not establish it, so the draft never claims a figure
+  // the supplier never confirmed. finalCustomerAmount is always required.
+  supplierAmount: moneySchema.nullable(),
+  platformMargin: moneySchema.nullable(),
+  customerPayableTaxes: moneySchema.nullable(),
+  customerPayableFees: moneySchema.nullable(),
   finalCustomerAmount: moneySchema,
   status: z.enum(["estimated", "quoted", "live", "expired", "confirmed"]),
   source: nonBlank(120),
@@ -324,38 +327,39 @@ export const componentPriceFields = {
   expiresAt: utcDateTimeSchema.nullable(),
 };
 
+const priceParts = (price: {
+  supplierAmount: { currency: string; minorUnits: number } | null;
+  platformMargin: { currency: string; minorUnits: number } | null;
+  customerPayableTaxes: { currency: string; minorUnits: number } | null;
+  customerPayableFees: { currency: string; minorUnits: number } | null;
+}) => [price.supplierAmount, price.platformMargin, price.customerPayableTaxes, price.customerPayableFees];
+
 export const componentPriceSchema = z
   .object(componentPriceFields)
   .strict()
   .superRefine((price, context) => {
-    const amounts = [
-      price.supplierAmount,
-      price.platformMargin,
-      price.customerPayableTaxes,
-      price.customerPayableFees,
-      price.finalCustomerAmount,
-    ];
-    if (!amounts.every((amount) => amount.currency === price.finalCustomerAmount.currency)) {
+    const parts = priceParts(price);
+    const present = parts.filter((part) => part !== null);
+    if (present.some((part) => part.currency !== price.finalCustomerAmount.currency)) {
       addIssue(
         context,
         ["finalCustomerAmount", "currency"],
         "Component price currencies must match",
       );
     }
-    const expectedFinal =
-      price.supplierAmount.minorUnits +
-      price.platformMargin.minorUnits +
-      price.customerPayableTaxes.minorUnits +
-      price.customerPayableFees.minorUnits;
+    if (price.expiresAt !== null && epoch(price.expiresAt) <= epoch(price.checkedAt)) {
+      addIssue(context, ["expiresAt"], "Price expiry must follow its checked timestamp");
+    }
+    // When every part is established the total must reconcile exactly. An unknown part
+    // leaves the payable total authoritative and the breakdown explicitly unverified.
+    if (present.length !== parts.length) return;
+    const expectedFinal = present.reduce((total, part) => total + part.minorUnits, 0);
     if (price.finalCustomerAmount.minorUnits !== expectedFinal) {
       addIssue(
         context,
         ["finalCustomerAmount", "minorUnits"],
         "Final customer amount must equal all price parts",
       );
-    }
-    if (price.expiresAt !== null && epoch(price.expiresAt) <= epoch(price.checkedAt)) {
-      addIssue(context, ["expiresAt"], "Price expiry must follow its checked timestamp");
     }
   });
 
@@ -408,30 +412,30 @@ const transferDetailsSchema = z
 export const travelComponentSchema = z
   .discriminatedUnion("type", [
     z
-      .object({ ...componentBaseFields, type: z.literal("flight"), details: flightDetailsSchema })
+      .object({ ...componentBaseFields, type: z.literal("flight"), details: flightDetailsSchema.nullable() })
       .strict(),
     z
       .object({
         ...componentBaseFields,
         type: z.literal("accommodation"),
-        details: accommodationDetailsSchema,
+        details: accommodationDetailsSchema.nullable(),
       })
       .strict(),
     z
       .object({
         ...componentBaseFields,
         type: z.literal("activity"),
-        details: activityDetailsSchema,
+        details: activityDetailsSchema.nullable(),
       })
       .strict(),
     z
-      .object({ ...componentBaseFields, type: z.literal("rail"), details: railDetailsSchema })
+      .object({ ...componentBaseFields, type: z.literal("rail"), details: railDetailsSchema.nullable() })
       .strict(),
     z
       .object({
         ...componentBaseFields,
         type: z.literal("transfer"),
-        details: transferDetailsSchema,
+        details: transferDetailsSchema.nullable(),
       })
       .strict(),
   ])
@@ -520,10 +524,11 @@ export const conversionDisclosureSchema = z
 export const tripPriceSchema = z
   .object({
     currency: currencySchema,
-    supplierTotal: moneySchema,
-    platformMarginTotal: moneySchema,
-    customerPayableTaxesTotal: moneySchema,
-    customerPayableFeesTotal: moneySchema,
+    // Rolled-up parts are null when any component did not establish that part.
+    supplierTotal: moneySchema.nullable(),
+    platformMarginTotal: moneySchema.nullable(),
+    customerPayableTaxesTotal: moneySchema.nullable(),
+    customerPayableFeesTotal: moneySchema.nullable(),
     finalCustomerTotal: moneySchema,
     status: z.enum(["estimated", "quoted", "live", "expired", "confirmed"]),
     checkedAt: utcDateTimeSchema,
@@ -531,22 +536,24 @@ export const tripPriceSchema = z
   })
   .strict()
   .superRefine((price, context) => {
-    const totals = [
+    const parts = [
       price.supplierTotal,
       price.platformMarginTotal,
       price.customerPayableTaxesTotal,
       price.customerPayableFeesTotal,
-      price.finalCustomerTotal,
     ];
-    if (!totals.every((total) => total.currency === price.currency)) {
+    const present = parts.filter((total) => total !== null);
+    if (
+      present.some((total) => total.currency !== price.currency) ||
+      price.finalCustomerTotal.currency !== price.currency
+    ) {
       addIssue(context, ["currency"], "Every trip price total must use the presentation currency");
-    }
-    const expectedFinal =
-      price.supplierTotal.minorUnits +
-      price.platformMarginTotal.minorUnits +
-      price.customerPayableTaxesTotal.minorUnits +
-      price.customerPayableFeesTotal.minorUnits;
-    if (price.finalCustomerTotal.minorUnits !== expectedFinal) {
+  }
+    if (present.length !== parts.length) return;
+    if (
+      price.finalCustomerTotal.minorUnits !==
+      present.reduce((total, part) => total + part.minorUnits, 0)
+    ) {
       addIssue(
         context,
         ["finalCustomerTotal", "minorUnits"],
@@ -559,8 +566,9 @@ export const publicTripPriceSchema = z
   .object({
     currency: currencySchema,
     finalCustomerMinor: nonNegativeInteger,
-    taxesMinor: nonNegativeInteger.optional(),
-    feesMinor: nonNegativeInteger.optional(),
+    // null means the supplier did not establish that part; the payable total still stands.
+    taxesMinor: nonNegativeInteger.nullable().optional(),
+    feesMinor: nonNegativeInteger.nullable().optional(),
     status: z.enum(["estimated", "quoted", "live", "expired", "confirmed"]),
     checkedAt: utcDateTimeSchema,
     expiresAt: utcDateTimeSchema.nullable().optional(),
@@ -735,26 +743,41 @@ function validateSnapshot(snapshot: SnapshotForValidation, context: z.Refinement
     }
   }
 
-  const componentSums = snapshot.components.reduce(
-    (totals, component) => ({
-      supplier: totals.supplier + component.price.supplierAmount.minorUnits,
-      margin: totals.margin + component.price.platformMargin.minorUnits,
-      taxes: totals.taxes + component.price.customerPayableTaxes.minorUnits,
-      fees: totals.fees + component.price.customerPayableFees.minorUnits,
-      final: totals.final + component.price.finalCustomerAmount.minorUnits,
-    }),
-    { supplier: 0, margin: 0, taxes: 0, fees: 0, final: 0 },
-  );
-  const declaredTotals = snapshot.price;
-  if (
-    componentSums.supplier !== declaredTotals.supplierTotal.minorUnits ||
-    componentSums.margin !== declaredTotals.platformMarginTotal.minorUnits ||
-    componentSums.taxes !== declaredTotals.customerPayableTaxesTotal.minorUnits ||
-    componentSums.fees !== declaredTotals.customerPayableFeesTotal.minorUnits ||
-    componentSums.final !== declaredTotals.finalCustomerTotal.minorUnits
-  ) {
-    addIssue(context, ["price"], "Trip price totals must equal component price totals");
+  // Rolled-up parts mirror their components: a bucket is known only when every component
+  // established it, so an unknown part stays null instead of being reported as zero.
+  const parts = ["supplierAmount", "platformMargin", "customerPayableTaxes", "customerPayableFees"] as const;
+  const declared: Record<(typeof parts)[number], number | null> = {
+    supplierAmount: snapshot.price.supplierTotal?.minorUnits ?? null,
+    platformMargin: snapshot.price.platformMarginTotal?.minorUnits ?? null,
+    customerPayableTaxes: snapshot.price.customerPayableTaxesTotal?.minorUnits ?? null,
+    customerPayableFees: snapshot.price.customerPayableFeesTotal?.minorUnits ?? null,
+  };
+  const declaredFields = {
+    supplierAmount: "supplierTotal",
+    platformMargin: "platformMarginTotal",
+    customerPayableTaxes: "customerPayableTaxesTotal",
+    customerPayableFees: "customerPayableFeesTotal",
+  } as const;
+  for (const part of parts) {
+    const known = snapshot.components.every((component) => component.price[part] !== null);
+    const sum = snapshot.components.reduce(
+      (total, component) => total + (component.price[part]?.minorUnits ?? 0),
+      0,
+    );
+    if (declared[part] !== (known ? sum : null)) {
+      addIssue(
+        context,
+        ["price", declaredFields[part]],
+        "Trip price totals must equal component price totals",
+      );
+    }
   }
+  const finalSum = snapshot.components.reduce(
+    (total, component) => total + component.price.finalCustomerAmount.minorUnits,
+    0,
+  );
+  if (finalSum !== snapshot.price.finalCustomerTotal.minorUnits)
+    addIssue(context, ["price"], "Trip price totals must equal component price totals");
 }
 
 export const tripSnapshotSchema = z.object(snapshotFields).strict().superRefine(validateSnapshot);

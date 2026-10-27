@@ -14,6 +14,10 @@ Deterministic provider doubles are the default. Live mode requires credentials a
 
 Map/research credentials and agent-model credentials are configured separately. Missing or unavailable sources must remain visible as unverified; the application does not infer favorable terms. Read [the operations guide](docs/operations.md) for migrations, recovery, retention policy, and pricing controls.
 
+## Production deployment
+
+The hosted instance runs on a Leaseweb VPS with Caddy terminating TLS for `onholidai.nl`. Releases are built in GitHub Actions, published to GHCR by digest, and deployed with `infra/production/scripts/deploy-vps.sh`; host preparation, required secrets, backups, and rollback are documented in [the production runbook](infra/production/README.md).
+
 ## Guest planning
 
 On `/trips/new`, the information icons beside route ordering and travel styles explain how each choice guides AI recommendations. Hover over an icon or focus it with the keyboard to read its tooltip; Escape dismisses it. **My order** preserves your stop sequence, while **Let AI arrange** lets AI compare route orders, travel time and available pricing for your review, without guaranteeing savings. Each availability window has a **Delete** button; removing a window adjusts the trip duration to fit the remaining dates.

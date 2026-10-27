@@ -178,8 +178,8 @@ export async function seedAuthorizedBooking(
       serviceEnd: component.serviceEnd,
       travellerIds: component.travellerIds,
       finalCustomerMinor: component.price.finalCustomerAmount.minorUnits,
-      taxesMinor: component.price.customerPayableTaxes.minorUnits,
-      feesMinor: component.price.customerPayableFees.minorUnits,
+      taxesMinor: component.price.customerPayableTaxes!.minorUnits,
+      feesMinor: component.price.customerPayableFees!.minorUnits,
       currency: component.price.finalCustomerAmount.currency,
       cancellationTerms: component.cancellationTerms,
       expiresAt,
@@ -287,10 +287,10 @@ export async function seedReviewedWholeTrip(
     component.price.expiresAt = expiresAt;
     if (component.planningDetails) component.planningDetails.checkedAt = checkedAt;
   }
-  fixture.snapshot.components[0].price.supplierAmount.minorUnits -= acceptedEstimateReductionMinor;
+  fixture.snapshot.components[0].price.supplierAmount!.minorUnits -= acceptedEstimateReductionMinor;
   fixture.snapshot.components[0].price.finalCustomerAmount.minorUnits -=
     acceptedEstimateReductionMinor;
-  fixture.snapshot.price.supplierTotal.minorUnits -= acceptedEstimateReductionMinor;
+  fixture.snapshot.price.supplierTotal!.minorUnits -= acceptedEstimateReductionMinor;
   fixture.snapshot.price.finalCustomerTotal.minorUnits -= acceptedEstimateReductionMinor;
   const terms = bookingTermsV2Schema.parse(wholeTripTermsFixture(fixture, now));
   const snapshot = structuredClone(fixture.snapshot);

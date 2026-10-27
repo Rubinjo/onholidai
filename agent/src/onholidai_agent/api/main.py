@@ -33,7 +33,9 @@ def create_app(
             application.state.settings = settings
             application.state.resources = resources
             client = await resources.enter_async_context(
-                httpx.AsyncClient(base_url=settings.web_base_url, timeout=8)
+                # Matches web's research request bound; each supplier read keeps its own
+                # shorter deadline inside that request.
+                httpx.AsyncClient(base_url=settings.web_base_url, timeout=12)
             )
             store = (
                 store_factory(client, settings)

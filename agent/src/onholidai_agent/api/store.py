@@ -152,6 +152,12 @@ class WebRunStore:
                 if attempt == 2:
                     raise
                 await asyncio.sleep(0.05 * (attempt + 1))
+            except httpx.HTTPStatusError as error:
+                # Problem details carry only a public title, status, code and correlation id.
+                detail = error.response.text[:300]
+                raise ValueError(
+                    f"persistence rejected ({error.response.status_code}): {detail}"
+                ) from error
         raise RuntimeError("unreachable")
 
     async def event(

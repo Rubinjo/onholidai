@@ -12,6 +12,7 @@ import { createPlanningSession, revokePlanningSession } from "../../server/auth/
 import { SetupDraftRepository } from "../../server/db/setup-draft-repository";
 import { resolvePlanningActor } from "../../server/auth/planning-actor";
 import { RunRepository } from "../../server/agent-client/run-repository";
+import { CLARIFICATION_IDLE_MS } from "../../server/agent-client/run-lifecycle";
 import { validSetupPayload } from "../helpers/guest-setup";
 import { reviewSetupDraftRetention } from "../../server/privacy/retention";
 import { previewEdit, applyEdit } from "../../domain/trip/edit";
@@ -205,6 +206,67 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("guest recovery and revocat
     const fresh = await runs.reserve({ ...commands[0], requestId: randomUUID() });
     expect(fresh.id).not.toBe(accepted[0].id);
     expect(await fixture.database.selectFrom("trips").selectAll().execute()).toHaveLength(2);
+  });
+  it("releases concurrency from abandoned clarifications and expires them", async () => {
+    const { session } = await createPlanningSession(fixture.database);
+    const drafts = new SetupDraftRepository(fixture.database, {
+      accountUserId: null,
+      guestSessionId: session.id,
+    });
+    const trips = [];
+    for (let index = 0; index < 2; index++) {
+      const { draft } = await drafts.allocate(randomUUID());
+      const saved = await drafts.save(draft.draftId, {
+        requestId: randomUUID(),
+        expectedRevision: 1,
+        currentStep: "review",
+        payload: validSetupPayload(),
+      });
+      trips.push(await drafts.submit(draft.draftId, { expectedRevision: saved.revision }));
+    }
+    const owners = await fixture.database
+      .selectFrom("trips")
+      .select(["id", "ownerUserId"])
+      .execute();
+    let now = new Date("2026-10-25T12:00:00Z");
+    const runs = new RunRepository(fixture.database, () => now),
+      commands = trips.map((trip) => ({
+        userId: owners.find((entry) => entry.id === trip.tripId)!.ownerUserId,
+        tripId: trip.tripId,
+        requestId: trip.researchRequestId,
+        baseTripVersion: 1,
+        purpose: "initial_estimate",
+        message: "Synthetic estimate",
+      }));
+    const accepted = await Promise.all(commands.map((command) => runs.reserve(command)));
+    await fixture.database
+      .updateTable("agentRuns")
+      .set({
+        status: "awaiting_clarification",
+        leaseExpiresAt: null,
+        completedAt: null,
+        phaseStartedAt: now,
+      })
+      .where(
+        "id",
+        "in",
+        accepted.map((run) => run.id),
+      )
+      .execute();
+    await expect(runs.reserve({ ...commands[0], requestId: randomUUID() })).rejects.toMatchObject({
+      status: 429,
+    });
+    now = new Date(now.getTime() + CLARIFICATION_IDLE_MS + 1000);
+    const fresh = await runs.reserve({ ...commands[0], requestId: randomUUID() });
+    expect(fresh.id).not.toBe(accepted[0].id);
+    await expect(
+      runs.resume(commands[0].userId, accepted[0].id, {
+        questionId: randomUUID(),
+        requestId: randomUUID(),
+        answer: "Yes",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect((await runs.read(commands[0].userId, accepted[0].id)).status).toBe("failed");
   });
   it("reviews old incomplete drafts without automatic deletion", async () => {
     const { session } = await createPlanningSession(fixture.database),

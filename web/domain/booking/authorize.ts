@@ -16,6 +16,7 @@ import { ProblemError } from "@/server/errors";
 import { BookingRepository } from "@/server/db/booking-repository";
 import { readOwnedTripVersion } from "@/domain/trip/read";
 import { tripSnapshotSchema } from "@/domain/trip/schema";
+import { assertEstablishedPricing } from "@/domain/booking/pricing-evidence";
 import { inTransaction } from "@/server/db/transaction";
 import { IdempotencyRepository } from "@/server/db/idempotency-repository";
 import { assertTrustedBookingPrerequisites } from "@/server/supply/payment";
@@ -132,6 +133,8 @@ export async function authorizeBooking(
     }
     const version = await readOwnedTripVersion(transaction, actor.planningOwnerId, tripId);
     const snapshot = tripSnapshotSchema.parse(version.snapshot);
+    // Draft estimates may carry unverified fee lines; booking terms require established parts.
+    assertEstablishedPricing(snapshot);
     if (
       snapshot.constraints.some(
         (constraint) =>

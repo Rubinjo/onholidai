@@ -204,12 +204,22 @@ export type PlanningOffer = z.infer<typeof planningOfferSchema>;
 export type CompletePlanningOffer = Omit<PlanningOffer, "component"> & {
   component: z.infer<typeof travelComponentSchema>;
 };
+/**
+ * Converts a sourced discovery offer into a draft component. A part the supplier never
+ * published stays null so the draft never states a figure the source did not confirm;
+ * the payable total and every captured fact carry through unchanged.
+ */
 export function materializePlanningOffer(raw: unknown): CompletePlanningOffer {
   const offer = normalizePlanningOffer(raw);
   const { currency: _currency, ...price } = offer.component.price;
   void _currency;
   return { ...offer, component: travelComponentSchema.parse({ ...offer.component, price }) };
 }
+/**
+ * True when the offer can enter a draft: sourced total, dates, availability and captured
+ * evidence are present. An unknown price breakdown does not disqualify it; booking still
+ * requires established parts.
+ */
 export function isCompletePlanningOffer(offer: PlanningOffer): offer is CompletePlanningOffer {
   const { currency: _currency, ...price } = offer.component.price;
   void _currency;

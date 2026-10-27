@@ -1,0 +1,219 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy the built digests to the production VPS
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Never interrupt an in-progress production deployment.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  APP_DOMAIN: onholidai.nl
+  PNPM_VERSION: 12.11.2
+  UV_VERSION: 0.9.18
+
+jobs:
+  web-checks:
+    name: Web release checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare "pnpm@${PNPM_VERSION}" --activate
+      - name: Install locked Node.js dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint web
+        run: pnpm --filter @onholidai/web lint
+      - name: Type-check web
+        run: pnpm --filter @onholidai/web typecheck
+      - name: Build web
+        env:
+          DATABASE_URL: postgresql://build@localhost:5432/build
+          BETTER_AUTH_URL: http://localhost:3000
+          BETTER_AUTH_SECRET: build-only-auth-secret-0000000000000000
+          SERVICE_TOKEN_SECRET: build-only-service-secret-000000000000
+          PRICING_DIAGNOSTIC_SECRET: build-only-pricing-secret-000000000000
+        run: pnpm --filter @onholidai/web build
+
+  agent-checks:
+    name: Agent release checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: agent/.python-version
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Install locked Python dependencies
+        run: uv sync --project agent --frozen
+      - name: Lint agent
+        run: uv run --project agent ruff check agent
+      - name: Test agent
+        run: uv run --project agent pytest agent/tests
+
+  images:
+    name: Build and publish images
+    needs: [web-checks, agent-checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      web: ${{ steps.web.outputs.digest }}
+      agent: ${{ steps.agent.outputs.digest }}
+      prefix: ${{ steps.names.outputs.prefix }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Image names
+        id: names
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "prefix=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.10.0
+      - name: Log in to the container registry
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push the web image
+        id: web
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.6.1
+        with:
+          context: .
+          file: web/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.names.outputs.prefix }}-web:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - name: Build and push the agent image
+        id: agent
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.6.1
+        with:
+          context: .
+          file: agent/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.names.outputs.prefix }}-agent:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=agent
+          cache-to: type=gha,mode=max,scope=agent
+
+  deploy:
+    name: Deploy to production
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy
+    needs: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment:
+      name: production
+      url: https://onholidai.nl
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    env:
+      RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      IMAGE_PREFIX: ${{ needs.images.outputs.prefix }}
+      WEB_DIGEST: ${{ needs.images.outputs.web }}
+      AGENT_DIGEST: ${{ needs.images.outputs.agent }}
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare the release bundle
+        run: |
+          set -euo pipefail
+          bundle=bundle
+          mkdir -p "$bundle/infra/production" "$bundle/infra/postgres" "$bundle/infra/temporal"
+          cp infra/production/compose.yml infra/production/compose.build.yml \
+             infra/production/Caddyfile infra/production/Caddyfile.http-only \
+             infra/production/README.md "$bundle/infra/production/"
+          cp -r infra/production/scripts infra/production/systemd "$bundle/infra/production/"
+          cp -r infra/postgres/init "$bundle/infra/postgres/"
+          cp infra/temporal/development.yaml "$bundle/infra/temporal/"
+          printf 'WEB_IMAGE=%s-web@%s\nAGENT_IMAGE=%s-agent@%s\nAPP_DOMAIN=%s\n' \
+            "$IMAGE_PREFIX" "$WEB_DIGEST" "$IMAGE_PREFIX" "$AGENT_DIGEST" "$APP_DOMAIN" \
+            > "$bundle/.release.env"
+          tar -czf release.tgz -C "$bundle" .
+      - name: Configure verified SSH access
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ "$VPS_HOST" =~ ^[a-zA-Z0-9.-]+$ && "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ && "$VPS_PORT" =~ ^[0-9]+$ ]]
+          test -n "$SSH_KEY" && test -n "$KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host production
+            HostName $VPS_HOST
+            User $VPS_USER
+            Port $VPS_PORT
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            BatchMode yes
+            ConnectTimeout 15
+            ServerAliveInterval 30
+            ServerAliveCountMax 6
+          EOF
+      - name: Upload and deploy the immutable release
+        env:
+          PRODUCTION_ENV: ${{ secrets.PRODUCTION_ENV }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PRODUCTION_ENV//[[:space:]]/}" ]]; then
+            echo 'Set PRODUCTION_ENV in the production GitHub environment.' >&2
+            exit 1
+          fi
+          ssh production "mkdir -p /srv/onholidai/releases/$RELEASE_ID && tar -xzf - -C /srv/onholidai/releases/$RELEASE_ID" < release.tgz
+          printf '%s\n' "$PRODUCTION_ENV" | ssh production \
+            "bash /srv/onholidai/releases/$RELEASE_ID/infra/production/scripts/deploy-vps.sh --env-stdin"
+      - name: Verify public HTTPS from outside the VPS
+        run: curl --fail --silent --show-error --retry 3 --max-time 30 "https://$APP_DOMAIN/" > /dev/null
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts ~/.ssh/config

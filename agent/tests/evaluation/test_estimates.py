@@ -70,10 +70,10 @@ def decision_case():
 
 def test_material_planning_facts_cannot_be_ignored_when_claiming_equivalence():
     case = decision_case()
-    for offer, location in zip(
-        case["offers"], ("Near the station", "Outside the city"), strict=True
+    for offer, terms in zip(
+        case["offers"], ("Refundable until 24 hours before", "Non-refundable"), strict=True
     ):
-        offer["component"]["planningDetails"] = {"locationName": location}
+        offer["component"]["cancellationTerms"] = terms
     with pytest.raises(MaterialChoice, match="terms"):
         select_quotes(case["offers"], 95, snapshot=case["input"]["snapshot"], query=case["query"])
 

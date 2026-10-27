@@ -1,9 +1,13 @@
 from copy import deepcopy
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 
+from onholidai_agent.api.store import RunStore
 from onholidai_agent.graph.estimate import estimate
+from onholidai_agent.integrations.nebius import NebiusClient
+from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import CreateAgentRunRequest
 from tests.fixtures.planning import complete_component_facts
 
@@ -299,3 +303,130 @@ def test_unavailable_baseline_does_not_hide_a_supported_departure_alternative():
     assert result.kind == "proposal"
     assert "unavailable or not comparable" in result.proposal.rationale
     assert "Compared 1 departure alternatives" in result.proposal.rationale
+
+
+def test_unavailable_advisory_model_still_returns_the_deterministic_estimate():
+    import asyncio
+
+    class QuotedSources(Sources):
+        async def search(
+            self, request: CreateAgentRunRequest, query: dict[str, object]
+        ) -> dict[str, object]:
+            return {
+                "offers": [
+                    {
+                        "component": {
+                            **complete_component_facts(kind, query),
+                            "id": f"a0000000-a000-4000-8000-a{index:011}",
+                            "type": kind,
+                            "bookingStatus": "unbooked",
+                            "price": {
+                                "currency": "EUR",
+                                "finalCustomerMinor": 10000,
+                                "taxesMinor": 0,
+                                "feesMinor": 0,
+                            },
+                        }
+                    }
+                    for index, kind in enumerate(["flight", "accommodation"], 1)
+                ]
+            }
+
+    class UnavailableModel:
+        async def complete(self, messages: list[dict[str, str]]) -> str:
+            raise TimeoutError()
+
+    sources = EstimateSources(
+        cast(RunStore, QuotedSources()), cast(NebiusClient, UnavailableModel())
+    )
+    result = asyncio.run(estimate(request(), sources)).root
+    assert result.kind == "proposal"
+    assert "Advisory model summary" not in result.proposal.rationale
+
+
+def test_started_window_plans_the_remaining_days_instead_of_past_dates():
+    import asyncio
+    from typing import cast
+
+    class QuotedSources(Sources):
+        async def search(
+            self, request: CreateAgentRunRequest, query: dict[str, object]
+        ) -> dict[str, object]:
+            assert str(query["startDate"]) >= "2030-05-15"
+            return {
+                "offers": [
+                    {
+                        "component": {
+                            **complete_component_facts(kind, query),
+                            "id": f"a0000000-a000-4000-8000-a{index:011}",
+                            "type": kind,
+                            "bookingStatus": "unbooked",
+                            "price": {
+                                "currency": "EUR",
+                                "finalCustomerMinor": 10000,
+                                "taxesMinor": 0,
+                                "feesMinor": 0,
+                            },
+                        }
+                    }
+                    for index, kind in enumerate(["flight", "accommodation"], 1)
+                ]
+            }
+
+    result = asyncio.run(
+        estimate(request(), QuotedSources(), now=datetime(2030, 5, 15, tzinfo=UTC))
+    ).root
+    assert result.kind == "proposal"
+    routed = cast(
+        list[dict[str, object]],
+        next(
+            operation.value
+            for operation in result.proposal.operations
+            if operation.target == "/destinations"
+        ),
+    )
+    assert routed[0]["arrivalDate"] == "2030-05-15"
+    assert routed[-1]["departureDate"] == "2030-05-20"
+    assert "remaining availability window days" in result.proposal.rationale
+    assert any("6 remaining days" in warning for warning in result.proposal.warnings)
+
+
+def test_passed_window_asks_for_future_dates_before_searching():
+    import asyncio
+
+    sources = Sources()
+    result = asyncio.run(estimate(request(), sources, now=datetime(2030, 7, 1, tzinfo=UTC))).root
+    assert result.kind == "clarification"
+    assert "in the past" in result.clarification.question
+    assert sources.searches == 0
+
+
+def test_incomplete_live_pricing_reports_research_instead_of_failing():
+    import asyncio
+
+    class IncompleteSources(Sources):
+        async def search(
+            self, request: CreateAgentRunRequest, query: dict[str, object]
+        ) -> dict[str, object]:
+            return {
+                "offers": [
+                    {
+                        "component": {
+                            **complete_component_facts("flight", query),
+                            "id": "b0000000-b000-4000-8000-b000000000001",
+                            "type": "flight",
+                            "bookingStatus": "unbooked",
+                            "price": {
+                                "currency": "EUR",
+                                "finalCustomerMinor": None,
+                                "taxesMinor": 20716,
+                                "feesMinor": None,
+                            },
+                        }
+                    }
+                ]
+            }
+
+    result = asyncio.run(estimate(request(), IncompleteSources())).root
+    assert result.kind == "answer"
+    assert "none established a complete customer price" in result.message

@@ -9,6 +9,32 @@ import { Button } from "@/components/ui/button";
 import { planningError, planningJson } from "./http";
 
 const resultsSchema = z.object({ candidates: z.array(placeCandidateSchema) }).passthrough();
+const supplierIdentitySchema = z.object({
+  destinationId: z
+    .string()
+    .regex(/^\d{1,10}$/)
+    .nullable(),
+});
+
+// Supplier identities are resolved once, when the traveller picks the place, so a
+// failed lookup only leaves activity coverage unverified instead of blocking setup.
+async function withSupplierIdentity(place: PlaceCandidate): Promise<PlaceCandidate> {
+  try {
+    const { destinationId } = supplierIdentitySchema.parse(
+      await planningJson(
+        `/api/v1/places/viator-destination?name=${encodeURIComponent(place.name)}`,
+      ),
+    );
+    return destinationId
+      ? {
+          ...place,
+          providerPlaceIds: { ...place.providerPlaceIds, "viator:destination": destinationId },
+        }
+      : place;
+  } catch {
+    return place;
+  }
+}
 export function PlaceSearch({
   departure = false,
   onSelect,
@@ -26,6 +52,7 @@ export function PlaceSearch({
     [results, setResults] = useState<PlaceCandidate[]>([]),
     [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
+    [resolving, setResolving] = useState(false),
     [error, setError] = useState("");
   useEffect(
     () => () => {
@@ -130,7 +157,9 @@ export function PlaceSearch({
       </div>
       {open && (
         <div className="place-search__dropdown">
-          <p role="status">{busy ? "Searching…" : error}</p>
+          <p role="status">
+            {resolving ? "Resolving destination…" : busy ? "Searching…" : error}
+          </p>
           <ul
             ref={list}
             id={`${id}-results`}
@@ -155,10 +184,21 @@ export function PlaceSearch({
                     )
                   }
                   onClick={() => {
-                    onSelect(place);
-                    close();
-                    setQuery("");
-                    input.current?.focus();
+                    const apply = (selected: PlaceCandidate) => {
+                      onSelect(selected);
+                      close();
+                      setQuery("");
+                      input.current?.focus();
+                    };
+                    if (
+                      place.kind === "airport" ||
+                      place.providerPlaceIds?.["viator:destination"]
+                    )
+                      return apply(place);
+                    setResolving(true);
+                    void withSupplierIdentity(place)
+                      .then(apply)
+                      .finally(() => setResolving(false));
                   }}
                 >
                   <strong>{place.name}</strong>

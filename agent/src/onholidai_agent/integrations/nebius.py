@@ -5,6 +5,8 @@ import httpx
 
 from .http import bounded_post
 
+MAXIMUM_ADVICE_CHARACTERS = 8000
+
 
 class CompletionTransport(Protocol):
     async def complete(
@@ -29,7 +31,9 @@ class NebiusClient:
             result = await self.transport.complete(
                 model=self.model, messages=messages, maximum_output_tokens=1200
             )
-        if not result.strip() or len(result) > 4000:
+        # Reasoning models may emit their whole token budget as thinking text, so the
+        # character count can exceed the token count; only unbounded output is rejected.
+        if not result.strip() or len(result) > MAXIMUM_ADVICE_CHARACTERS:
             raise ValueError("invalid_model_result")
         return result
 

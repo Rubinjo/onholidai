@@ -301,6 +301,7 @@ export function SetupForm() {
                 <Availability
                   windows={p.availabilityWindows}
                   timezone={p.departureOrigin?.timezone}
+                  blockPastDates
                   duration={{
                     minimumDays: p.duration.minimumDays ?? 0,
                     idealDays: p.duration.idealDays ?? 0,

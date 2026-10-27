@@ -1,0 +1,242 @@
+# Production stack for the Leaseweb VPS.
+#
+# Deploy through infra/production/scripts/deploy-vps.sh, which supplies the
+# release manifest (WEB_IMAGE/AGENT_IMAGE digests), the production environment
+# file and, on a first deployment without a registry, compose.build.yml.
+#
+# Only Caddy publishes ports. Every other service is reachable on the internal
+# `app` network, and provider egress is restricted to the services that need it.
+name: onholidai-production
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.6
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set the database admin password}
+      # Consumed by ../postgres/init/10-create-local-databases.sh, which runs as
+      # the non-root postgres user and therefore cannot read root-only files.
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set the web database password}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?Set the migration database password}
+      TEMPORAL_DB_PASSWORD: ${TEMPORAL_DB_PASSWORD:?Set the Temporal database password}
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:?Set the worker database password}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    shm_size: 256mb
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [app]
+
+  temporal:
+    image: temporalio/auto-setup:1.27.2
+    restart: unless-stopped
+    # The image entrypoint runs auto-setup.sh only for the literal "autosetup"
+    # argument; otherwise the server starts against an empty schema.
+    command: [autosetup]
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:?Set the Temporal database password}
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
+    volumes:
+      - ../temporal/development.yaml:/etc/temporal/config/dynamicconfig/development.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, temporal, operator, cluster, health, --address, temporal:7233]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    networks: [app]
+
+  web:
+    image: ${WEB_IMAGE:-onholidai-web:local}
+    restart: unless-stopped
+    init: true
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export BETTER_AUTH_SECRET="$$(cat /run/secrets/web_auth_secret)"
+        export SERVICE_TOKEN_SECRET="$$(cat /run/secrets/service_token_secret)"
+        export PRICING_DIAGNOSTIC_SECRET="$$(cat /run/secrets/pricing_diagnostic_secret)"
+        export DATABASE_URL="postgresql://onholidai_web:$$APP_DB_PASSWORD@postgres:5432/onholidai"
+        exec pnpm --filter @onholidai/web start
+    environment:
+      NODE_ENV: production
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set the web database password}
+      PROVIDER_MODE: ${PROVIDER_MODE:-live}
+      BOOKING_DEMO_ENABLED: ${BOOKING_DEMO_ENABLED:-false}
+      GUEST_MAX_ACTIVE_RUNS: ${GUEST_MAX_ACTIVE_RUNS:-2}
+      GUEST_MAX_RUNS_PER_HOUR: ${GUEST_MAX_RUNS_PER_HOUR:-10}
+      GUEST_MAX_SESSIONS_PER_HOUR: ${GUEST_MAX_SESSIONS_PER_HOUR:-20}
+      GUEST_TRUST_PROXY_IP: "true"
+      SUPPLIER_PROVIDERS: ${SUPPLIER_PROVIDERS:-{}}
+      DUFFEL_READ_SECRET: ${DUFFEL_READ_SECRET:-}
+      DUFFEL_TRANSACTION_SECRET: ${DUFFEL_TRANSACTION_SECRET:-}
+      NUITEE_SECRET: ${NUITEE_SECRET:-}
+      NUITEE_ENVIRONMENT: ${NUITEE_ENVIRONMENT:-sandbox}
+      VIATOR_SECRET: ${VIATOR_SECRET:-}
+      VIATOR_ENVIRONMENT: ${VIATOR_ENVIRONMENT:-sandbox}
+      MAPS_GROUNDING_API_KEY: ${MAPS_GROUNDING_API_KEY:-}
+      BETTER_AUTH_URL: ${PUBLIC_ORIGIN:-https://onholidai.nl}
+      WEB_BASE_URL: ${PUBLIC_ORIGIN:-https://onholidai.nl}
+      AGENT_BASE_URL: http://agent:8000
+      TEMPORAL_ADDRESS: temporal:7233
+    secrets:
+      - web_auth_secret
+      - service_token_secret
+      - pricing_diagnostic_secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3000/api/health').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [edge, app, outbound]
+
+  agent:
+    image: ${AGENT_IMAGE:-onholidai-agent:local}
+    restart: unless-stopped
+    init: true
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export SERVICE_TOKEN_SECRET="$$(cat /run/secrets/service_token_secret)"
+        exec uvicorn onholidai_agent.api.main:app --host 0.0.0.0 --port 8000
+    environment:
+      PROVIDER_MODE: ${PROVIDER_MODE:-live}
+      ENVIRONMENT: production
+      WEB_BASE_URL: http://web:3000
+      NEBIUS_BASE_URL: ${NEBIUS_BASE_URL:-https://api.tokenfactory.nebius.com/v1}
+      NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
+      NEBIUS_MODEL: ${NEBIUS_MODEL:-synthetic-model}
+      MAPS_GROUNDING_API_KEY: ${MAPS_GROUNDING_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://eu.api.smith.langchain.com}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_AGENT_ID: ${LANGSMITH_AGENT_ID:-onholidai}
+      LANGSMITH_AGENT_ENVIRONMENT: ${LANGSMITH_AGENT_ENVIRONMENT:-production}
+    secrets:
+      - service_token_secret
+    depends_on:
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          CMD,
+          python,
+          -c,
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [app, outbound]
+
+  booking-worker:
+    image: ${WEB_IMAGE:-onholidai-web:local}
+    restart: unless-stopped
+    init: true
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export DATABASE_URL="postgresql://onholidai_worker:$$WORKER_DB_PASSWORD@postgres:5432/onholidai"
+        export TEMPORAL_ADDRESS="temporal:7233"
+        exec pnpm --filter @onholidai/web booking:worker
+    environment:
+      NODE_ENV: production
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:?Set the worker database password}
+      PROVIDER_MODE: ${PROVIDER_MODE:-live}
+      SUPPLIER_PROVIDERS: ${SUPPLIER_PROVIDERS:-{}}
+      DUFFEL_READ_SECRET: ${DUFFEL_READ_SECRET:-}
+      DUFFEL_TRANSACTION_SECRET: ${DUFFEL_TRANSACTION_SECRET:-}
+      NUITEE_SECRET: ${NUITEE_SECRET:-}
+      NUITEE_ENVIRONMENT: ${NUITEE_ENVIRONMENT:-sandbox}
+      VIATOR_SECRET: ${VIATOR_SECRET:-}
+      VIATOR_ENVIRONMENT: ${VIATOR_ENVIRONMENT:-sandbox}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    networks: [app, outbound]
+
+  # One-shot schema job. Started explicitly by deploy-vps.sh, never by `up`.
+  migrate:
+    image: ${WEB_IMAGE:-onholidai-web:local}
+    profiles: [tools]
+    restart: "no"
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        export MIGRATION_DATABASE_URL="postgresql://onholidai_migration:$$MIGRATION_DB_PASSWORD@postgres:5432/onholidai"
+        exec pnpm --filter @onholidai/web db:migrate
+    environment:
+      NODE_ENV: production
+      PROVIDER_MODE: deterministic
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?Set the migration database password}
+    networks: [app]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-onholidai.nl}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ${CADDYFILE:-./Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks: [edge]
+
+networks:
+  edge:
+  app:
+    internal: true
+  outbound:
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:
+
+secrets:
+  web_auth_secret:
+    file: ${SECRETS_DIR:-/srv/onholidai/secrets}/web_auth_secret.txt
+  service_token_secret:
+    file: ${SECRETS_DIR:-/srv/onholidai/secrets}/service_token_secret.txt
+  pricing_diagnostic_secret:
+    file: ${SECRETS_DIR:-/srv/onholidai/secrets}/pricing_diagnostic_secret.txt

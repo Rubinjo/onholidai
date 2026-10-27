@@ -186,7 +186,8 @@ export function createRevalidationActivities(
                         propertyType: null,
                         roomIds: [],
                         fare: null,
-                        baggage: component.type === "flight" ? component.details.baggage : [],
+                        baggage:
+                          component.type === "flight" ? (component.details?.baggage ?? []) : [],
                         refundTerms: null,
                         changeTerms: null,
                         taxFeeInclusion: null,

@@ -64,7 +64,7 @@ try {
                 if (item.componentId === missing.id) item.componentId = null;
               }),
             );
-            snapshot.price.supplierTotal.minorUnits -= missing.price.supplierAmount.minorUnits;
+            snapshot.price.supplierTotal!.minorUnits -= missing.price.supplierAmount!.minorUnits;
             snapshot.price.finalCustomerTotal.minorUnits -=
               missing.price.finalCustomerAmount.minorUnits;
           }

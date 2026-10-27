@@ -23,7 +23,16 @@ export interface DuffelFlightsHttpOptions extends ReadHttpOptions {
   /** Dedicated discovery token with offer-request creation permission, never the worker token. */
   readToken: string;
   /** Trusted place lookup, not an API URL or a model-supplied supplier identifier. */
-  resolveDestination: (destinationId: string, query: SupplyReadQuery) => string | null;
+  resolveDestination: (
+    destinationId: string,
+    query: SupplyReadQuery,
+    signal?: AbortSignal,
+  ) => string | null | Promise<string | null>;
+  /** Trusted origin lookup used when the departure is a city without an IATA code. */
+  resolveOrigin?: (
+    query: SupplyReadQuery,
+    signal?: AbortSignal,
+  ) => string | null | Promise<string | null>;
 }
 
 // Official contracts: https://duffel.com/docs/api/v2/offer-requests and /offers.
@@ -35,7 +44,12 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
     Accept: "application/json",
     "Content-Type": "application/json",
   };
-  const searchUrl = "https://api.duffel.com/air/offer_requests?return_offers=true";
+  const searchUrl = "https://api.duffel.com/air/offer_requests?return_offers=false";
+  // Requesting every offer in the offer request exceeds the bounded response size
+  // for busy routes, so offers are read from one sorted, bounded page instead.
+  const OFFER_PAGE_LIMIT = 32;
+  const offersPageUrl = (offerRequestId: string) =>
+    `https://api.duffel.com/air/offers?offer_request_id=${encodeURIComponent(offerRequestId)}&limit=${OFFER_PAGE_LIMIT}&sort=total_amount`;
   const grants = new Map<string, string>();
 
   function serviceInstant(value: unknown, airport: Record<string, unknown>): string | null {
@@ -68,8 +82,10 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
     const hit = emptyHit(id, query.currency, checkedAt(options));
     hit.supplierMinor = base;
     hit.taxesMinor = tax;
-    // The offer total does not establish service choices or payment surcharges.
+    // The offer total does not establish service choices or payment surcharges, so the
+    // fee line stays unknown while the payable total Duffel reports is authoritative.
     hit.feesMinor = null;
+    hit.customerMinor = total;
     hit.expiresAt = instant(offer.expires_at);
     hit.serviceStart = serviceInstant(
       record(segments[0]).departing_at,
@@ -156,11 +172,16 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
     search: (input: SupplyReadQuery, signal: AbortSignal) =>
       safeMapping(async () => {
         const query = validateQuery(input);
-        if (query.destinationIds.length !== 1 || !query.departureOrigin?.airportCode)
-          throw new SupplyReadError("unsupported");
-        const origin = identifier(query.departureOrigin.airportCode, /^[A-Z]{3}$/);
+        if (query.destinationIds.length !== 1) throw new SupplyReadError("unsupported");
+        // A country or city selection carries no IATA code; the trusted resolver
+        // supplies the gateway Duffel actually serves so the search is never floated
+        // at an invented airport.
+        const origin =
+          query.departureOrigin?.airportCode ??
+          (query.departureOrigin ? await options.resolveOrigin?.(query, signal) : null);
+        if (!query.departureOrigin || !origin) throw new SupplyReadError("unsupported");
         const destination = identifier(
-          options.resolveDestination(query.destinationIds[0], query),
+          await options.resolveDestination(query.destinationIds[0], query, signal),
           /^[A-Z]{3}$/,
         );
         if (origin === destination) throw new SupplyReadError("unsupported");
@@ -179,9 +200,12 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
             },
           }),
         );
-        const hits = list(record(response.data).offers)
-          .slice(0, 32)
-          .map((offer) => mapOffer(offer, query));
+        const offerRequestId = identifier(record(response.data).id, /^orq_[A-Za-z0-9]{1,64}$/);
+        const pageUrl = offersPageUrl(offerRequestId);
+        const page = record(
+          await readJson(options, [`GET ${pageUrl}`], headers)(pageUrl, "GET", signal),
+        );
+        const hits = list(page.data, OFFER_PAGE_LIMIT).map((offer) => mapOffer(offer, query));
         for (const hit of hits) {
           if (grants.size >= 256) grants.delete(grants.keys().next().value!);
           grants.set(hit.offerId, queryKey(query));

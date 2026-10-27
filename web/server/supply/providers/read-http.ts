@@ -13,6 +13,8 @@ export interface ReadHttpOptions {
 
 export interface WireHit {
   availability?: "available" | "unavailable" | "unknown";
+  /** True when the supplier published no terms and the reader supplied only an absence notice. */
+  termsUnverified?: boolean;
   offerId: string;
   currency: string;
   supplierMinor: number | null;
@@ -131,10 +133,21 @@ export function emptyHit(offerId: string, currency: string, checkedAt: string): 
 /** Keep bounded source pricing/availability conditions without inventing complete component details. */
 export function discoveryHit(hit: WireHit, source: string) {
   const facts = JSON.stringify(hit.details);
-  if (facts.length > 2000) throw new SupplyReadError("unsupported");
+  // A busy multi-passenger fare matrix is larger than the bounded advisory text. The
+  // excess is truncated and disclosed instead of discarding otherwise valid inventory.
+  const truncated = facts.length > 2000;
+  const bounded = truncated ? `${facts.slice(0, 1900)}…[truncated]` : facts;
   return {
     ...hit,
     details: null,
+    // Suppliers that publish no terms still need an explicit, non-claiming statement so
+    // a draft can carry the line without inventing refundability. termsUnverified keeps
+    // the "terms unknown" signal the adapter records.
+    terms:
+      hit.terms ??
+      `${source}: cancellation and change terms are not established by this read; ` +
+        "verify them before any purchase.",
+    termsUnverified: hit.terms === null || hit.termsUnverified === true,
     planningDetails: {
       locationName: text(hit.details.name ?? hit.details.title, 500),
       timezone: null,
@@ -143,7 +156,7 @@ export function discoveryHit(hit: WireHit, source: string) {
       flightDirection: null,
       durationMinutes: null,
       layovers: [],
-      fareConditions: facts,
+      fareConditions: bounded,
       accommodationType: null,
       travelFromStayMinutes: null,
       eligibility: "unverified",
@@ -152,7 +165,11 @@ export function discoveryHit(hit: WireHit, source: string) {
       constraintEvidence: [],
       source,
       checkedAt: hit.checkedAt,
-      unavailableFacts: ["Complete service details", "Complete mandatory costs and material terms"],
+      unavailableFacts: [
+        "Complete service details",
+        "Complete mandatory costs and material terms",
+        ...(truncated ? ["Source fare detail exceeded the bounded record"] : []),
+      ],
     } satisfies PlanningDetails,
   };
 }

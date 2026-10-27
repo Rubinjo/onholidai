@@ -8,6 +8,10 @@ import { createDatabase } from "@/server/db/database";
 import { configureSpanSink, createOtlpHttpSink } from "@/server/telemetry-exporter";
 import { createPlaceLookupProvider } from "@/server/supply/places";
 import {
+  createViatorDestinationDirectory,
+  type ViatorDestinationDirectory,
+} from "@/server/supply/viator-destinations";
+import {
   createConfiguredPlanningProviders,
   type PlanningProviderMappings,
 } from "@/server/supply/providers";
@@ -27,6 +31,7 @@ export function createApplication(
   dependencies: {
     planningProviders?: readonly SupplyReadProvider[];
     places?: PlaceLookupProvider;
+    viatorDestinations?: ViatorDestinationDirectory;
     supplierMappings?: PlanningProviderMappings;
     bookingPrerequisites?: TrustedBookingPrerequisiteReader;
   } = {},
@@ -53,6 +58,16 @@ export function createApplication(
       );
     });
   });
+  // Destination identities are resolved only when a live Viator read credential
+  // exists; place search still works without supplier IDs, just unmapped.
+  const configuredViatorDestinations = () => {
+    if (config.PROVIDER_MODE !== "live") return undefined;
+    const reference = config.SUPPLIER_PROVIDERS.viator?.readSecretRef;
+    const apiKey = reference ? environment[reference]?.trim() : undefined;
+    return apiKey
+      ? createViatorDestinationDirectory({ apiKey, environment: config.VIATOR_ENVIRONMENT })
+      : undefined;
+  };
   const database = createDatabase({ connectionString: config.DATABASE_URL });
   const authPool = new Pool({
     application_name: "onholidai-auth",
@@ -73,6 +88,7 @@ export function createApplication(
         createPlaceLookupProvider(config.PROVIDER_MODE, {
           apiKey: config.MAPS_GROUNDING_API_KEY,
         }),
+      viatorDestinations: dependencies.viatorDestinations ?? configuredViatorDestinations(),
       planningProviders,
       shutdown(): Promise<void> {
         shutdownPromise ??= Promise.allSettled([database.destroy(), authPool.end()]).then(

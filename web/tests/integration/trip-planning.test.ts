@@ -51,7 +51,7 @@ describe("selected-source candidate safety", () => {
             "customerPayableFees",
             "finalCustomerAmount",
           ] as const)
-            expensive.component.price[field].minorUnits *= 2;
+            expensive.component.price[field]!.minorUnits *= 2;
           return [offer, expensive];
         });
       },

@@ -88,7 +88,7 @@ describe("Duffel Stays synthetic HTTP wire", () => {
       feesMinor: null,
       serviceStart: null,
       serviceEnd: null,
-      terms: null,
+      terms: expect.stringContaining("are not established by this read"),
       details: null,
       supplierReferences: { accommodationId: "acc_synthetic1", searchResultId: "srr_synthetic1" },
     });

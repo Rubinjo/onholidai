@@ -305,7 +305,7 @@ describe("complete trip booking coverage", () => {
     const [outbound, inbound] = fixture.snapshot.components;
     const returnItem = fixture.snapshot.itineraryDays[1].items.at(-1)!;
     outbound.serviceEnd = inbound.serviceEnd;
-    outbound.price.supplierAmount.minorUnits += inbound.price.supplierAmount.minorUnits;
+    outbound.price.supplierAmount!.minorUnits += inbound.price.supplierAmount!.minorUnits;
     outbound.price.finalCustomerAmount.minorUnits += inbound.price.finalCustomerAmount.minorUnits;
     outbound.itineraryItemIds.push(returnItem.id);
     returnItem.componentId = outbound.id;

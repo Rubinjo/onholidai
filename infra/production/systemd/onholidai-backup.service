@@ -1,0 +1,11 @@
+[Unit]
+Description=onholidai production database backup
+Documentation=https://github.com/Rubinjo/onholidai/blob/main/infra/production/README.md
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/srv/onholidai/current/infra/production/scripts/backup-vps.sh
+Nice=10
+IOSchedulingClass=idle

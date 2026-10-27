@@ -286,7 +286,7 @@ describe("explicit application composition", () => {
     }
   });
 
-  it("composes real read clients from read secrets only and fails closed without trusted location mappings", async () => {
+  it("composes real read clients from read secrets only and fails closed when a supplier is unreachable", async () => {
     const { createApplication } = await import("../../server/application");
     const { searchPlanningOffers } = await import("../../server/supply/read");
     const { createSyntheticTripSnapshot } = await import("../fixtures/trips");
@@ -347,13 +347,23 @@ describe("explicit application composition", () => {
         { readiness: application.providerReadiness },
       );
       expect(result.offers).toEqual([]);
+      // Trusted identities are resolved inside the composition root (Duffel place
+      // suggestions, LiteAPI place data), so a missing injected mapping no longer
+      // blocks a source by itself. An unreachable supplier still fails closed.
       expect(result.outcomes.map((source) => source.status)).toEqual([
         "unsupported",
-        "access_blocked",
+        "error",
         "unsupported",
         "unsupported",
       ]);
-      expect(transport).not.toHaveBeenCalled();
+      expect(transport.mock.calls.length).toBeGreaterThan(0);
+      expect(
+        transport.mock.calls.every(([url]) =>
+          /^https:\/\/(api\.duffel\.com|api\.liteapi\.travel|api\.sandbox\.viator\.com)\//.test(
+            String(url),
+          ),
+        ),
+      ).toBe(true);
       expect(JSON.stringify(application.planningProviders)).not.toMatch(
         /synthetic-duffel-read|synthetic-never-used-write|synthetic-viator-read/,
       );

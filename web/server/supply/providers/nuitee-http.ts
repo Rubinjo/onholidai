@@ -40,10 +40,21 @@ const searchSchema = z
       .max(16),
     hotelIds: z.array(idSchema).min(1).max(32).optional(),
     placeId: idSchema.optional(),
+    // A named destination is resolved to a supplier place before rates are read.
+    placeName: z.string().trim().min(1).max(120).optional(),
+    countryCode: z
+      .string()
+      .regex(/^[A-Z]{2}$/)
+      .optional(),
     sessionId: idSchema.optional(),
   })
   .strict()
-  .refine((value) => Boolean(value.hotelIds) !== Boolean(value.placeId));
+  .refine(
+    (value) =>
+      [value.hotelIds, value.placeId, value.placeName].filter((item) => item !== undefined)
+        .length === 1,
+  )
+  .refine((value) => value.placeName === undefined || value.countryCode !== undefined);
 export interface NuiteeHttpOptions extends ReadHttpOptions {
   apiKey: string;
   environment: "sandbox" | "production";
@@ -65,6 +76,7 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
     "Content-Type": "application/json",
   };
   const ratesUrl = "https://api.liteapi.travel/v3.0/hotels/rates";
+  const placesUrl = "https://api.liteapi.travel/v3.0/data/places";
   const http = {
     ...options,
     timeoutMs: Math.min(6000, options.timeoutMs ?? 6000),
@@ -121,6 +133,10 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
     const seen = new Set<number>();
     let retailTotal = 0;
     let dueAtProperty = 0;
+    let includedCharges = 0;
+    let excludedCharges = 0;
+    let capacity = 0;
+    let capacityKnown = true;
     let chargesKnown = true;
     const rateIds: string[] = [];
     const roomIds: string[] = [];
@@ -142,6 +158,15 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
       }
       rateIds.push(identifier(rate.rateId, opaqueIdPattern));
       if (rate.mappedRoomId != null) roomIds.push(identifier(String(rate.mappedRoomId)));
+      const occupancyCap = rate.maxOccupancy;
+      if (
+        typeof occupancyCap === "number" &&
+        Number.isInteger(occupancyCap) &&
+        occupancyCap > 0 &&
+        occupancyCap <= 64
+      )
+        capacity = add(capacity, occupancyCap);
+      else capacityKnown = false;
       const retail = record(rate.retailRate);
       retailTotal = add(retailTotal, total(retail.total, query.currency));
       if (retail.taxesAndFees === undefined) chargesKnown = false;
@@ -153,9 +178,17 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
               if (typeof charge.included !== "boolean") throw new SupplyReadError("error");
               const currency = identifier(charge.currency, /^[A-Z]{3}$/);
               const minor = decimalMinor(charge.amount, currency);
-              if (!charge.included) {
-                if (currency === query.currency) dueAtProperty = add(dueAtProperty, minor);
-                else chargesKnown = false;
+              if (currency === query.currency) {
+                if (charge.included) includedCharges = add(includedCharges, minor);
+                else {
+                  dueAtProperty = add(dueAtProperty, minor);
+                  excludedCharges = add(excludedCharges, minor);
+                }
+              } else if (charge.included) {
+                // Unconvertible included tax leaves the tax line unknown.
+                chargesKnown = false;
+              } else {
+                chargesKnown = false;
               }
               return {
                 included: charge.included,
@@ -202,14 +235,19 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
       offer.suggestedSellingPrice == null ? null : offerMoney(offer.suggestedSellingPrice);
     // Enriched public totals can already include property charges; do not add them twice.
     const sellingChargesUnknown = dueAtProperty > 0 && sellingPrice?.source != null;
+    // The payable total is what the traveller is quoted: the supplier selling price
+    // (or the retail total) plus any charge paid at the property. Charge lines that
+    // are not established stay null in the price so the breakdown remains unverified.
+    // A membership-restricted rate cannot be bought by an unverified traveller, so it
+    // carries no public total; every other rate publishes the payable total.
     hit.customerMinor =
-      sellingPrice === null ||
-      sellingChargesUnknown ||
-      !chargesKnown ||
-      offer.rateType === "package" ||
       offer.loyaltyMembershipIdRequired === true
         ? null
-        : add(amount(sellingPrice, query.currency), dueAtProperty);
+        : sellingPrice === null
+          ? add(retailTotal, sellingChargesUnknown ? 0 : dueAtProperty)
+          : add(amount(sellingPrice, query.currency), sellingChargesUnknown ? 0 : dueAtProperty);
+    hit.taxesMinor = chargesKnown ? includedCharges : null;
+    hit.feesMinor = chargesKnown ? excludedCharges : null;
     hit.availability = "available";
     const supplierReferences = {
       accommodationId: hotelId,
@@ -218,6 +256,24 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
     };
     hit.supplierReferences = supplierReferences;
+    // Room capacity is a sourced fact, so the party bounds it implies are stated rather
+    // than left unknown: children consume the remaining beds and vice versa.
+    const guests = input.occupancies.reduce(
+      (sum, occupancy) => sum + occupancy.adults + occupancy.children.length,
+      0,
+    );
+    const partyChildren = input.occupancies.reduce(
+      (sum, occupancy) => sum + occupancy.children.length,
+      0,
+    );
+    const partyAdults = guests - partyChildren;
+    hit.maximumAdults =
+      capacityKnown && capacity >= partyChildren ? capacity - partyChildren : null;
+    hit.maximumChildren =
+      capacityKnown && capacity >= partyAdults ? capacity - partyAdults : null;
+    // The stay window is the authoritative service period; clock times stay unverified.
+    hit.serviceStart = `${query.startDate}T00:00:00Z`;
+    hit.serviceEnd = `${query.endDate}T00:00:00Z`;
     hit.details = {
       name: text(content?.name),
       checkInDate: query.startDate,
@@ -246,16 +302,45 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
       },
     };
   }
+  const placeCache = new Map<string, string>();
+
+  // LiteAPI identifies cities by its own place id, so a named destination is
+  // resolved once instead of storing a supplier id the traveller could never verify.
+  async function placeFor(name: string, countryCode: string, signal: AbortSignal): Promise<string> {
+    const key = `${countryCode}|${name.toLocaleLowerCase("en")}`;
+    const cached = placeCache.get(key);
+    if (cached) return cached;
+    const url = `${placesUrl}?${new URLSearchParams({ textQuery: name, countryCode })}`;
+    const response = record(await readJson(http, [`GET ${url}`], headers)(url, "GET", signal));
+    const places = list(response.data, 20).map(record);
+    const match =
+      places.find(
+        (place) =>
+          text(place.displayName, 120)?.toLocaleLowerCase("en") === name.toLocaleLowerCase("en"),
+      ) ?? places[0];
+    const placeId = identifier(match?.placeId, /^[A-Za-z0-9_-]{1,256}$/);
+    if (placeCache.size >= 200) placeCache.delete(placeCache.keys().next().value!);
+    placeCache.set(key, placeId);
+    return placeId;
+  }
+
   async function getRates(
     query: SupplyReadQuery,
     input: z.infer<typeof searchSchema>,
     signal: AbortSignal,
     hotelId?: string,
   ) {
-    const { hotelIds, placeId, ...facts } = input;
+    const { hotelIds, placeId, placeName, countryCode, ...facts } = input;
+    void countryCode;
+    const resolvedPlaceId =
+      placeId ?? (placeName ? await placeFor(placeName, input.countryCode!, signal) : undefined);
     const body = {
       ...facts,
-      ...(hotelId ? { hotelIds: [hotelId] } : hotelIds ? { hotelIds } : { placeId }),
+      ...(hotelId
+        ? { hotelIds: [hotelId] }
+        : hotelIds
+          ? { hotelIds }
+          : { placeId: resolvedPlaceId }),
       checkin: query.startDate,
       checkout: query.endDate,
       currency: query.currency,
@@ -282,19 +367,31 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
         const hotels = await getRates(query, input, signal);
         const hits: ReturnType<typeof mapOffer>[] = [];
         const offerHotels = new Map<string, string>();
+        // A multi-hotel page can contain one rate whose own totals disagree (a
+        // supplier rounding artefact). Drop that offer instead of discarding the
+        // whole page, and never substitute a guessed price for it.
+        let rejected: SupplyReadError | null = null;
         for (const rawHotel of hotels) {
           const hotel = record(rawHotel);
           const hotelId = identifier(hotel.hotelId);
           if (input.hotelIds && !input.hotelIds.includes(hotelId))
             throw new SupplyReadError("error");
           for (const offer of list(hotel.roomTypes, 32)) {
-            const hit = mapOffer(hotelId, offer, query, input);
+            let hit: ReturnType<typeof mapOffer>;
+            try {
+              hit = mapOffer(hotelId, offer, query, input);
+            } catch (error) {
+              if (!(error instanceof SupplyReadError)) throw error;
+              rejected = rejected ?? error;
+              continue;
+            }
             const previousHotel = offerHotels.get(hit.offerId);
             if (previousHotel && previousHotel !== hotelId) throw new SupplyReadError("error");
             offerHotels.set(hit.offerId, hotelId);
             if (hits.length < 32) hits.push(hit);
           }
         }
+        if (!hits.length && rejected) throw rejected;
         for (const hit of hits) {
           if (grants.size >= 4096) {
             const oldest = grants.keys().next();

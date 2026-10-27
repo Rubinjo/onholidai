@@ -8,6 +8,8 @@ Start `--profile infrastructure` for PostgreSQL 18/PostGIS, Temporal, and local 
 
 The booking worker has its own composition root and configuration validation. Production requires explicit `DATABASE_URL` and `TEMPORAL_ADDRESS`; supplier configuration retains the same validation and worker-only readiness rules. It does not initialize web authentication or planning clients and does not require `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `SERVICE_TOKEN_SECRET`, or `PRICING_DIAGNOSTIC_SECRET`. Keep those web/service secrets out of the worker; Compose mounts only `worker_db_password` for its database role. Web production startup still requires all of its auth and signing settings. After updating worker code, rebuild and recreate it with `docker compose -f infra/compose/compose.yml --profile infrastructure --profile booking up -d --build booking-worker`.
 
+The hosted deployment on the Leaseweb VPS uses a separate Compose project, reverse proxy and release process; see [the production runbook](../infra/production/README.md). It does not enable the Compose `infrastructure` profile's observability services.
+
 ### Docker research mode and retry diagnostics
 
 Run Compose from the repository root with `--env-file .env` explicitly.
@@ -55,11 +57,28 @@ with web to make a missing reference resolve.
 
 Live credentials alone do not establish verified supplier operations. Keep the
 existing per-provider/product readiness gates, destination mappings, occupancy
-and currency requirements. Nuitee still needs an injected trusted stay-search
-mapping; an API key alone cannot supply it. Missing readiness must remain an
-explicit unavailable outcome, never synthetic live success. The base booking
-worker remains deterministic; this planning configuration does not activate
-unfinished live booking.
+and currency requirements. Missing readiness must remain an explicit unavailable
+outcome, never synthetic live success. The base booking worker remains
+deterministic; this planning configuration does not activate unfinished live
+booking.
+
+Trusted supplier identities are resolved inside the web composition root, never
+by a model and never from a request parameter:
+
+- Flights: a stored `providerPlaceIds["duffel:flight"]` wins; otherwise Duffel
+  place suggestions (`GET /places/suggestions?query=<name>`) supply the gateway
+  for a country or city destination and for a city departure without an IATA
+  code. A failed lookup leaves the flight source `unsupported`.
+- Stays: the destination name and country are resolved to a LiteAPI place id
+  (`GET /v3.0/data/places`) before rates are read; guest nationality comes from
+  the confirmed departure country because setup does not collect residence.
+- Activities: `providerPlaceIds["viator:destination"]` is still required.
+
+Resolution is cached in-process for ten minutes and bounded by its own timeout,
+so a slow identity lookup degrades one component instead of the estimate. The
+bundled place catalogue ranks airports by the population of the city they
+serve (`airportClass` plus `rank`); regenerate it with
+`pnpm --filter @onholidai/web geo:catalogue`.
 
 For a request that appears to do nothing, inspect the browser's
 `POST /api/v1/trips/{tripId}/agent-runs` response:
@@ -233,9 +252,16 @@ in-memory MCP server. Owner/trip/run/version/token context is captured by the
 server, not supplied by tool arguments. Signed callbacks use the web audience
 and `trip:read` scope. No proposal scope or supplier secret reaches this facade.
 
-Search evidence is separate from accepted components. Missing dates, terms,
-details, totals, taxes and fees remain unknown; complete strict materialization
-is required before an offer can enter a trip proposal. Details and revalidation
+Search evidence is separate from accepted components. Missing dates, terms and
+details remain unknown. A discovery offer enters a draft proposal only when the
+customer-payable total is known; an unknown supplier amount, platform margin or
+payable tax/fee breakdown is carried as `null` rather than estimated, so the
+draft keeps an authoritative `finalCustomerAmount` and unknown parts stay
+explicit. Unknown fee breakdowns are recorded in backend evidence only
+(`unavailableFacts`/`unverifiedFacts`), not shown as a customer warning. Booking
+stays strict: `assertEstablishedPricing` rejects a snapshot whose components
+still have an unknown breakdown with `409 price_breakdown_unverified` until
+revalidation establishes supplier pricing. Details and revalidation
 append immutable revisions with compare-and-swap. An unknown/failed read cannot
 extend old evidence or grant booking authority. The browser may inspect its
 current-version completed research; internal callbacks additionally require an
@@ -257,7 +283,12 @@ Duffel write keys are never used as a read fallback. Nuitee's and Viator's share
 keys are constrained by fixed read endpoint/method allowlists, not by their names.
 For Duffel, `readSecretRef` means the dedicated **discovery process** credential,
 not an upstream read-only permission guarantee. Flight search creates an offer
-request via POST. The tested read-only sandbox token returned HTTP 403 with
+request via POST and then reads one bounded page of offers sorted by total
+amount (`GET /air/offers?offer_request_id=…&limit=32&sort=total_amount`) instead
+of requesting every offer with the request. Test-mode offer requests return tens
+of megabytes when all offers are included, which exceeds the bounded response
+size, so paging is what keeps a search inside the client limit. The tested
+read-only sandbox token returned HTTP 403 with
 `insufficient_permissions`, although airline reads succeeded. Provision a
 separate discovery token with the required offer-request permission (read-write
 where Duffel offers only read-only/read-write), distinct from the worker token.
@@ -276,6 +307,16 @@ respectively `providerPlaceIds["duffel:flight"]` (IATA) and
 `providerPlaceIds["viator:destination"]` (numeric supplier destination ID) from
 the authoritative saved trip. Missing mappings return unsupported coverage.
 Trusted deployments may inject `supplierMappings` at `createApplication`.
+
+Setup records those identities when a place is selected. An airport candidate
+from the bundled OurAirports catalogue contributes its own IATA code, so the
+flight mapping is established offline. Cities and countries are resolved once at
+selection through Viator free-text destination search
+(`GET /api/v1/places/viator-destination`), which records an ID only when exactly
+one supplier destination carries the same name; ambiguous or failed lookups leave
+the destination unmapped and coverage unverified. The lookup requires a live
+Viator read credential and a sandbox/production match, is cached per term, and
+never blocks setup. Deterministic mode records no supplier identities.
 Nuitee stays additionally requires separately verified sandbox/production access and
 an explicit trusted `staySearch` resolver returning nationality, exact room allocation
 (including child ages), and either bounded supplier `hotelIds` or a `placeId`.
@@ -536,3 +577,11 @@ An administrator may place or release a trip legal hold; each action is recorded
 ## Health and evidence
 
 `/api/health` and the agent `/health` endpoint check shell readiness. Database-dependent routes additionally require the schema migrations. Keep synthetic and live-provider acceptance reports separate. The release acceptance and cross-cutting evidence files list measurements that still require execution; do not treat local code review as provider, performance, or accessibility acceptance.
+
+## Production deployment
+
+The hosted instance runs as one Compose project (`onholidai-production`) under `/srv/onholidai` on the Leaseweb VPS, with Caddy terminating TLS for `onholidai.nl` and publishing only ports 80 and 443. Application images are built by `.github/workflows/release.yml`, pushed to GHCR, and deployed by digest through `infra/production/scripts/deploy-vps.sh`; the script applies migrations through the migration role before replacing running services and refuses mutable tags.
+
+Host preparation is `infra/production/scripts/bootstrap-vps.sh` (Docker, swap, firewall, unattended upgrades, Docker secret files). Backups run daily from `onholidai-backup.timer` and are verified before the run reports success. Release layout, required GitHub secrets, rollback, and routine commands are documented in [the production runbook](../infra/production/README.md).
+
+The production stack does not include Jaeger, the Temporal UI, or the OTel collector. Do not set `OTEL_EXPORTER_OTLP_ENDPOINT` there until a collector exists, and keep the synthetic provider doubles out of the production environment file.

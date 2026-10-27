@@ -837,3 +837,23 @@ Stays activation remains blocked; all-rates and quote permissions are still
 untested. Conditional implementation approval is unchanged and T017 remains
 incomplete. No application secret references, operation readiness, environment
 files or runtime code were changed.
+
+### Readiness revision (2026-10-26T11:45Z)
+
+This supersedes the `Provider-test / live access` and `Activation gate` cells
+for Duffel Flights and Nuitee stays above; the earlier rows describe the
+2026-10-19/21 state.
+
+| Product | Access | Evidence | Remaining gate |
+| ------- | ------ | -------- | -------------- |
+| Duffel Flights | `search` verified, environment sandbox (`live_mode: false`); detail/revalidation/booking undeclared | `supplier-live-verification-2026-10-26.md`: paged offer read, `places/suggestions` gateway resolution | Dedicated discovery credential; production inventory; service/payment cost verification |
+| Nuitee stays | `search` + `detail` verified, environment sandbox; prebook/payment/booking undeclared | `supplier-live-verification-2026-10-26.md`: `data/places`, `data/hotels`, `hotels/rates`, adapter normalization | Production access; final checkout terms; cancellation/payment semantics |
+| Viator activities | `search` verified for `affiliate_basic`; merchant/status/booking undeclared | `supplier-live-verification-2026-10-26.md`: direct product search | Sandbox `products/search` currently takes 23-40 s (three attempts, one `500`), so the 8-second source budget yields `deadline`; reconnect/verify before claiming activity coverage |
+
+Trusted identity rule now in force: an operation only runs when the composition
+root can prove the supplier identity it needs. Flights resolve country/city
+selections through Duffel's own place suggestions (stored `duffel:flight`
+wins); stays resolve a named destination to a LiteAPI place id at read time.
+Nothing is inferred from a model response, a URL parameter or a demographic
+guess, and an unresolvable identity stays `unsupported` instead of being
+replaced by a nearby airport or hotel.
