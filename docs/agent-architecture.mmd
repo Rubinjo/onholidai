@@ -1,0 +1,67 @@
+---
+config:
+  theme: base
+  look: classic
+  fontFamily: Trebuchet MS, Verdana, sans-serif
+  htmlLabels: false
+  markdownAutoWrap: false
+  themeVariables:
+    fontSize: 16px
+    primaryColor: "#edf5f0"
+    primaryTextColor: "#19382a"
+    primaryBorderColor: "#78a98f"
+    lineColor: "#60736a"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#f7faf8"
+    clusterBkg: "#f7faf8"
+    clusterBorder: "#b6cec0"
+    edgeLabelBackground: "#ffffff"
+  themeCSS: |
+    .image-shape .label rect { fill: transparent; }
+    @media (prefers-color-scheme: dark) {
+      .edgeLabel .label rect { fill: #0d1117; }
+      .edgeLabel text, .image-shape.agent .label text { fill: #edf5f0; }
+      .flowchart-link { stroke: #9fb5a7; }
+      .marker { fill: #9fb5a7; stroke: #9fb5a7; }
+    }
+  flowchart:
+    curve: basis
+    nodeSpacing: 38
+    rankSpacing: 52
+    padding: 20
+---
+flowchart TB
+    Traveller["Your next trip"] --> Agent
+    Agent@{ img: "../web/public/logo/main_logo.svg", label: "Your AI trip-planning agent", h: 48, constraint: "on" }
+
+    subgraph Inference["Model inference"]
+        Nebius@{ img: "../web/public/logo/Nebius_logo.svg", label: "Token Factory", h: 34, constraint: "on" }
+        NVIDIA@{ img: "../web/public/logo/NVIDIA_logo.svg", label: "Nemotron models", h: 30, constraint: "on" }
+        Nebius --- NVIDIA
+    end
+    Agent <-->|Reasoning and conversation| Nebius
+
+    subgraph Research["Destination research"]
+        Maps@{ img: "../web/public/logo/Google-maps_logo.svg", label: "Google Maps<br/>Grounding Lite MCP", h: 46, constraint: "on" }
+        Tavily@{ img: "../web/public/logo/Tavily_logo.svg", label: "Web research<br/>/search API", h: 34, constraint: "on" }
+    end
+    Agent <-->|Places| Maps
+    Agent <-->|Web context| Tavily
+
+    Agent <-->|Read-only supplier MCP| Gateway["Supplier gateway"]
+    subgraph Supply["Travel discovery"]
+        Duffel@{ img: "../web/public/logo/Duffel_logo.svg", label: "Flights", h: 34, constraint: "on" }
+        Nuitee@{ img: "../web/public/logo/Nuitée_logo.svg", label: "Accommodation<br/>LiteAPI", h: 42, constraint: "on" }
+        Viator@{ img: "../web/public/logo/Viator_logo.svg", label: "Activities", h: 34, constraint: "on" }
+    end
+    Gateway <--> Duffel
+    Gateway <--> Nuitee
+    Gateway <--> Viator
+
+    Agent --> Plan["Your trip<br/>Save + restore"]
+    Plan --> Review["Booking review<br/>Your approval"]
+
+    classDef journey fill:#edf5f0,stroke:#78a98f,color:#19382a,stroke-width:1.5px
+    classDef gateway fill:#ffffff,stroke:#b6cec0,color:#19382a
+    class Traveller,Plan,Review journey
+    class Gateway gateway
