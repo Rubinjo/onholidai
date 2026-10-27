@@ -9,7 +9,8 @@ import { getSession } from "@/server/auth/auth";
 import { signOutAction } from "@/server/auth/actions";
 
 export async function MarketingNavigation({ returnPath }: { returnPath?: string } = {}) {
-  const session = await getSession(getApplication().auth, await headers());
+  const requestHeaders = await headers();
+  const session = await getSession(getApplication().auth, requestHeaders);
   const query = returnPath
     ? `?redirectTo=${encodeURIComponent(safeAuthDestination(undefined, returnPath))}`
     : "";

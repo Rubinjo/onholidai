@@ -7,14 +7,16 @@ import { signOutAction } from "../../server/auth/actions";
 const state = vi.hoisted(() => ({
   auth: {},
   headers: new Headers(),
+  readHeaders: vi.fn(async () => state.headers),
+  getApplication: vi.fn(() => ({ auth: state.auth })),
   getSession: vi.fn(),
   signOut: vi.fn(),
   redirect: vi.fn(),
 }));
-vi.mock("next/headers", () => ({ headers: async () => state.headers }));
+vi.mock("next/headers", () => ({ headers: state.readHeaders }));
 vi.mock("next/navigation", () => ({ redirect: state.redirect }));
 vi.mock("../../server/application", () => ({
-  getApplication: () => ({ auth: state.auth }),
+  getApplication: state.getApplication,
 }));
 vi.mock("../../server/auth/auth", () => ({
   getSession: state.getSession,
@@ -24,6 +26,15 @@ vi.mock("../../server/auth/auth", () => ({
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+});
+
+it("propagates the prerender bailout without accessing the runtime application", async () => {
+  const bailout = new Error("Dynamic server usage: headers");
+  state.readHeaders.mockRejectedValueOnce(bailout);
+
+  await expect(MarketingNavigation()).rejects.toBe(bailout);
+  expect(state.getApplication).not.toHaveBeenCalled();
+  expect(state.getSession).not.toHaveBeenCalled();
 });
 
 it("offers home and account entry points that return guests to the same trip", async () => {
