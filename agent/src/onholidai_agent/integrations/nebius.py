@@ -156,7 +156,7 @@ class NebiusHttpTransport:
         choices = cast(list[dict[str, object]], data.get("choices", []))
         if not choices:
             raise ValueError("empty_model_result")
-        choice = cast(dict[str, object], choices[0])
+        choice = choices[0]
         message = cast(dict[str, object], choice.get("message", {}))
         content = message.get("content")
         if not isinstance(content, str):
