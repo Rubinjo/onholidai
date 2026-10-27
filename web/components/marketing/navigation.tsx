@@ -8,7 +8,10 @@ import { getApplication } from "@/server/application";
 import { getSession } from "@/server/auth/auth";
 import { signOutAction } from "@/server/auth/actions";
 
-export async function MarketingNavigation({ returnPath }: { returnPath?: string } = {}) {
+export async function MarketingNavigation({
+  returnPath,
+  showPlanningLink = false,
+}: { returnPath?: string; showPlanningLink?: boolean } = {}) {
   const requestHeaders = await headers();
   const session = await getSession(getApplication().auth, requestHeaders);
   const query = returnPath
@@ -18,8 +21,7 @@ export async function MarketingNavigation({ returnPath }: { returnPath?: string 
     <header className="marketing-nav">
       <BrandLink />
       <nav aria-label="Main navigation">
-        <Link href="/">Home</Link>
-        <Link href="/trips/new">Start planning</Link>
+        {showPlanningLink && <Link href="/trips/new">Start planning</Link>}
         {session ? (
           <>
             <Link href="/sign-in">Account</Link>

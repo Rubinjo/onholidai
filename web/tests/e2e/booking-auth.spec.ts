@@ -24,10 +24,8 @@ test("Book trip continues from a draft through free sign-up and same-trip linkin
   await completeSetup(page, { title: "Same-trip account continuation" });
   await expect(savedVersion(page, 2)).toBeVisible({ timeout: 35000 });
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
-  await expect(navigation.getByRole("link", { name: "Home", exact: true })).toHaveAttribute(
-    "href",
-    "/",
-  );
+  await expect(page.getByRole("link", { name: "OnHolidai home" })).toHaveAttribute("href", "/");
+  await expect(navigation.getByRole("link", { name: "Start planning" })).toHaveCount(0);
   await expect(navigation.getByRole("link", { name: "Sign in" })).toHaveAttribute(
     "href",
     `/sign-in?redirectTo=${encodeURIComponent(new URL(page.url()).pathname)}`,

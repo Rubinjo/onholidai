@@ -37,17 +37,14 @@ it("propagates the prerender bailout without accessing the runtime application",
   expect(state.getSession).not.toHaveBeenCalled();
 });
 
-it("offers home and account entry points that return guests to the same trip", async () => {
+it("offers the logo and account entry points that return guests to the same trip", async () => {
   state.getSession.mockResolvedValue(null);
   const returnPath = "/trips/00000000-0000-4000-8000-000000000001";
   render(await MarketingNavigation({ returnPath }));
   expect(state.getSession).toHaveBeenCalledWith(state.auth, state.headers);
   expect(screen.getByRole("link", { name: "OnHolidai home" })).toHaveAttribute("href", "/");
-  expect(screen.getByRole("link", { name: /^Home$/ })).toHaveAttribute("href", "/");
-  expect(screen.getByRole("link", { name: "Start planning" })).toHaveAttribute(
-    "href",
-    "/trips/new",
-  );
+  expect(screen.queryByRole("link", { name: /^Home$/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Start planning" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
     "href",
     `/sign-in?redirectTo=${encodeURIComponent(returnPath)}`,
@@ -57,6 +54,16 @@ it("offers home and account entry points that return guests to the same trip", a
     `/sign-up?redirectTo=${encodeURIComponent(returnPath)}`,
   );
   expect(screen.queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
+});
+
+it("shows the planning entry point only when requested for the homepage", async () => {
+  state.getSession.mockResolvedValue(null);
+  render(await MarketingNavigation({ showPlanningLink: true }));
+  expect(screen.getByRole("link", { name: "Start planning" })).toHaveAttribute(
+    "href",
+    "/trips/new",
+  );
+  expect(screen.queryByRole("link", { name: /^Home$/ })).not.toBeInTheDocument();
 });
 
 it("preserves the home page's default authentication destinations", async () => {

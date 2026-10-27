@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 export default function HomePage() {
   return (
     <div className="marketing-page">
-      <MarketingNavigation />
+      <MarketingNavigation showPlanningLink />
       <main>
         <MarketingHero />
         <PlanningProcess />
