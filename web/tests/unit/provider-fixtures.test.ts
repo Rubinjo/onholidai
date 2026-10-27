@@ -53,6 +53,8 @@ describe("deterministic provider fixtures", () => {
         checkedAt: "2030-01-01T00:00:00.000Z",
       });
       expect(first.component.expiresAt).toBe("2030-01-01T00:15:00.000Z");
+      expect(first.occupancy).toEqual({ maximumAdults: 2, maximumChildren: 1 });
+      expect(first.unverifiedFacts).not.toContain("occupancy");
       vi.advanceTimersByTime(1_000);
       for (const method of [source.detail!, source.revalidate!]) {
         const current = normalizePlanningOffer(
@@ -63,12 +65,28 @@ describe("deterministic provider fixtures", () => {
         expect(current.component.checkedAt).toBe("2030-01-01T00:00:01.000Z");
         expect(current.component.bookingStatus).toBe("unbooked");
         expect(current.eligibility.status).toBe("unverified");
+        expect(current.occupancy).toEqual(first.occupancy);
       }
       expect(
         normalizePlanningOffer(first, new Date("2030-01-01T00:16:00Z")).component.offerStatus,
       ).toBe("expired");
     },
   );
+
+  it("provides explicit occupancy for the adult-only guest planning journey", async () => {
+    const query = { ...readQuery(), travellerParty: { adults: 2, children: [] } };
+    const source = createReadAdapter(
+      "nuitee",
+      "accommodation",
+      syntheticReadClient("accommodation"),
+    );
+    const offer = normalizePlanningOffer(
+      (await source.search(query, new AbortController().signal))[0],
+    );
+    expect(offer.occupancy).toEqual({ maximumAdults: 2, maximumChildren: 0 });
+    expect(offer.unverifiedFacts).not.toContain("occupancy");
+    expect(offer.eligibility.status).toBe("unverified");
+  });
 
   it("keeps anonymous adult slots stable across products and searches without inventing service-date age eligibility", async () => {
     const query = readQuery(),

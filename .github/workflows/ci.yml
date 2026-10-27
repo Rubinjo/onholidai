@@ -189,8 +189,9 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     env:
-      DATABASE_URL: postgresql://onholidai_web:synthetic-web@127.0.0.1:5432/onholidai_e2e
-      MIGRATION_DATABASE_URL: postgresql://onholidai_migration:synthetic-migration@127.0.0.1:5432/onholidai_e2e
+      DATABASE_URL: postgresql://onholidai_web:synthetic-web@127.0.0.1:5432/onholidai_us3_browser
+      MIGRATION_DATABASE_URL: postgresql://onholidai_migration:synthetic-migration@127.0.0.1:5432/onholidai_us3_browser
+      E2E_FIXTURE_DATABASE_URL: postgresql://onholidai_web:synthetic-web@127.0.0.1:5432/onholidai_us3_browser
       PROVIDER_MODE: deterministic
       BETTER_AUTH_URL: https://localhost:3000
       WEB_BASE_URL: https://localhost:3000
@@ -219,11 +220,11 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f infra/postgres/test-roles.sql
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
-          CREATE DATABASE onholidai_e2e OWNER onholidai_migration;
-          REVOKE CONNECT ON DATABASE onholidai_e2e FROM PUBLIC;
-          GRANT CONNECT ON DATABASE onholidai_e2e TO onholidai_migration, onholidai_web, onholidai_worker;
+          CREATE DATABASE onholidai_us3_browser OWNER onholidai_migration;
+          REVOKE CONNECT ON DATABASE onholidai_us3_browser FROM PUBLIC;
+          GRANT CONNECT ON DATABASE onholidai_us3_browser TO onholidai_migration, onholidai_web, onholidai_worker;
           SQL
-          psql -h 127.0.0.1 -U postgres -d onholidai_e2e -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS postgis"
+          psql -h 127.0.0.1 -U postgres -d onholidai_us3_browser -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS postgis"
           pnpm --dir web db:migrate
       - name: Set up Python for browser planning
         if: matrix.install-browsers
@@ -251,6 +252,7 @@ jobs:
           openssl pkcs12 -export -inkey "$RUNNER_TEMP/browser.key" \
             -in "$RUNNER_TEMP/browser.crt" -out "$RUNNER_TEMP/browser.pfx" -passout pass:
           echo "PLAYWRIGHT_TLS_CERTIFICATE=$RUNNER_TEMP/browser.pfx" >> "$GITHUB_ENV"
+          echo "NODE_EXTRA_CA_CERTS=$RUNNER_TEMP/browser.crt" >> "$GITHUB_ENV"
       - name: Install Playwright browsers
         if: matrix.install-browsers
         run: pnpm --dir web exec playwright install --with-deps

@@ -255,7 +255,7 @@ pnpm --dir web build
 
 Run the browser journeys against the production HTTPS harness described above,
 with a deterministic agent and a separate fully migrated loopback database named
-exactly `onholidai_us3_browser`. Set `US3_REVIEW_FIXTURE_DATABASE_URL` to that
+exactly `onholidai_us3_browser`. Set `E2E_FIXTURE_DATABASE_URL` to that
 disposable database and `PLAYWRIGHT_BASE_URL` to the matching HTTPS/auth origin.
 For an untrusted local test certificate outside CI, set
 `PLAYWRIGHT_IGNORE_HTTPS_ERRORS=true`; do not change application cookie or Origin

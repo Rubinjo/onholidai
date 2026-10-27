@@ -41,7 +41,7 @@ const command = z
     z.object({ action: z.literal("inspect"), ownerUserId: z.string(), tripId: z.uuid() }).strict(),
   ])
   .parse(JSON.parse(process.argv[2] ?? ""));
-const connectionString = process.env.US3_REVIEW_FIXTURE_DATABASE_URL;
+const connectionString = process.env.E2E_FIXTURE_DATABASE_URL;
 if (!connectionString)
   throw new Error("The browser fixture requires an explicitly isolated database");
 const url = new URL(connectionString);

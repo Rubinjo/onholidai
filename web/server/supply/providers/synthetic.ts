@@ -134,8 +134,8 @@ export function syntheticReadClient(
             : details,
         minimumAge: null,
         maximumAge: null,
-        maximumAdults: null,
-        maximumChildren: null,
+        maximumAdults: type === "accommodation" ? query.travellerParty.adults : null,
+        maximumChildren: type === "accommodation" ? query.travellerParty.children.length : null,
         accessibilityVerified: null,
       }));
     },
