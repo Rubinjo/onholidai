@@ -45,12 +45,17 @@ def create_app(
             model = NebiusClient(
                 (
                     NebiusHttpTransport(
-                        client, settings.nebius_base_url, settings.nebius_api_key or ""
+                        client,
+                        settings.nebius_base_url,
+                        settings.nebius_api_key or "",
+                        settings.nebius_request_timeout_seconds,
                     )
                     if settings.provider_mode == "live"
                     else DeterministicModel()
                 ),
                 settings.nebius_model,
+                settings.nebius_max_output_tokens,
+                settings.nebius_request_timeout_seconds,
             )
             maps = (
                 MapsGroundingClient(

@@ -1,6 +1,6 @@
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     nebius_base_url: str = "https://api.tokenfactory.nebius.com/v1"
     nebius_api_key: str | None = None
     nebius_model: str = "synthetic-model"
+    nebius_max_output_tokens: int = Field(default=4096, ge=512, le=8192)
+    nebius_request_timeout_seconds: float = Field(default=90, ge=8, le=300)
     maps_grounding_api_key: str | None = None
     tavily_api_key: str | None = None
     langsmith_api_key: str | None = None

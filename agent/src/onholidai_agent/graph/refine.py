@@ -26,6 +26,20 @@ from onholidai_agent.tools.propose_trip_changes import propose_trip_changes
 from onholidai_agent.tools.research import SelectedResearchReader
 from onholidai_agent.tools.retrieve_relevant_context import retrieve_relevant_context
 
+# The answer contract caps a message at 12000 characters; trim on a boundary, never mid-word.
+MAXIMUM_ANSWER_CHARACTERS = 12000
+
+
+def bounded_answer(text: str) -> str:
+    if len(text) <= MAXIMUM_ANSWER_CHARACTERS:
+        return text
+    window = text[:MAXIMUM_ANSWER_CHARACTERS]
+    for separator in ("\n\n", ". ", "\n", " "):
+        index = window.rfind(separator)
+        if index >= MAXIMUM_ANSWER_CHARACTERS // 2:
+            return window[: index + len(separator)].strip()
+    return window.strip()
+
 
 def question(text: str, reason: str = "scope") -> AgentResult:
     return AgentResult.model_validate(
@@ -593,7 +607,10 @@ async def dispatch(request: CreateAgentRunRequest, sources: Sources) -> AgentRes
                             "options when appropriate. Distinguish verified trip facts from ideas. "
                             "Do not propose operations or claim changes, reservations or payments. "
                             "A later explicit request can update the draft through validation. "
-                            "Keep the answer under 160 words; do not repeat the full trip."
+                            "Give a complete, well-structured answer so nothing is left implied; "
+                            "do not restate the whole itinerary or pad the answer with filler. "
+                            "Respond with the final answer only: never include reasoning, "
+                            "analysis steps or a planning narrative."
                         ),
                     },
                     context[1],
@@ -609,7 +626,7 @@ async def dispatch(request: CreateAgentRunRequest, sources: Sources) -> AgentRes
                 "stays go through validated draft proposals. "
                 "Transport, activities and prices remain subject to verification."
             )
-        return AgentResult.model_validate({"kind": "answer", "message": answer[:12000]})
+        return AgentResult.model_validate({"kind": "answer", "message": bounded_answer(answer)})
     if request.purpose == "initial_estimate":
         return await estimate(request, sources)
     if request.purpose == "refinement":

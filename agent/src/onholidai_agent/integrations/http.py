@@ -6,10 +6,15 @@ import httpx
 
 
 async def bounded_post(
-    client: httpx.AsyncClient, url: str, headers: dict[str, str], body: dict[str, object]
+    client: httpx.AsyncClient,
+    url: str,
+    headers: dict[str, str],
+    body: dict[str, object],
+    *,
+    timeout_seconds: float = 8,
 ) -> dict[str, object]:
     async with (
-        asyncio.timeout(8),
+        asyncio.timeout(timeout_seconds),
         client.stream("POST", url, headers=headers, json=body) as response,
     ):
         response.raise_for_status()

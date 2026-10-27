@@ -54,6 +54,10 @@ The live agent needs non-synthetic values for `NEBIUS_API_KEY`, `NEBIUS_MODEL`, 
 
 Choose a model identifier available to your Nebius account. NVIDIA model availability does not mean every deployment uses one automatically.
 
+`NEBIUS_MAX_OUTPUT_TOKENS` (default 4096, ceiling 8192) bounds each completion. Reasoning tokens are billed inside that budget, so a tight value makes a reasoning model spend the whole allowance thinking and stop mid-answer. Truncated replies are never shown as complete: the agent continues the reply, then widens the budget when only reasoning fit, and fails with `model_output_truncated` rather than delivering a partial message. `NEBIUS_REQUEST_TIMEOUT_SECONDS` (default 90) must stay above the slowest expected completion; progress events renew the run lease while the model works.
+
+Provider reasoning (`reasoning`/`reasoning_content`) is discarded, `<thinking>` blocks are stripped, and a reply that is only a reasoning transcript is rejected as `invalid_model_result`. Only the final answer reaches a chat message.
+
 Enable the Google APIs needed by both processes and check key restrictions against their intended use. Place matching and timezone lookup must both succeed before a resolved destination becomes trusted trip data.
 
 ## Connect live travel sources
