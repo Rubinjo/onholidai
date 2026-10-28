@@ -1,12 +1,29 @@
 import { currencySchema } from "@/domain/trip/schema";
 
-import { SupplyReadError, supplyReadQuerySchema, type SupplyReadQuery } from "../read";
+import {
+  retryDelayMs,
+  SUPPLIER_ATTEMPT_CEILING_MS,
+  SUPPLIER_ATTEMPT_TIMEOUT_MS,
+  SUPPLIER_ATTEMPTS,
+} from "../deadlines";
+import {
+  SupplyReadError,
+  isSupplyReadError,
+  supplyReadQuerySchema,
+  type SupplyReadQuery,
+} from "../read";
 
 import type { PlanningDetails } from "@/domain/trip/itinerary";
 
 export interface ReadHttpOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
+  /**
+   * Attempts per request. Reads opt in to retrying transient supplier failures;
+   * transaction clients keep the default of one, because a booking call must never be
+   * replayed automatically.
+   */
+  attempts?: number;
   now?: () => Date;
   decimalFields?: readonly string[];
 }
@@ -202,8 +219,44 @@ export async function safeMapping<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
-    throw error instanceof SupplyReadError ? error : new SupplyReadError("error");
+    throw isSupplyReadError(error) ? error : new SupplyReadError("error");
   }
+}
+
+/** Exponential backoff with jitter; a supplier Retry-After wins when it is longer. */
+function abortableSleep(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(
+        new SupplyReadError("error", undefined, { retryable: false, detail: "caller_aborted" }),
+      );
+      return;
+    }
+    const stop = () => {
+      clearTimeout(timer);
+      reject(
+        new SupplyReadError("error", undefined, { retryable: false, detail: "caller_aborted" }),
+      );
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", stop);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", stop, { once: true });
+  });
+}
+
+function retryAfterMs(response: Response): number | null {
+  const raw = response.headers.get("retry-after");
+  if (!raw) return null;
+  if (/^\d{1,5}$/.test(raw)) return Math.min(86_400_000, Number(raw) * 1000);
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.min(86_400_000, Math.max(0, at - Date.now())) : null;
+}
+
+/** Statuses where another identical attempt can realistically succeed. */
+function transientStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
 // Callers supply only closed, internally constructed operations, never a browser/model URL.
@@ -212,7 +265,158 @@ export function readJson(
   allowed: readonly string[],
   headers: Record<string, string>,
 ) {
-  const timeout = Math.min(8000, Math.max(1, options.timeoutMs ?? 8000));
+  const timeout = Math.min(
+    SUPPLIER_ATTEMPT_CEILING_MS,
+    Math.max(1, options.timeoutMs ?? SUPPLIER_ATTEMPT_TIMEOUT_MS),
+  );
+  const attempts = Math.min(SUPPLIER_ATTEMPTS, Math.max(1, options.attempts ?? 1));
+
+  async function attempt(
+    url: string,
+    method: "GET" | "POST",
+    payload: string | undefined,
+    signal: AbortSignal,
+    controller: AbortController,
+  ): Promise<unknown> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let rejectAbort: (() => void) | undefined;
+    const abort = () => {
+      controller.abort();
+      rejectAbort?.();
+    };
+    const work = async () => {
+      const response = await (options.fetch ?? fetch)(url, {
+        method,
+        headers,
+        body: payload,
+        signal: controller.signal,
+        redirect: "error",
+        credentials: "omit",
+        cache: "no-store",
+      });
+      if (controller.signal.aborted) {
+        void response.body?.cancel().catch(() => {});
+        throw new SupplyReadError("error", undefined, {
+          retryable: false,
+          detail: "attempt_aborted",
+        });
+      }
+      if (!response.ok) {
+        void response.body?.cancel().catch(() => {});
+        if (response.status === 401 || response.status === 403)
+          throw new SupplyReadError("access_blocked", undefined, {
+            retryable: false,
+            detail: `http_${response.status}`,
+          });
+        if (response.status === 429)
+          throw new SupplyReadError("rate_limited", retryAfterMs(response) ?? undefined, {
+            retryable: true,
+            detail: "http_429",
+          });
+        throw new SupplyReadError("error", undefined, {
+          retryable: transientStatus(response.status),
+          detail: `http_${response.status}`,
+        });
+      }
+      const declared = response.headers.get("content-length");
+      if (declared && (!/^\d+$/.test(declared) || Number(declared) > 1_048_576)) {
+        void response.body?.cancel().catch(() => {});
+        throw new SupplyReadError("error", undefined, {
+          retryable: false,
+          detail: "response_too_large",
+        });
+      }
+      if (!response.body)
+        throw new SupplyReadError("error", undefined, { retryable: false, detail: "empty_body" });
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      const cancel = () => {
+        void reader.cancel().catch(() => {});
+      };
+      controller.signal.addEventListener("abort", cancel, { once: true });
+      try {
+        while (true) {
+          const chunk = await reader.read();
+          if (controller.signal.aborted)
+            throw new SupplyReadError("error", undefined, {
+              retryable: false,
+              detail: "attempt_aborted",
+            });
+          if (chunk.done) break;
+          size += chunk.value.byteLength;
+          if (size > 1_048_576) {
+            cancel();
+            throw new SupplyReadError("error", undefined, {
+              retryable: false,
+              detail: "response_too_large",
+            });
+          }
+          chunks.push(chunk.value);
+        }
+        const body = Buffer.concat(chunks).toString("utf8");
+        try {
+          return JSON.parse(body, (key: string, value: unknown, context?: { source?: string }) => {
+            if (
+              typeof value === "number" &&
+              [
+                "fromPrice",
+                "recommendedRetailPrice",
+                "totalExtraCharges",
+                ...(options.decimalFields ?? []),
+              ].includes(key)
+            ) {
+              // Modern JSON.parse exposes the original numeric token, avoiding precision
+              // loss before decimal scaling. Older runtimes must not guess lost digits.
+              if (!context?.source)
+                throw new SupplyReadError("unsupported", undefined, {
+                  retryable: false,
+                  detail: "lossy_decimal",
+                });
+              return context.source;
+            }
+            return value;
+          }) as unknown;
+        } catch (error) {
+          // A malformed supplier body is not a transient transport failure.
+          if (isSupplyReadError(error)) throw error;
+          throw new SupplyReadError("error", undefined, {
+            retryable: false,
+            detail: "malformed_response",
+          });
+        }
+      } finally {
+        controller.signal.removeEventListener("abort", cancel);
+        reader.releaseLock();
+      }
+    };
+    try {
+      return await Promise.race([
+        work(),
+        new Promise<never>((_, reject) => {
+          rejectAbort = () =>
+            reject(
+              new SupplyReadError("error", undefined, {
+                retryable: true,
+                detail: "attempt_timeout",
+              }),
+            );
+          timer = setTimeout(abort, timeout);
+          if (signal.aborted) abort();
+        }),
+      ]);
+    } catch (error) {
+      // Provider error bodies, URLs, headers and transport exception messages are not public evidence.
+      if (isSupplyReadError(error)) throw error;
+      throw new SupplyReadError("error", undefined, {
+        retryable: !controller.signal.aborted,
+        detail: "transport_error",
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   return async (
     url: string,
     method: "GET" | "POST",
@@ -220,111 +424,47 @@ export function readJson(
     body?: unknown,
   ): Promise<unknown> => {
     if (!allowed.some((entry) => entry === `${method} ${url}`))
-      throw new SupplyReadError("unsupported");
-    if (signal.aborted) throw new SupplyReadError("error");
+      throw new SupplyReadError("unsupported", undefined, {
+        retryable: false,
+        detail: "endpoint_not_allowed",
+      });
+    if (signal.aborted)
+      throw new SupplyReadError("error", undefined, {
+        retryable: false,
+        detail: "caller_aborted",
+      });
     const payload = body === undefined ? undefined : JSON.stringify(body);
-    if (payload && Buffer.byteLength(payload) > 16_384) throw new SupplyReadError("unsupported");
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let rejectAbort: (() => void) | undefined;
-    const abort = () => {
-      controller.abort();
-      rejectAbort?.();
-    };
-    signal.addEventListener("abort", abort, { once: true });
+    if (payload && Buffer.byteLength(payload) > 16_384)
+      throw new SupplyReadError("unsupported", undefined, {
+        retryable: false,
+        detail: "request_too_large",
+      });
+    // One caller listener governs every attempt, so retries never leak listeners.
+    let active: AbortController | null = null;
+    const abortActive = () => active?.abort();
+    signal.addEventListener("abort", abortActive, { once: true });
     try {
-      const work = async () => {
-        const response = await (options.fetch ?? fetch)(url, {
-          method,
-          headers,
-          body: payload,
-          signal: controller.signal,
-          redirect: "error",
-          credentials: "omit",
-          cache: "no-store",
-        });
-        if (controller.signal.aborted) {
-          void response.body?.cancel().catch(() => {});
-          throw new SupplyReadError("error");
-        }
-        if (!response.ok) {
-          void response.body?.cancel().catch(() => {});
-          if (response.status === 401 || response.status === 403)
-            throw new SupplyReadError("access_blocked");
-          if (response.status === 429) {
-            const raw = response.headers.get("retry-after");
-            const seconds = raw && /^\d{1,5}$/.test(raw) ? Number(raw) : null;
-            throw new SupplyReadError(
-              "rate_limited",
-              seconds === null ? undefined : Math.min(86_400_000, seconds * 1000),
-            );
-          }
-          throw new SupplyReadError("error");
-        }
-        const declared = response.headers.get("content-length");
-        if (declared && (!/^\d+$/.test(declared) || Number(declared) > 1_048_576)) {
-          void response.body?.cancel().catch(() => {});
-          throw new SupplyReadError("error");
-        }
-        if (!response.body) throw new SupplyReadError("error");
-        const reader = response.body.getReader();
-        const chunks: Uint8Array[] = [];
-        let size = 0;
-        const cancel = () => {
-          void reader.cancel().catch(() => {});
-        };
-        controller.signal.addEventListener("abort", cancel, { once: true });
+      let failure: SupplyReadError | null = null;
+      for (let attemptNumber = 1; attemptNumber <= attempts; attemptNumber += 1) {
+        const controller = new AbortController();
+        active = controller;
         try {
-          while (true) {
-            const chunk = await reader.read();
-            if (controller.signal.aborted) throw new SupplyReadError("error");
-            if (chunk.done) break;
-            size += chunk.value.byteLength;
-            if (size > 1_048_576) {
-              cancel();
-              throw new SupplyReadError("error");
-            }
-            chunks.push(chunk.value);
-          }
-          return JSON.parse(
-            Buffer.concat(chunks).toString("utf8"),
-            (key: string, value: unknown, context?: { source?: string }) => {
-              if (
-                typeof value === "number" &&
-                [
-                  "fromPrice",
-                  "recommendedRetailPrice",
-                  "totalExtraCharges",
-                  ...(options.decimalFields ?? []),
-                ].includes(key)
-              ) {
-                // Modern JSON.parse exposes the original numeric token, avoiding precision
-                // loss before decimal scaling. Older runtimes must not guess lost digits.
-                if (!context?.source) throw new SupplyReadError("unsupported");
-                return context.source;
-              }
-              return value;
-            },
-          ) as unknown;
+          return await attempt(url, method, payload, signal, controller);
+        } catch (error) {
+          const current = isSupplyReadError(error)
+            ? error
+            : new SupplyReadError("error", undefined, { detail: "transport_error" });
+          failure = current;
+          if (!current.retryable || signal.aborted || attemptNumber === attempts) throw current;
+          await abortableSleep(retryDelayMs(attemptNumber, current.retryAfterMs), signal);
+          if (signal.aborted) throw current;
         } finally {
-          controller.signal.removeEventListener("abort", cancel);
-          reader.releaseLock();
+          active = null;
         }
-      };
-      return await Promise.race([
-        work(),
-        new Promise<never>((_, reject) => {
-          rejectAbort = () => reject(new SupplyReadError("error"));
-          timer = setTimeout(abort, timeout);
-          if (signal.aborted) abort();
-        }),
-      ]);
-    } catch (error) {
-      // Provider error bodies, URLs, headers and transport exception messages are not public evidence.
-      throw error instanceof SupplyReadError ? error : new SupplyReadError("error");
+      }
+      throw failure ?? new SupplyReadError("error");
     } finally {
-      if (timer) clearTimeout(timer);
-      signal.removeEventListener("abort", abort);
+      signal.removeEventListener("abort", abortActive);
     }
   };
 }

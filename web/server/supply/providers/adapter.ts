@@ -9,6 +9,7 @@ import { planningDetailsSchema } from "@/domain/trip/itinerary";
 import { normalizePlanningOffer } from "../offers";
 
 import type { SupplyReadProvider, SupplyReadQuery } from "../read";
+import type { PlanningOffer } from "../offers";
 
 // Provider-specific SDK/HTTP clients translate wire payloads to this narrow, read-only port.
 // No supplier credential, reservation method or arbitrary URL crosses the port.
@@ -163,12 +164,22 @@ export function createReadAdapter(
       },
     },
     async search(query, signal) {
-      return z
-        .array(hitSchema)
-        .max(32)
-        .parse(await client.search(query, signal))
-        .map((hit) => normalize(hit, query))
-        .filter((offer) => offer.eligibility.status !== "ineligible");
+      const raw = await client.search(query, signal);
+      if (!Array.isArray(raw) || raw.length > 32)
+        throw new Error("Supplier offer page is invalid or too large");
+      const offers: PlanningOffer[] = [];
+      let rejected = 0;
+      // One malformed record is a partial supplier outage; the rest of the page is
+      // still valid evidence and must not be discarded with it.
+      for (const entry of raw) {
+        try {
+          offers.push(normalize(entry, query));
+        } catch {
+          rejected += 1;
+        }
+      }
+      if (!offers.length && rejected) throw new Error("No usable supplier offers");
+      return offers.filter((offer) => offer.eligibility.status !== "ineligible");
     },
     ...(client.detail
       ? {

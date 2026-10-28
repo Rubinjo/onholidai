@@ -15,6 +15,8 @@ import {
   type ViatorHttpOptions,
 } from "./viator-read";
 import { syntheticReadClient } from "./synthetic";
+import { providerAttemptTimeoutMs } from "../deadlines";
+import { createViatorDestinationDirectory } from "../viator-destinations";
 
 import type { SupplyReadProvider, SupplyReadQuery } from "../read";
 import type { ServerConfig } from "@/server/config";
@@ -113,23 +115,37 @@ export function createConfiguredPlanningProviders(
     );
   const viatorRef = config.SUPPLIER_PROVIDERS.viator?.readSecretRef;
   const viatorKey = viatorRef ? environment[viatorRef]?.trim() : undefined;
-  if (viatorKey)
+  if (viatorKey) {
+    // Viator product search needs its own numeric destination id. A stored selection is
+    // preferred; otherwise the supplier's published catalogue resolves the named place,
+    // because its freetext destination search currently fails for every query.
+    const destinations = createViatorDestinationDirectory({
+      apiKey: viatorKey,
+      environment: config.VIATOR_ENVIRONMENT,
+      fetch: mappings.fetch,
+    });
     providers.push(
       createViatorReadProvider(
         createViatorHttpClient({
           apiKey: viatorKey,
           environment: config.VIATOR_ENVIRONMENT,
           fetch: mappings.fetch,
+          timeoutMs: providerAttemptTimeoutMs("viator"),
           resolveDestination:
             mappings.activityDestination ??
-            ((id, query) =>
-              query.destinations?.find((place) => place.id === id)?.providerPlaceIds[
-                "viator:destination"
-              ] ?? null),
+            (async (id, query, signal) => {
+              const place = query.destinations?.find((entry) => entry.id === id);
+              const stored = place?.providerPlaceIds?.["viator:destination"];
+              if (stored && /^\d{1,12}$/.test(stored)) return [stored];
+              if (!place) return null;
+              const matches = await destinations.candidates(place.name, signal);
+              return matches.map((match) => match.id);
+            }),
           resolvePaxMix: mappings.activityPaxMix,
         }),
       ),
     );
+  }
   return providers.map((provider) => ({
     ...provider,
     capabilities: { ...provider.capabilities, mode: "live" },

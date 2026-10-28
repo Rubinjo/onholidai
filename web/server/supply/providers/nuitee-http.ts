@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { MAX_SUPPLIER_ID_LENGTH } from "@/domain/trip/schema";
 
-import { SupplyReadError, type SupplyReadQuery } from "../read";
+import { SUPPLIER_ATTEMPT_TIMEOUT_MS, SUPPLIER_ATTEMPTS } from "../deadlines";
+import { SupplyReadError, isSupplyReadError, type SupplyReadQuery } from "../read";
 import {
   checkedAt,
   decimalMinor,
@@ -79,7 +80,13 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
   const placesUrl = "https://api.liteapi.travel/v3.0/data/places";
   const http = {
     ...options,
-    timeoutMs: Math.min(6000, options.timeoutMs ?? 6000),
+    // Rate reads page several hotels and occasionally wait on supplier inventory; the
+    // shared attempt budget is the real ceiling, so keep this aligned with it.
+    timeoutMs: Math.min(
+      SUPPLIER_ATTEMPT_TIMEOUT_MS,
+      options.timeoutMs ?? SUPPLIER_ATTEMPT_TIMEOUT_MS,
+    ),
+    attempts: options.attempts ?? SUPPLIER_ATTEMPTS,
     decimalFields: ["amount"],
   };
   const grants = new Map<string, { query: string; hotelId: string }>();
@@ -343,7 +350,9 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
       checkin: query.startDate,
       checkout: query.endDate,
       currency: query.currency,
-      timeout: 6,
+      // Supplier-side wait for rate completeness, in seconds. The previous six
+      // seconds dropped rates that the supplier could still have priced.
+      timeout: 10,
       limit: 32,
       maxRatesPerHotel: hotelId ? 16 : 1,
       roomMapping: true,
@@ -380,7 +389,7 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
             try {
               hit = mapOffer(hotelId, offer, query, input);
             } catch (error) {
-              if (!(error instanceof SupplyReadError)) throw error;
+              if (!isSupplyReadError(error)) throw error;
               rejected = rejected ?? error;
               continue;
             }

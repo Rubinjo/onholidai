@@ -112,8 +112,9 @@ describe("bounded read HTTP and decimal mapping", () => {
       for (const [event, listener] of addInternal?.mock.calls ?? []) {
         if (event === "abort") expect(removeInternal).toHaveBeenCalledWith("abort", listener);
       }
-      expect(addCaller).toHaveBeenCalledTimes(1);
-      expect(removeCaller).toHaveBeenCalledTimes(1);
+      expect(addCaller.mock.calls.length).toBeGreaterThan(0);
+      // Every transient listener (attempts and backoff waits) is removed again.
+      expect(removeCaller.mock.calls.length).toBe(addCaller.mock.calls.length);
     },
   );
   it.each([
@@ -242,5 +243,60 @@ describe("bounded read HTTP and decimal mapping", () => {
     await expect(client(transport).search(query(), new AbortController().signal)).rejects.toThrow(
       "The supplier search failed or returned invalid evidence; inventory is unknown.",
     );
+  });
+  it("retries a transient supplier failure and returns the recovered page", async () => {
+    let calls = 0;
+    const transport = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) return new Response("busy", { status: 503 });
+      return Response.json({ products: [] });
+    });
+    const payload = await client(transport).search(query(), new AbortController().signal);
+    expect(payload).toEqual([]);
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+  it("stops after the attempt budget when a supplier keeps failing", async () => {
+    const transport = vi.fn(async () => new Response("busy", { status: 500 }));
+    await expect(
+      client(transport).search(query(), new AbortController().signal),
+    ).rejects.toMatchObject({ status: "error" });
+    expect(transport).toHaveBeenCalledTimes(3);
+  });
+  it("does not retry a definitive rejection", async () => {
+    const transport = vi.fn(async () => new Response("denied", { status: 403 }));
+    await expect(
+      client(transport).search(query(), new AbortController().signal),
+    ).rejects.toMatchObject({ status: "access_blocked" });
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+  it("honours a rate limit retry window without exceeding the attempt budget", async () => {
+    let calls = 0;
+    const transport = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1)
+        return new Response("slow down", { status: 429, headers: { "retry-after": "0" } });
+      return Response.json({ products: [] });
+    });
+    await expect(client(transport).search(query(), new AbortController().signal)).resolves.toEqual(
+      [],
+    );
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+  it("keeps usable products when a page contains one unusable record", async () => {
+    const transport = vi.fn(async () =>
+      Response.json({
+        products: [
+          {
+            productCode: "SYNTHETIC1",
+            title: "Sourced activity",
+            pricing: { currency: "GBP", summary: { fromPrice: "12.34" } },
+          },
+          { title: "Missing a product code" },
+        ],
+      }),
+    );
+    const payload = await client(transport).search(query(), new AbortController().signal);
+    expect(payload).toHaveLength(1);
+    expect(payload[0]).toMatchObject({ offerId: "SYNTHETIC1", currency: "GBP" });
   });
 });

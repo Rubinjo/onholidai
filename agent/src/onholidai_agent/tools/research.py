@@ -73,9 +73,10 @@ def complete_planning_component(value: object) -> bool:
 async def research(
     reader: ResearchReader, request: CreateAgentRunRequest, query: dict[str, object]
 ) -> dict[str, object]:
-    # Web bounds each supplier read to eight seconds and the whole research
-    # request to twelve, so this client must allow the documented request bound
+    # Web bounds each supplier product read to at most sixty seconds (Duffel needs two
+    # sequential calls, Viator's search is slower still) and the whole research request
+    # to sixty, so this client must allow that documented bound plus transport overhead
     # rather than cutting off a source that is already enforcing its own deadline.
-    async with asyncio.timeout(12):
+    async with asyncio.timeout(75):
         result = await reader.search(request, query)
     return result

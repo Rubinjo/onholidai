@@ -3,7 +3,7 @@ from math import asin, cos, isfinite, radians, sin, sqrt
 from typing import cast
 
 
-def _coordinates(place: dict[str, object]) -> tuple[float, float] | None:
+def place_coordinates(place: dict[str, object]) -> tuple[float, float] | None:
     location = place.get("location")
     if not isinstance(location, dict):
         return None
@@ -31,18 +31,26 @@ def _distance(first: dict[str, object], second: dict[str, object]) -> float:
     return 2 * asin(min(1, sqrt(sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2)))
 
 
+def separation_km(first: dict[str, object], second: dict[str, object]) -> float | None:
+    """Great-circle distance, or ``None`` when either place has no usable coordinates."""
+    if place_coordinates(first) is None or place_coordinates(second) is None:
+        return None
+    return _distance(first, second) * 6371.0088
+
+
 def arrange_destinations(
     stops: list[dict[str, object]],
     policy: object,
     departure_origins: list[dict[str, object]] | None = None,
 ) -> list[dict[str, object]]:
     """Propose a short geographic circuit; this does not verify transport feasibility."""
-    if policy != "ai" or len(stops) < 3 or len(stops) > 8:
+    if policy != "ai" or len(stops) < 2 or len(stops) > 8:
         return stops
-    if any(_coordinates(stop) is None for stop in stops):
+    if any(place_coordinates(stop) is None for stop in stops):
         return stops
     if departure_origins is not None and (
-        not departure_origins or any(_coordinates(origin) is None for origin in departure_origins)
+        not departure_origins
+        or any(place_coordinates(origin) is None for origin in departure_origins)
     ):
         return stops
 

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { bookingTermsV2Schema } from "../../domain/booking/authorization";
 import { tripSnapshotSchema } from "../../domain/trip/schema";
+import { SUPPLIER_ATTEMPT_TIMEOUT_MS } from "../../server/supply/deadlines";
 import { createNuiteeHttpClient } from "../../server/supply/providers/nuitee-http";
 import { createNuiteeReadProvider } from "../../server/supply/providers/nuitee-read";
 import { normalizePlanningOffer, projectPublicPlanningOffer } from "../../server/supply/offers";
@@ -276,7 +277,8 @@ describe("Nuitee safe hotel wire mappings", () => {
       checkin: query.startDate,
       checkout: query.endDate,
       currency: "GBP",
-      timeout: 6,
+      // Supplier-side price wait, in seconds, must be generous enough to price a rate.
+      timeout: 10,
       limit: 32,
     });
     expect(provider.capabilities.operations?.revalidation).toBe("unsupported");
@@ -653,7 +655,9 @@ describe("Nuitee safe hotel wire mappings", () => {
         expect(error).toMatchObject({ status: expected });
         expect(String(error)).not.toMatch(/synthetic-key|sensitive upstream/);
       }
-      expect(fetch).toHaveBeenCalledOnce();
+      // Definitive rejections are never replayed; transient ones retry a bounded number
+      // of times and stop, so a supplier is never hammered.
+      expect(fetch).toHaveBeenCalledTimes(status === 401 ? 1 : 3);
     },
   );
 
@@ -697,20 +701,22 @@ describe("Nuitee safe hotel wire mappings", () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
 
-  it("enforces the six-second shopping bound even when fetch ignores cancellation", async () => {
+  it("enforces the shared attempt bound even when fetch ignores cancellation", async () => {
     vi.useFakeTimers();
     const fetch = vi.fn<typeof globalThis.fetch>(() => new Promise(() => {}));
     const client = createNuiteeHttpClient({
       apiKey: "synthetic-key",
       environment: "sandbox",
       fetch,
+      attempts: 1,
       resolveSearch: () => selection,
     });
     const pending = expect(
       client.search(query, new AbortController().signal),
     ).rejects.toHaveProperty("status");
-    await vi.advanceTimersByTimeAsync(6000);
+    await vi.advanceTimersByTimeAsync(SUPPLIER_ATTEMPT_TIMEOUT_MS);
     await pending;
     expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    vi.useRealTimers();
   });
 });

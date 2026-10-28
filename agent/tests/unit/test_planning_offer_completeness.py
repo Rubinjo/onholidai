@@ -114,8 +114,9 @@ def test_only_incomplete_required_inventory_cannot_create_zero_cost_proposal():
 
     result = asyncio.run(estimate(request(), IncompleteSources())).root
     assert result.kind == "answer"
-    assert "Useful supplier research" in result.message
-    assert "remain unknown" in result.message
+    assert "draft was not changed" in result.message
+    assert "flight" in result.message
+    assert "Retry" in result.message
 
 
 def test_explicit_rail_deferral_continues_supported_planning_without_waiving_the_requirement():

@@ -1,6 +1,7 @@
 import { qualifiedInstant } from "@/domain/trip/feasibility-policy";
 
-import { SupplyReadError, type SupplyReadQuery } from "../read";
+import { SUPPLIER_ATTEMPTS } from "../deadlines";
+import { SupplyReadError, isSupplyReadError, type SupplyReadQuery } from "../read";
 import {
   checkedAt,
   decimalMinor,
@@ -38,6 +39,11 @@ export interface DuffelFlightsHttpOptions extends ReadHttpOptions {
 // Official contracts: https://duffel.com/docs/api/v2/offer-requests and /offers.
 // POST offer_requests performs search; no Orders, payment or hold endpoint is reachable.
 export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions) {
+  // Discovery reads opt in to bounded retries; transaction clients never do.
+  const http: DuffelFlightsHttpOptions = {
+    ...options,
+    attempts: options.attempts ?? SUPPLIER_ATTEMPTS,
+  };
   const headers = {
     Authorization: `Bearer ${secret(options.readToken)}`,
     "Duffel-Version": "v2",
@@ -162,7 +168,7 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
       identifier(offerId, /^off_[A-Za-z0-9]{1,120}$/);
       if (grants.get(offerId) !== queryKey(query)) throw new SupplyReadError("unsupported");
       const url = `https://api.duffel.com/air/offers/${offerId}`;
-      const response = record(await readJson(options, [`GET ${url}`], headers)(url, "GET", signal));
+      const response = record(await readJson(http, [`GET ${url}`], headers)(url, "GET", signal));
       const hit = mapOffer(response.data, query);
       if (hit.offerId !== offerId) throw new SupplyReadError("error");
       return hit;
@@ -190,7 +196,7 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
           ...query.travellerParty.children.map((child) => ({ age: child.ageAtTripStart })),
         ];
         const response = record(
-          await readJson(options, [`POST ${searchUrl}`], headers)(searchUrl, "POST", signal, {
+          await readJson(http, [`POST ${searchUrl}`], headers)(searchUrl, "POST", signal, {
             data: {
               slices: [
                 { origin, destination, departure_date: query.startDate },
@@ -203,9 +209,24 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
         const offerRequestId = identifier(record(response.data).id, /^orq_[A-Za-z0-9]{1,64}$/);
         const pageUrl = offersPageUrl(offerRequestId);
         const page = record(
-          await readJson(options, [`GET ${pageUrl}`], headers)(pageUrl, "GET", signal),
+          await readJson(http, [`GET ${pageUrl}`], headers)(pageUrl, "GET", signal),
         );
-        const hits = list(page.data, OFFER_PAGE_LIMIT).map((offer) => mapOffer(offer, query));
+        const hits: ReturnType<typeof mapOffer>[] = [];
+        let rejected = 0;
+        let firstRejection: SupplyReadError | null = null;
+        // One unusable fare record must not discard an entire route's inventory.
+        for (const offer of list(page.data, OFFER_PAGE_LIMIT)) {
+          try {
+            hits.push(mapOffer(offer, query));
+          } catch (error) {
+            if (!isSupplyReadError(error)) throw error;
+            rejected += 1;
+            firstRejection = firstRejection ?? error;
+          }
+        }
+        // When no fare is usable, the page's own rejection reason is the honest status
+        // (for example an unsupported currency) instead of a generic failure.
+        if (!hits.length && rejected) throw firstRejection ?? new SupplyReadError("error");
         for (const hit of hits) {
           if (grants.size >= 256) grants.delete(grants.keys().next().value!);
           grants.set(hit.offerId, queryKey(query));

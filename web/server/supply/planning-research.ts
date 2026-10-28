@@ -12,12 +12,14 @@ import { readOwnedTripVersion } from "@/domain/trip/read";
 import { ProblemError } from "@/server/errors";
 import { selectedOfferSchema, selectedOffersSchema } from "@/domain/trip/proposal";
 
+import { providerSearchBudgetMs, RESEARCH_BUDGET_MS } from "./deadlines";
 import {
   productReadiness,
   readWithRateLimitRetry,
   searchPlanningOffers,
   supplyReadQuerySchema,
   SupplyReadError,
+  type SupplyReadOutcome,
   type SupplyReadProvider,
 } from "./read";
 import {
@@ -30,6 +32,8 @@ import {
 import type { SupplierReadiness } from "@/server/config";
 import type { Database } from "@/server/db/database";
 import type { Kysely, Transaction } from "kysely";
+
+export const RESEARCH_COMPONENT_TYPES = ["flight", "accommodation", "activity", "rail"] as const;
 
 export const researchQuerySchema = z
   .object({
@@ -119,7 +123,7 @@ export async function searchResearch(
 ) {
   const input = researchQuerySchema.parse(raw);
   const signal = AbortSignal.any([
-    AbortSignal.timeout(12_000),
+    AbortSignal.timeout(RESEARCH_BUDGET_MS),
     ...(options.signal ? [options.signal] : []),
   ]);
   requireTime(signal);
@@ -169,6 +173,28 @@ export async function searchResearch(
         signal,
       })
     : { offers: [], outcomes: [] };
+  if (input.componentTypes.length < RESEARCH_COMPONENT_TYPES.length) {
+    // A scoped retry re-reads only the products that failed and replays the evidence
+    // already persisted for everything else, so no successful read is repeated.
+    const reused = await reusePriorResearch(database, actor, basis, types, new Date());
+    if (reused.offers.length) result.offers.push(...reused.offers);
+    if (reused.outcomes.length) result.outcomes.push(...reused.outcomes);
+  }
+  if (result.outcomes.length)
+    // Operator diagnostics only: status per product, never supplier bodies or credentials.
+    console.warn(
+      JSON.stringify({
+        event: "supplier_research_completed",
+        runId: basis.runId,
+        offers: result.offers.length,
+        outcomes: result.outcomes.map((entry) => ({
+          provider: entry.provider,
+          componentType: entry.componentType,
+          status: entry.status,
+          retryable: entry.retryable,
+        })),
+      }),
+    );
   if (filteredAccommodation)
     result.outcomes.push({
       provider: "nuitee",
@@ -185,7 +211,7 @@ export async function searchResearch(
     propertyTypes: input.propertyTypes,
     requirementIds: input.requirementIds,
   });
-  const offers = result.offers.map((rawOffer) =>
+  const offers = boundedOffers(result.offers).map((rawOffer) =>
     normalizePlanningOffer({
       ...rawOffer,
       offerRef: randomUUID(),
@@ -246,6 +272,132 @@ export async function searchResearch(
     outcomes: result.outcomes,
     queryFingerprint,
   };
+}
+
+/**
+ * Replays still-valid offers for products a scoped retry did not re-read. The prior
+ * evidence only qualifies when the same dates, party, currency and destinations were
+ * researched, and expired or incomplete evidence is always dropped rather than
+ * extended. A saved draft version does not disqualify it: the researched facts are
+ * the same trip facts.
+ */
+async function reusePriorResearch(
+  database: Kysely<Database>,
+  actor: ResearchActor,
+  basis: { runId: string; query: z.infer<typeof supplyReadQuerySchema> },
+  retriedTypes: readonly string[],
+  now: Date,
+): Promise<{ offers: PlanningOffer[]; outcomes: SupplyReadOutcome[] }> {
+  const runs = await database
+    .selectFrom("agentRuns")
+    .select(["id", "researchResult"])
+    .where("ownerUserId", "=", actor.userId)
+    .where("tripId", "=", actor.tripId)
+    .where("id", "!=", basis.runId)
+    .orderBy("startedAt", "desc")
+    .limit(5)
+    .execute();
+  const offers: PlanningOffer[] = [];
+  const outcomes = new Map<string, SupplyReadOutcome>();
+  const seen = new Set<string>();
+  for (const run of runs) {
+    const rows = await database
+      .selectFrom("planningOfferRecords")
+      .select(["offer", "query"])
+      .where("runId", "=", run.id)
+      .limit(64)
+      .execute();
+    for (const row of rows) {
+      let offer: PlanningOffer;
+      try {
+        offer = normalizePlanningOffer(row.offer, now);
+      } catch {
+        continue;
+      }
+      const type = offer.component.type;
+      if (retriedTypes.includes(type) || offer.component.offerStatus !== "available") continue;
+      const query = row.query as Record<string, unknown> | null;
+      if (
+        !query ||
+        query.startDate !== basis.query.startDate ||
+        query.endDate !== basis.query.endDate ||
+        query.currency !== basis.query.currency ||
+        JSON.stringify(query.destinationIds) !== JSON.stringify(basis.query.destinationIds) ||
+        JSON.stringify(query.travellerParty) !== JSON.stringify(basis.query.travellerParty) ||
+        !isCompletePlanningOffer(offer)
+      )
+        continue;
+      const identity = `${type}:${offer.component.provider}:${offer.component.supplierOfferId}`;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      offers.push(offer);
+    }
+    const recorded = researchOutcomes(run.researchResult);
+    for (const outcome of recorded)
+      if (!retriedTypes.includes(outcome.componentType) && !outcomes.has(outcome.componentType))
+        outcomes.set(outcome.componentType, outcome);
+  }
+  // A product reused from prior evidence reports that reuse explicitly instead of
+  // claiming a fresh read. A product whose earlier read failed is still reported as
+  // currently unavailable, because this retry did not re-read it.
+  const reused = [...outcomes.values()].map((outcome) => ({
+    ...outcome,
+    reused: outcome.status === "available" || outcome.status === "no_matches",
+  }));
+  for (const offer of offers) {
+    const type = offer.component.type;
+    if (reused.some((outcome) => outcome.componentType === type)) continue;
+    reused.push({
+      provider: offer.component.provider,
+      componentType: type,
+      mode: "unknown",
+      status: "available",
+      safeReason:
+        "Reused cited research for the same trip dates and party; inventory is not reserved.",
+      retryable: false,
+      retryAfterMs: null,
+      unverifiedCount: offer.unverifiedFacts.length,
+      reused: true,
+    });
+  }
+  return { offers, outcomes: reused };
+}
+
+function researchOutcomes(value: unknown): SupplyReadOutcome[] {
+  const outcomes = (value as { outcomes?: unknown } | null)?.outcomes;
+  if (!Array.isArray(outcomes)) return [];
+  const parsed: SupplyReadOutcome[] = [];
+  for (const entry of outcomes.slice(0, 16)) {
+    const candidate = entry as Partial<SupplyReadOutcome> | null;
+    if (
+      !candidate ||
+      typeof candidate.componentType !== "string" ||
+      typeof candidate.status !== "string" ||
+      typeof candidate.provider !== "string" ||
+      typeof candidate.safeReason !== "string"
+    )
+      continue;
+    parsed.push(candidate as SupplyReadOutcome);
+  }
+  return parsed;
+}
+
+/**
+ * Keeps the shared offer budget with per-product fairness, so replaying prior evidence
+ * for one product can never squeeze another product's fresh offers out of the page.
+ */
+function boundedOffers(offers: readonly PlanningOffer[], limit = 32): PlanningOffer[] {
+  const byType = new Map<string, PlanningOffer[]>();
+  for (const offer of offers) {
+    const bucket = byType.get(offer.component.type) ?? [];
+    if (bucket.length < 16) bucket.push(offer);
+    byType.set(offer.component.type, bucket);
+  }
+  const bounded: PlanningOffer[] = [];
+  for (let index = 0; index < 16 && bounded.length < limit; index += 1)
+    for (const bucket of byType.values())
+      if (bucket[index] && bounded.length < limit) bounded.push(bucket[index]);
+  return bounded;
 }
 
 async function evidenceRecord(database: Kysely<Database>, actor: ResearchActor, raw: unknown) {
@@ -478,9 +630,10 @@ export async function refreshResearchOffer(
     };
   }
   let current: PlanningOffer;
+  const budgetMs = providerSearchBudgetMs(previous.component.provider);
   const deadline = new AbortController();
-  const deadlineAt = Date.now() + 8_000;
-  const timer = setTimeout(() => deadline.abort(), 8_000);
+  const deadlineAt = Date.now() + budgetMs;
+  const timer = setTimeout(() => deadline.abort(), budgetMs);
   const signal = AbortSignal.any([deadline.signal, requestSignal]);
   let stop: (() => void) | undefined;
   try {

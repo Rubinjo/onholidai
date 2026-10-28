@@ -388,6 +388,7 @@ export const AgentRunSchema: z.ZodType<AgentRun> = z
                     "running",
                     "awaiting_clarification",
                     "proposed",
+                    "completed",
                     "failed",
                     "cancelled",
                   ],

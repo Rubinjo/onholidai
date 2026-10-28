@@ -217,13 +217,23 @@ def test_run_lease_and_result_state_are_consistent() -> None:
         AgentRun.model_validate({**run, "leaseExpiresAt": None})
     with pytest.raises(ValidationError):
         AgentRun.model_validate({**run, "status": "awaiting_clarification"})
+    # A sourced estimate may legitimately answer instead of proposing (for example when
+    # required transport could not be priced); that is completed work, not a failure.
+    AgentRun.model_validate(
+        {
+            **run,
+            "status": "completed",
+            "leaseExpiresAt": None,
+            "result": {"kind": "answer", "message": "Supplier research is incomplete"},
+        }
+    )
     with pytest.raises(ValidationError):
         AgentRun.model_validate(
             {
                 **run,
                 "status": "completed",
                 "leaseExpiresAt": None,
-                "result": {"kind": "answer", "message": "Unreviewable estimate"},
+                "result": {"kind": "proposal", "proposal": proposal()},
             }
         )
 

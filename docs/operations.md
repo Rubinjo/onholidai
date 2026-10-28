@@ -74,6 +74,24 @@ Duffel can resolve airport suggestions when a saved IATA mapping is absent. Nuit
 
 Duffel Stays is not an active accommodation source. Previously saved evidence may remain visible, but new stay research uses Nuitee. Rail is not an active supplier integration.
 
+### Supplier research timeouts and retries
+
+Supplier latency is dominated by supplier-side queue time, not our own work. A live Duffel search needs an offer request plus a paged offer read (five to nine seconds together), and a Viator product search regularly takes twenty to forty seconds. The shared policy in [deadlines.ts](../web/server/supply/deadlines.ts) keeps every layer aligned, so a source is never cut off by a bound that a different process assumed was generous:
+
+| Bound                   | Value                              | Applies to                                               |
+| ----------------------- | ---------------------------------- | -------------------------------------------------------- |
+| Supplier attempt        | 20 seconds (Viator 50)             | One HTTP request inside a read                           |
+| Product search budget   | Duffel 35s, Nuitee 30s, Viator 50s | Every call one product needs, including place resolution |
+| Research request budget | 65 seconds                         | All products in parallel, plus persistence               |
+| Agent research call     | 75 seconds                         | The agent's client bound for that request                |
+| Estimate run            | 210 seconds                        | One dispatched estimate, renewed by progress events      |
+
+Reads retry a transient supplier failure (network error, HTTP 408/425/429/5xx, or an unusable page) up to three attempts with jittered exponential backoff, honouring a supplier `Retry-After` window. Definitive rejections (401, 403, most 4xx, unsupported coverage) are never retried. **Transaction clients never opt into retries**: a booking call is attempted once, so an uncertain supplier outcome is never replayed automatically.
+
+Each product reports its own outcome (`available`, `no_matches`, `deadline`, `rate_limited`, `access_blocked`, `unconfigured`, `unsupported`, `error`). A failed product never discards another product's sourced offers, and one unusable record inside a supplier page is dropped without discarding the rest of that page. Supplier failure diagnostics are logged as JSON with the provider, product, status, duration and an internal cause code — never a URL, credential or supplier body.
+
+When products fail, the draft is not silently changed. The assistant answers with per-product reasons, and the workspace shows the same status with a **Retry** action for the products that can reasonably succeed. A retry re-reads only those products and replays still-valid evidence for the others, so successful work is not repeated and the reviewed settings are untouched.
+
 ### Give each process only the credentials it needs
 
 | Process          | Allowed credential purpose                                                                     |

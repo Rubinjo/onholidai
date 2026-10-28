@@ -12,10 +12,43 @@ import { ProposalCard } from "./proposal-card";
 import { Clarification } from "./clarification";
 import { TripCheckpoint, useChatVersions } from "./trip-checkpoints";
 
+const componentLabels: Record<string, string> = {
+  flight: "Flight",
+  accommodation: "Stay",
+  activity: "Activity",
+  rail: "Rail",
+};
+const researchSchema = z
+  .object({
+    outcomes: z.array(
+      z
+        .object({
+          provider: z.string().nullable(),
+          componentType: z.string(),
+          status: z.string(),
+          mode: z.string(),
+          safeReason: z.string(),
+          retryable: z.boolean(),
+          retryAfterMs: z.number().nullable(),
+          unverifiedCount: z.number(),
+          reused: z.boolean(),
+        })
+        .passthrough(),
+    ),
+    retryableComponentTypes: z.array(z.string()),
+    incomplete: z.boolean(),
+  })
+  .passthrough();
 const runSchema = z
   .object({
     id: z.uuid(),
     status: z.string(),
+    research: researchSchema.nullable().optional(),
+    failure: z
+      .object({ category: z.string(), message: z.string() })
+      .passthrough()
+      .nullable()
+      .optional(),
     result: z
       .object({
         kind: z.string(),
@@ -105,7 +138,7 @@ export function Conversation({
   });
   const refreshHistory = history.refetch;
   const submit = useCallback(
-    async (purpose?: "initial_estimate") => {
+    async (purpose?: "initial_estimate", retryScope?: readonly string[]) => {
       setError("");
       setOutcome("");
       setBusy(true);
@@ -114,12 +147,15 @@ export function Conversation({
         // replay their original request and version until their outcome is known.
         const latest = tripEnvelopeSchema.parse(await planningJson(`/api/v1/trips/${trip.tripId}`));
         if (!pendingResearch.current) {
+          const scope = retryScope?.length
+            ? ` Retry supplier research for: ${retryScope.join(", ")}.`
+            : "";
           pendingResearch.current = {
             requestId: initialRequest.current ?? crypto.randomUUID(),
             baseTripVersion: latest.version,
             purpose:
               purpose ?? (latest.snapshot.components.length ? "refinement" : "initial_estimate"),
-            message: message || "Estimate my reviewed settings and update my draft trip.",
+            message: (message || "Estimate my reviewed settings and update my draft trip.") + scope,
           };
           initialRequest.current = undefined;
         }
@@ -183,6 +219,13 @@ export function Conversation({
   ]);
   const result = run.data?.result,
     active = ["queued", "running"].includes(run.data?.status ?? "");
+  const statusPanel =
+    run.data?.research?.incomplete && !active && run.data.status !== "failed"
+      ? run.data.research.outcomes.filter(
+          (entry) =>
+            entry.retryable || entry.status === "access_blocked" || entry.status === "no_matches",
+        )
+      : null;
   const canSend =
     !busy &&
     !active &&
@@ -279,7 +322,8 @@ export function Conversation({
             (retryPending
               ? "The previous request is unconfirmed. Retry it before sending another message; your draft is preserved."
               : run.data?.status === "failed"
-                ? "Research interrupted. Retry the update or send a message to continue."
+                ? (run.data.failure?.message ??
+                  "Research interrupted. Retry the update or send a message to continue.")
                 : active
                   ? "Updating your trip…"
                   : "Ready")}
@@ -338,6 +382,40 @@ export function Conversation({
             ? `Retry trip update in ${retryAfterSeconds}s`
             : "Retry trip update"}
         </Button>
+      )}
+      {!active && statusPanel && (
+        <section className="assistant-chat__research" aria-labelledby="research-status-heading">
+          <h3 id="research-status-heading">Research status</h3>
+          <p>
+            Some supplier steps did not return usable current inventory. Nothing was booked and the
+            missing facts stay unknown.
+          </p>
+          <ul aria-label="Supplier research results">
+            {statusPanel.map((entry) => (
+              <li key={`${entry.componentType}-${entry.provider ?? "none"}-${entry.status}`}>
+                <strong>{componentLabels[entry.componentType] ?? entry.componentType}</strong>:{" "}
+                {entry.safeReason}{" "}
+                <span className="assistant-chat__research-status">({entry.status})</span>
+                {entry.reused ? " Reused from earlier research for this trip; not re-priced." : ""}
+              </li>
+            ))}
+          </ul>
+          {run.data?.research?.retryableComponentTypes.length ? (
+            <Button
+              variant="outline"
+              disabled={busy || retryAfterSeconds > 0 || trip.lifecycleState !== "draft"}
+              onClick={() => void submit(undefined, run.data?.research?.retryableComponentTypes)}
+            >
+              {retryAfterSeconds > 0
+                ? `Retry research in ${retryAfterSeconds}s`
+                : `Retry ${run.data.research.retryableComponentTypes.map((type) => componentLabels[type] ?? type).join(" and ")} research`}
+            </Button>
+          ) : (
+            <p>
+              Retrying will not change these results until the supplier access or support changes.
+            </p>
+          )}
+        </section>
       )}
       <form
         className="assistant-chat__composer"

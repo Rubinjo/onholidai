@@ -9,6 +9,7 @@ import {
 } from "@/domain/trip/schema";
 import { containsSensitiveText } from "@/lib/privacy";
 
+import { providerSearchBudgetMs, retryDelayMs } from "./deadlines";
 import { normalizePlanningOffer, type PlanningOffer } from "./offers";
 
 import type { ProviderOperationReadiness, SupplierReadiness } from "@/server/config";
@@ -101,11 +102,20 @@ const safeReasons: Record<SearchStatus, string> = {
   error: "The supplier search failed or returned invalid evidence; inventory is unknown.",
 };
 
+export interface SupplyReadErrorOptions {
+  /** Overrides the default "transport-shaped failures are worth another attempt" rule. */
+  retryable?: boolean;
+  /** Short machine code for operator logs. Never contains supplier text or credentials. */
+  detail?: string;
+}
+
 export class SupplyReadError extends Error {
   readonly status: FailureStatus;
   readonly retryAfterMs: number | null;
+  readonly retryable: boolean;
+  readonly detail: string | null;
 
-  constructor(status: FailureStatus, retryAfterMs?: number) {
+  constructor(status: FailureStatus, retryAfterMs?: number, options: SupplyReadErrorOptions = {}) {
     super(safeReasons[status]);
     this.name = "SupplyReadError";
     this.status = failureStatusSchema.parse(status);
@@ -113,7 +123,29 @@ export class SupplyReadError extends Error {
       status === "rate_limited" && retryAfterMs !== undefined
         ? z.number().int().min(0).max(86_400_000).parse(retryAfterMs)
         : null;
+    this.retryable = options.retryable ?? (status === "error" || status === "rate_limited");
+    this.detail = options.detail ?? null;
   }
+
+  /** Same public message and status, with an internal diagnostic code attached. */
+  withDetail(detail: string): SupplyReadError {
+    return new SupplyReadError(this.status, this.retryAfterMs ?? undefined, {
+      retryable: this.retryable,
+      detail,
+    });
+  }
+}
+
+/** Brand check: the same module can be bundled more than once, so instanceof alone is unsafe. */
+export function isSupplyReadError(error: unknown): error is SupplyReadError {
+  if (error instanceof SupplyReadError) return true;
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { name?: unknown; status?: unknown };
+  return (
+    candidate.name === "SupplyReadError" &&
+    typeof candidate.status === "string" &&
+    failureStatusSchema.safeParse(candidate.status).success
+  );
 }
 
 export interface SupplyReadOutcome {
@@ -125,6 +157,8 @@ export interface SupplyReadOutcome {
   retryable: boolean;
   retryAfterMs: number | null;
   unverifiedCount: number;
+  /** True when a scoped retry replayed still-valid evidence instead of re-reading it. */
+  reused?: boolean;
 }
 export interface SupplyReadResult {
   offers: PlanningOffer[];
@@ -176,22 +210,19 @@ export async function readWithRateLimitRetry<T>(
   try {
     return await operation();
   } catch (error) {
-    if (
-      !(error instanceof SupplyReadError) ||
-      error.status !== "rate_limited" ||
-      error.retryAfterMs === null ||
-      signal.aborted ||
-      error.retryAfterMs >= deadlineAt - Date.now()
-    )
-      throw error;
-    const retryAfterMs = error.retryAfterMs;
+    if (!isSupplyReadError(error) || !error.retryable || signal.aborted) throw error;
+    // HTTP-level attempts already retried inside the reader; this is one provider-level
+    // second chance for a transient failure that survived them, honoured only when the
+    // remaining budget can absorb the wait.
+    const delay = retryDelayMs(1, error.retryAfterMs);
+    if (Date.now() + delay >= deadlineAt) throw error;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stop: (() => void) | undefined;
     try {
       await new Promise<void>((resolve, reject) => {
         stop = () => reject(new SupplyReadError("error"));
         signal.addEventListener("abort", stop, { once: true });
-        timer = setTimeout(resolve, retryAfterMs);
+        timer = setTimeout(resolve, delay);
         if (signal.aborted) stop();
       });
     } finally {
@@ -229,7 +260,8 @@ async function boundedSearch(
     };
   }
   const controller = new AbortController();
-  const deadlineAt = Date.now() + 8_000;
+  const budgetMs = providerSearchBudgetMs(sourceOutcome.provider ?? "");
+  const startedAt = Date.now();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let cancel: (() => void) | undefined;
   const deadline = new Promise<never>((_, reject) => {
@@ -237,7 +269,7 @@ async function boundedSearch(
       reject(new Error("Search interrupted"));
       controller.abort();
     };
-    timer = setTimeout(stop, 8_000);
+    timer = setTimeout(stop, budgetMs);
     cancel = stop;
     signal?.addEventListener("abort", stop, { once: true });
   });
@@ -247,25 +279,41 @@ async function boundedSearch(
         () =>
           provider.search({ ...structuredClone(query), componentTypes: [type] }, controller.signal),
         controller.signal,
-        deadlineAt,
+        startedAt + budgetMs,
       ),
       deadline,
     ]);
     if (signal?.aborted || controller.signal.aborted) throw new Error("Search interrupted");
     if (!Array.isArray(rawOffers) || rawOffers.length > 32)
-      throw new Error("Offer response is too large or invalid");
-    const normalized = rawOffers.map((offer) => normalizePlanningOffer(offer, now));
-    if (
-      normalized.some(
-        (offer) =>
-          offer.component.provider !== provider.capabilities.provider ||
-          offer.component.type !== type ||
-          (offer.component.price.finalCustomerAmount?.currency ??
-            offer.component.price.currency) !== query.currency,
-      )
-    ) {
-      throw new Error("Offer context does not match research");
+      throw new SupplyReadError("error", undefined, {
+        retryable: false,
+        detail: "offer_page_too_large",
+      });
+    const normalized: PlanningOffer[] = [];
+    let rejected = 0;
+    for (const offer of rawOffers) {
+      try {
+        const candidate = normalizePlanningOffer(offer, now);
+        if (
+          candidate.component.provider !== provider.capabilities.provider ||
+          candidate.component.type !== type ||
+          (candidate.component.price.finalCustomerAmount?.currency ??
+            candidate.component.price.currency) !== query.currency
+        ) {
+          rejected += 1;
+          continue;
+        }
+        normalized.push(candidate);
+      } catch {
+        // A single unusable record is a partial supplier outage, not a failed search.
+        rejected += 1;
+      }
     }
+    if (!normalized.length && rejected)
+      throw new SupplyReadError("error", undefined, {
+        retryable: false,
+        detail: "no_usable_offers",
+      });
     const offers = [...new Map(normalized.map((offer) => [offerIdentity(offer), offer])).values()];
     return {
       offers,
@@ -292,20 +340,51 @@ async function boundedSearch(
     }
     const status = controller.signal.aborted
       ? "deadline"
-      : error instanceof SupplyReadError
+      : isSupplyReadError(error)
         ? error.status
         : "error";
+    logSupplierSearchFailure({
+      provider: sourceOutcome.provider,
+      componentType: type,
+      mode: sourceOutcome.mode ?? "unknown",
+      status,
+      durationMs: Date.now() - startedAt,
+      budgetMs,
+      detail: isSupplyReadError(error)
+        ? error.detail
+        : controller.signal.aborted
+          ? "search_deadline"
+          : "unexpected_error",
+      errorName: error instanceof Error ? error.constructor.name : typeof error,
+    });
     return {
       offers: [],
       outcome: {
         ...outcome(sourceOutcome.provider, type, status, sourceOutcome.mode),
-        retryAfterMs: error instanceof SupplyReadError ? error.retryAfterMs : null,
+        retryAfterMs: isSupplyReadError(error) ? error.retryAfterMs : null,
       },
     };
   } finally {
     clearTimeout(timer);
     if (cancel) signal?.removeEventListener("abort", cancel);
   }
+}
+
+/**
+ * Operator diagnostics for a failed supplier read. Deliberately limited to fixed fields:
+ * never a supplier URL, header, credential or response body, and never traveller content.
+ */
+function logSupplierSearchFailure(fields: {
+  provider: string | null;
+  componentType: ComponentType;
+  mode: string;
+  status: SearchStatus;
+  durationMs: number;
+  budgetMs: number;
+  detail: string | null;
+  errorName?: string;
+}) {
+  console.warn(JSON.stringify({ event: "supplier_search_failed", ...fields }));
 }
 
 const deferredProviders = new Set(["booking", "booking.com", "trainline", "getyourguide"]);

@@ -1,32 +1,38 @@
 import { z } from "zod";
 
-const destinationResultsSchema = z
+import { retryDelayMs } from "./deadlines";
+
+// Viator's freetext destination search currently answers HTTP 500 for every
+// DESTINATIONS query, while the published destination catalogue is served reliably
+// (about 1.2 MB, cached here). Reads therefore resolve supplier place identity from
+// the catalogue instead of guessing an id or dropping activity coverage entirely.
+
+const catalogEntrySchema = z
   .object({
-    destinations: z
-      .object({
-        results: z
-          .array(
-            z
-              .object({
-                id: z.number().int().positive().max(2_147_483_647),
-                name: z.string().trim().min(1).max(200),
-              })
-              .passthrough(),
-          )
-          .max(20),
-      })
-      .passthrough(),
+    destinationId: z.number().int().positive().max(2_147_483_647),
+    name: z.string().trim().min(1).max(200),
+    type: z.string().trim().min(1).max(40),
+    parentDestinationId: z.number().int().positive().max(2_147_483_647).nullish(),
   })
+  .passthrough();
+const catalogSchema = z
+  .object({ destinations: z.array(catalogEntrySchema).min(1).max(20_000) })
   .passthrough();
 
 export interface ViatorDestinationMatch {
   id: string;
   name: string;
+  type: string;
+  parentId: string | null;
 }
 
 export interface ViatorDestinationDirectory {
-  /** Best-effort Viator destination lookup; never throws and never blocks planning. */
-  lookup(term: string, signal: AbortSignal): Promise<readonly ViatorDestinationMatch[]>;
+  /**
+   * Ranked supplier destination ids for a traveller-facing place name: the exact
+   * match first, then its parent country when the match is a city. Never throws and
+   * never invents an identity; an unmatched name yields no candidates.
+   */
+  candidates(term: string, signal?: AbortSignal): Promise<readonly ViatorDestinationMatch[]>;
 }
 
 export interface ViatorDestinationOptions {
@@ -37,74 +43,118 @@ export interface ViatorDestinationOptions {
   now?: () => number;
 }
 
-const CACHE_MS = 10 * 60_000;
-const CACHE_LIMIT = 200;
+const CACHE_MS = 30 * 60_000;
+const CATALOG_RESPONSE_LIMIT = 8 * 1_048_576;
+const CATALOG_ATTEMPTS = 2;
+const MAX_MATCHES = 8;
 
-// Free-text search requires a currency, but destination identity and naming do not
-// depend on it; this value is never used to price anything.
-const LOOKUP_CURRENCY = "EUR";
+const normalizeName = (value: string) => value.trim().toLocaleLowerCase("en");
 
 export function createViatorDestinationDirectory(
   options: ViatorDestinationOptions,
 ): ViatorDestinationDirectory {
   const endpoint =
     options.environment === "sandbox"
-      ? "https://api.sandbox.viator.com/partner/search/freetext"
-      : "https://api.viator.com/partner/search/freetext";
+      ? "https://api.sandbox.viator.com/partner/destinations"
+      : "https://api.viator.com/partner/destinations";
   const now = options.now ?? Date.now;
-  const timeout = Math.min(2500, Math.max(250, options.timeoutMs ?? 2000));
-  const cache = new Map<string, { at: number; matches: readonly ViatorDestinationMatch[] }>();
+  const timeout = Math.min(15_000, Math.max(1_000, options.timeoutMs ?? 10_000));
+  let cached: { at: number; entries: z.infer<typeof catalogEntrySchema>[] } | null = null;
+  let inFlight: Promise<z.infer<typeof catalogEntrySchema>[]> | null = null;
+
+  async function fetchCatalog(signal?: AbortSignal): Promise<z.infer<typeof catalogEntrySchema>[]> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    const cancel = () => controller.abort();
+    signal?.addEventListener("abort", cancel, { once: true });
+    try {
+      const response = await (options.fetch ?? fetch)(endpoint, {
+        method: "GET",
+        headers: {
+          "exp-api-key": options.apiKey,
+          Accept: "application/json;version=2.0",
+          "Accept-Language": "en",
+        },
+        signal: controller.signal,
+        redirect: "error",
+        credentials: "omit",
+        cache: "no-store",
+      });
+      if (!response.ok) return [];
+      const body = await response.text();
+      if (body.length > CATALOG_RESPONSE_LIMIT) return [];
+      const parsed = catalogSchema.safeParse(JSON.parse(body) as unknown);
+      return parsed.success ? parsed.data.destinations : [];
+    } catch {
+      return [];
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+    }
+  }
+
+  async function catalog(signal?: AbortSignal): Promise<z.infer<typeof catalogEntrySchema>[]> {
+    if (cached && now() - cached.at < CACHE_MS) return cached.entries;
+    if (inFlight) return inFlight;
+    inFlight = (async () => {
+      for (let attemptNumber = 1; attemptNumber <= CATALOG_ATTEMPTS; attemptNumber += 1) {
+        const entries = await fetchCatalog(signal);
+        if (entries.length) {
+          cached = { at: now(), entries };
+          return entries;
+        }
+        if (attemptNumber === CATALOG_ATTEMPTS || signal?.aborted) return [];
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs(attemptNumber)));
+      }
+      return [];
+    })().finally(() => {
+      inFlight = null;
+    });
+    return inFlight;
+  }
 
   return {
-    async lookup(term, signal) {
-      const key = term.trim().toLocaleLowerCase("en");
+    async candidates(term, signal) {
+      const key = normalizeName(term);
       if (!key) return [];
-      const cached = cache.get(key);
-      if (cached && now() - cached.at < CACHE_MS) return cached.matches;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeout);
-      const cancel = () => controller.abort();
-      signal.addEventListener("abort", cancel, { once: true });
-      try {
-        const response = await (options.fetch ?? fetch)(endpoint, {
-          method: "POST",
-          headers: {
-            "exp-api-key": options.apiKey,
-            Accept: "application/json;version=2.0",
-            "Content-Type": "application/json;version=2.0",
-            "Accept-Language": "en",
-          },
-          body: JSON.stringify({
-            searchTerm: term.trim().slice(0, 200),
-            currency: LOOKUP_CURRENCY,
-            searchTypes: [{ searchType: "DESTINATIONS", pagination: { start: 1, count: 10 } }],
-          }),
-          signal: controller.signal,
-          redirect: "error",
-          credentials: "omit",
-          cache: "no-store",
-        });
-        if (!response.ok) return [];
-        const parsed = destinationResultsSchema.safeParse(await response.json());
-        if (!parsed.success) return [];
-        const matches = parsed.data.destinations.results.map((result) => ({
-          id: String(result.id),
-          name: result.name,
+      const entries = await catalog(signal);
+      if (!entries.length) return [];
+      const matches = entries
+        .filter((entry) => normalizeName(entry.name) === key)
+        .slice(0, MAX_MATCHES)
+        .map((entry) => ({
+          id: String(entry.destinationId),
+          name: entry.name,
+          type: entry.type.toLocaleUpperCase("en"),
+          parentId: entry.parentDestinationId ? String(entry.parentDestinationId) : null,
         }));
-        if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!);
-        cache.set(key, { at: now(), matches });
-        return matches;
-      } catch {
-        return [];
-      } finally {
-        clearTimeout(timer);
-        signal.removeEventListener("abort", cancel);
+      if (!matches.length) return [];
+      const byId = new Map(entries.map((entry) => [String(entry.destinationId), entry]));
+      const ranked: ViatorDestinationMatch[] = [];
+      const seen = new Set<string>();
+      for (const match of matches) {
+        if (seen.has(match.id)) continue;
+        seen.add(match.id);
+        ranked.push(match);
       }
+      // A city search can fail inside the supplier while the same country succeeds;
+      // the country is a legitimate, larger coverage area for the named place.
+      for (const match of matches) {
+        if (match.type !== "CITY" || !match.parentId) continue;
+        const parent = byId.get(match.parentId);
+        if (!parent || seen.has(String(parent.destinationId))) continue;
+        seen.add(String(parent.destinationId));
+        ranked.push({
+          id: String(parent.destinationId),
+          name: parent.name,
+          type: parent.type.toLocaleUpperCase("en"),
+          parentId: null,
+        });
+      }
+      return ranked;
     },
   };
 }
-
-const normalizeName = (value: string) => value.trim().toLocaleLowerCase("en");
 
 /**
  * Returns a Viator destination ID only when the supplier returns exactly one

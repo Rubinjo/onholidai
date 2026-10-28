@@ -280,6 +280,10 @@ class AgentRun(ContractModel):
                                     "running",
                                     "awaiting_clarification",
                                     "proposed",
+                                    # A sourced estimate can legitimately answer instead of
+                                    # proposing, for example when required transport could not
+                                    # be priced. That run is completed work, not a failure.
+                                    "completed",
                                     "failed",
                                     "cancelled",
                                 ]

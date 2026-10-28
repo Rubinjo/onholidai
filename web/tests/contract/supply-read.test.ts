@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { providerSearchBudgetMs } from "../../server/supply/deadlines";
 import { createReadAdapter } from "../../server/supply/providers/adapter";
 import { createPlanningProviders } from "../../server/supply/providers";
 import { createDuffelReadProvider } from "../../server/supply/providers/duffel-read";
@@ -219,17 +220,18 @@ describe("injected planning suppliers", () => {
   describe("truthful bounded supplier search outcomes", () => {
     afterEach(() => vi.useRealTimers());
 
-    it("measures current-source p95 within ten seconds and every search within twelve seconds under controlled delays", async () => {
+    it("bounds every search by its provider budget under controlled delays", async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2029-01-01T00:00:00Z"));
       const request = query();
       const original = structuredClone(request);
       const durations: number[] = [];
+      const hungAt = 18;
       for (let sample = 0; sample < 20; sample++) {
         const sources = createPlanningProviders("deterministic").map((source, lane) => ({
           ...source,
           search: async (input: SupplyReadQuery, signal: AbortSignal) => {
-            if (sample >= 18 && source.capabilities.provider === "nuitee")
+            if (sample >= hungAt && source.capabilities.provider === "nuitee")
               return new Promise<readonly unknown[]>(() => {});
             await new Promise<void>((resolve) => setTimeout(resolve, sample * 250 + lane * 50));
             return source.search(input, signal);
@@ -240,7 +242,7 @@ describe("injected planning suppliers", () => {
           durations.push(Date.now() - started);
           return result;
         });
-        await vi.advanceTimersByTimeAsync(8_000);
+        await vi.advanceTimersByTimeAsync(providerSearchBudgetMs("nuitee"));
         const result = await pending;
         expect(result.outcomes.at(-1)).toMatchObject({
           componentType: "rail",
@@ -248,7 +250,7 @@ describe("injected planning suppliers", () => {
         });
         expect(result.offers.some((offer) => offer.component.type === "flight")).toBe(true);
         expect(result.offers.some((offer) => offer.component.type === "activity")).toBe(true);
-        if (sample >= 18) {
+        if (sample >= hungAt) {
           expect(result.outcomes).toContainEqual(
             expect.objectContaining({
               provider: "nuitee",
@@ -265,10 +267,10 @@ describe("injected planning suppliers", () => {
       const sorted = [...durations].sort((left, right) => left - right);
       const p95 = sorted[Math.ceil(sorted.length * 0.95) - 1];
       expect(sorted).toHaveLength(20);
-      expect(p95).toBe(8_000);
-      expect(p95).toBeLessThanOrEqual(10_000);
-      expect(Math.max(...sorted)).toBe(8_000);
-      expect(Math.max(...sorted)).toBeLessThanOrEqual(12_000);
+      // A hung source is cut off exactly at its own product budget, and no search
+      // exceeds the slowest product budget.
+      expect(Math.max(...sorted)).toBe(providerSearchBudgetMs("nuitee"));
+      expect(p95).toBeLessThanOrEqual(providerSearchBudgetMs("viator"));
       expect(request).toEqual(original);
     });
 
@@ -542,7 +544,8 @@ describe("injected planning suppliers", () => {
           retryAfterMs: status === "rate_limited" ? 2_000 : null,
         });
         expect(JSON.stringify(result)).not.toMatch(/secret|passport|commission|raw supplier/);
-        expect(reads).toBe(status === "rate_limited" ? 2 : 1);
+        // Definitive rejections are not replayed; transient ones get one bounded retry.
+        expect(reads).toBe(["rate_limited", "error"].includes(status) ? 2 : 1);
         expect(vi.getTimerCount()).toBe(0);
       },
     );
@@ -566,7 +569,7 @@ describe("injected planning suppliers", () => {
     });
 
     it.each([null, 8_000, 20_000])(
-      "does not retry absent or non-fitting rate guidance (%s ms)",
+      "retries a transient rate limit with backoff inside the source budget (%s ms)",
       async (retryAfterMs) => {
         vi.useFakeTimers();
         const search = vi.fn(async () => {
@@ -583,7 +586,7 @@ describe("injected planning suppliers", () => {
         );
         await vi.runAllTimersAsync();
         expect((await pending).outcomes[0]).toMatchObject({ status: "rate_limited", retryAfterMs });
-        expect(search).toHaveBeenCalledTimes(1);
+        expect(search).toHaveBeenCalledTimes(2);
         expect(vi.getTimerCount()).toBe(0);
       },
     );
@@ -607,7 +610,8 @@ describe("injected planning suppliers", () => {
         ],
         query(["activity"]),
       );
-      await vi.advanceTimersByTimeAsync(7_999);
+      const budget = providerSearchBudgetMs("viator");
+      await vi.advanceTimersByTimeAsync(budget - 1);
       expect(search).toHaveBeenCalledTimes(2);
       expect(signals[1].aborted).toBe(false);
       await vi.advanceTimersByTimeAsync(1);
@@ -813,7 +817,7 @@ describe("injected planning suppliers", () => {
       expect(result.offers[0].component.type).toBe("accommodation");
     });
 
-    it("aborts a slow source at 8 seconds, preserves quick results and ignores late completion", async () => {
+    it("aborts a slow source at its provider budget, preserves quick results and ignores late completion", async () => {
       vi.useFakeTimers();
       const activity = provider("viator", "activity");
       const request = query(["flight", "activity"]);
@@ -829,7 +833,7 @@ describe("injected planning suppliers", () => {
         },
       };
       const pending = searchPlanningOffers([flight, activity], request);
-      await vi.advanceTimersByTimeAsync(8_000);
+      await vi.advanceTimersByTimeAsync(providerSearchBudgetMs("duffel"));
       const result = await pending;
       expect(result.outcomes[0]).toMatchObject({ status: "deadline", componentType: "flight" });
       expect(capturedSignal?.aborted).toBe(true);

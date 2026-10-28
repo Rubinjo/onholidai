@@ -301,3 +301,143 @@ def test_incomplete_live_pricing_reports_research_instead_of_failing():
     result = asyncio.run(estimate(request(), IncompleteSources())).root
     assert result.kind == "answer"
     assert "none established a complete customer price" in result.message
+
+
+def _multi_city_snapshot(snapshot: dict[str, object]) -> None:
+    snapshot.update(
+        {
+            "departureOrigin": {
+                "placeId": "home",
+                "name": "Home",
+                "confirmedByUser": True,
+                "location": {"latitude": 0, "longitude": 0},
+            },
+            "duration": {"minimumDays": 5, "idealDays": 5, "maximumDays": 8},
+            "destinationOrder": "manual",
+            "destinations": [
+                {
+                    "id": f"10000000-0000-4000-8000-{index:012}",
+                    "name": name,
+                    "kind": "city",
+                    "location": {"latitude": 0, "longitude": longitude},
+                }
+                for index, (name, longitude) in enumerate(
+                    [("Coast", 20), ("Alpha", 0), ("Bay", 10)], 5
+                )
+            ],
+        }
+    )
+
+
+class MultiCitySources(Sources):
+    """One sourced stay per city and a sourced flight, as the research endpoint returns."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        _multi_city_snapshot(cast(dict[str, object], self.trip["snapshot"]))
+
+    async def search(
+        self, request: CreateAgentRunRequest, query: dict[str, object]
+    ) -> dict[str, object]:
+        dates = [
+            ("2030-05-01", "2030-05-03"),
+            ("2030-05-03", "2030-05-04"),
+            ("2030-05-04", "2030-05-05"),
+        ]
+        stops = cast(
+            list[dict[str, object]], cast(dict[str, object], self.trip["snapshot"])["destinations"]
+        )
+        offers: list[dict[str, object]] = [
+            {
+                "component": {
+                    **complete_component_facts("flight", query),
+                    "id": "c0000000-c000-4000-8000-c000000000001",
+                    "type": "flight",
+                    "bookingStatus": "unbooked",
+                    "provider": "duffel",
+                    "price": {
+                        "currency": "EUR",
+                        "finalCustomerMinor": 40000,
+                        "taxesMinor": 0,
+                        "feesMinor": 0,
+                    },
+                }
+            }
+        ]
+        for index, (start, end) in enumerate(dates, 2):
+            offers.append(
+                {
+                    "selectionGroup": f"stay-{index}",
+                    "component": {
+                        "id": f"c0000000-c000-4000-8000-c00000000000{index}",
+                        "type": "accommodation",
+                        "bookingStatus": "unbooked",
+                        "provider": "nuitee",
+                        "serviceStart": f"{start}T15:00:00Z",
+                        "serviceEnd": f"{end}T11:00:00Z",
+                        "details": {"description": "Synthetic stay"},
+                        "cancellationTerms": "Unverified synthetic terms",
+                        "planningDetails": {"locationName": f"Stay in {stops[index - 2]['name']}"},
+                        "price": {
+                            "currency": "EUR",
+                            "finalCustomerMinor": 20000,
+                            "taxesMinor": 0,
+                            "feesMinor": 0,
+                        },
+                    },
+                }
+            )
+        return {"offers": offers}
+
+
+def test_initial_estimate_proposes_a_complete_route_stays_and_intercity_transport():
+    source = MultiCitySources()
+    before = deepcopy(source.trip)
+    result = asyncio.run(estimate(request(), source)).root
+    assert result.kind == "proposal"
+    proposal = result.proposal
+    assert proposal.rationale.startswith(
+        "Suggested route: Home → Coast (2 nights) → Alpha (1 night) → Bay (1 night) → "
+        "back to Home."
+    )
+    suggestions = " ".join(proposal.tradeoffs)
+    assert "Stay in Coast in Coast for 2 nights" in suggestions
+    assert "Stay in Alpha in Alpha for 1 night" in suggestions
+    assert "Stay in Bay in Bay for 1 night" in suggestions
+    assert "Home → Coast:" in suggestions
+    assert "Coast → Alpha:" in suggestions
+    assert "Bay → Home:" in suggestions
+    assert "A shorter circuit would visit" in suggestions
+    assert "unverified" in suggestions
+    # The suggestion is advice: the traveller's saved order is what the proposal applies.
+    routed = cast(
+        list[dict[str, object]],
+        next(
+            operation.value
+            for operation in proposal.operations
+            if operation.target == "/destinations"
+        ),
+    )
+    assert [stop["name"] for stop in routed] == ["Coast", "Alpha", "Bay"]
+    assert source.trip == before
+
+
+def test_initial_estimate_reports_a_city_without_a_sourced_stay():
+    class MissingStay(MultiCitySources):
+        async def search(
+            self, request: CreateAgentRunRequest, query: dict[str, object]
+        ) -> dict[str, object]:
+            found = await super().search(request, query)
+            offers = cast(list[dict[str, object]], found["offers"])
+            return {
+                "offers": [
+                    offer
+                    for offer in offers
+                    if "Stay in Coast"
+                    not in str(cast(dict[str, object], offer["component"]).get("planningDetails"))
+                ]
+            }
+
+    result = asyncio.run(estimate(request(), MissingStay())).root
+    assert result.kind == "proposal"
+    assert any("No sourced stay covers Coast" in tradeoff for tradeoff in result.proposal.tradeoffs)

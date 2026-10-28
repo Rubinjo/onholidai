@@ -30,7 +30,7 @@ class EstimateSources:
         from .supplier_mcp import supplier_server
 
         offers: list[dict[str, object]] = []
-        async with asyncio.timeout(12), Client(supplier_server(self.store, request)) as client:
+        async with asyncio.timeout(30), Client(supplier_server(self.store, request)) as client:
             for selected in request.selected_offers or []:
                 response = await client.call_tool(
                     "supplier_offer_details",
@@ -56,8 +56,9 @@ class EstimateSources:
         trip = await self.get_trip(request)
         snapshot = cast(dict[str, object], trip["snapshot"])
         places = cast(list[dict[str, object]], snapshot["destinations"])
-        geography_query = "Travel overview for " + ", ".join(
-            f"{place['name']}, {place.get('countryCode', '')}" for place in places
+        geography_query = (
+            "Travel overview, plus nearby cities and towns worth adding as an extra base, for "
+            + ", ".join(f"{place['name']}, {place.get('countryCode', '')}" for place in places)
         )
         lookups = [
             client.search(geography_query[:500], 3) for client in (self.maps, self.tavily) if client
@@ -89,7 +90,7 @@ async def supplier_research(
     # The browser submits closed search arguments as the existing run message.
     # Web rechecks their dates, destinations and constraints against the current trip.
     query = SupplierSearchInput.model_validate_json(request.message)
-    async with asyncio.timeout(12), Client(supplier_server(store, request)) as client:
+    async with asyncio.timeout(70), Client(supplier_server(store, request)) as client:
         response = await client.call_tool(
             "supplier_search",
             query.model_dump(

@@ -299,6 +299,7 @@
                     "running",
                     "awaiting_clarification",
                     "proposed",
+                    "completed",
                     "failed",
                     "cancelled"
                   ]

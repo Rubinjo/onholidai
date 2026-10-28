@@ -14,6 +14,7 @@ from langgraph.graph import END, START, StateGraph  # pyright: ignore[reportMiss
 
 from onholidai_agent.context.build import build_context
 from onholidai_agent.graph.route_policy import arrange_destinations
+from onholidai_agent.graph.route_suggestion import proposal_suggestions, route_sequence
 from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import AgentResult, CreateAgentRunRequest
 from onholidai_agent.tools.get_trip import TripReader, get_trip
@@ -37,6 +38,26 @@ class MaterialChoice(ValueError):
 
 def facts(value: object) -> dict[str, object]:
     return cast(dict[str, object], value) if isinstance(value, dict) else {}
+
+
+RESEARCH_SCOPE_PATTERN = re.compile(
+    r"retry supplier research for:?\s*([a-z]+(?:\s*,\s*[a-z]+)*)", re.I
+)
+RESEARCH_SCOPES = ("flight", "accommodation", "activity", "rail")
+
+
+def research_scope(message: str) -> list[str] | None:
+    """Reads the traveller's retry scope, so a retry re-reads only failed products.
+
+    The browser retry action appends this closed instruction to the reviewed request;
+    anything unrecognised means a full research pass rather than a guessed subset.
+    """
+    match = RESEARCH_SCOPE_PATTERN.search(message)
+    if not match:
+        return None
+    requested = [part.strip().casefold() for part in match.group(1).split(",") if part.strip()]
+    scope = [kind for kind in RESEARCH_SCOPES if kind in requested]
+    return scope or None
 
 
 def rail_deferred(request: CreateAgentRunRequest) -> bool:
@@ -424,12 +445,62 @@ async def estimate(
         langsmith.tracing_context,  # pyright: ignore[reportUnknownMemberType]
     )
     with trace_control(enabled=False):
-        async with asyncio.timeout(30):
+        # Supplier research alone can legitimately use most of a minute per round (Duffel
+        # pages twice, Viator is slow), and an estimate may research a preferred and a
+        # flexible date set. The run lease is renewed by progress events, so the bound
+        # here only has to cap pathological work.
+        async with asyncio.timeout(210):
             result = await graph.compile().ainvoke({"request": request})
     value = result.get("result")
     if value is None:
         raise ValueError("missing_estimate_result")
     return value
+
+
+def supplier_status_notes(raw_outcomes: object, *, only: tuple[str, ...] = ()) -> list[str]:
+    """Actionable, per-product notes for the traveller, in place of a generic failure."""
+    if not isinstance(raw_outcomes, list):
+        return []
+    reasons = {
+        "deadline": "did not answer within the time limit",
+        "rate_limited": "is rate limiting requests",
+        "access_blocked": "refused access with the current credentials",
+        "unconfigured": "is not configured for this environment",
+        "unsupported": "does not support this search",
+        "error": "returned an error or unusable evidence",
+        "no_matches": "returned no matching inventory",
+    }
+    retry = {
+        "deadline": "retrying may return a price",
+        "rate_limited": "retrying after a short wait may return a price",
+        "error": "retrying may return a price",
+        "access_blocked": "retrying will not help until access is restored",
+        "unconfigured": "retrying will not help until it is configured",
+        "unsupported": "no retry will add this product",
+        "no_matches": "a different date or destination may find inventory",
+    }
+    notes: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for item in cast(list[object], raw_outcomes)[:16]:
+        if not isinstance(item, dict):
+            continue
+        outcome = cast(dict[str, object], item)
+        kind, status = outcome.get("componentType"), outcome.get("status")
+        if not isinstance(kind, str) or not isinstance(status, str) or status not in reasons:
+            continue
+        if only and kind not in only:
+            continue
+        provider = outcome.get("provider")
+        label = str(provider) if isinstance(provider, str) and provider else "the supplier"
+        key = (kind, status)
+        if key in seen:
+            continue
+        seen.add(key)
+        notes.append(
+            f"{kind.capitalize()} research through {label} is {status}: it "
+            f"{reasons[status]}, so no {kind} price is known ({retry[status]})."
+        )
+    return notes
 
 
 async def _compose(request: CreateAgentRunRequest, sources: Sources, now: datetime) -> AgentResult:
@@ -441,7 +512,12 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         from onholidai_agent.telemetry.redaction import redact_for_langsmith
 
         try:
-            advice = redact_for_langsmith(await sources.model.complete(context), production=False)
+            # Advisory text is optional; bound it so a slow model cannot consume the
+            # budget the sourced estimate needs.
+            async with asyncio.timeout(25):
+                advice = redact_for_langsmith(
+                    await sources.model.complete(context), production=False
+                )
         except (ValueError, TimeoutError, KeyError, httpx.HTTPError):
             # The deterministic estimate never depends on the advisory summary.
             advice = ""
@@ -551,6 +627,12 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         "endDate": end.isoformat(),
         "destinationIds": [item["id"] for item in destinations],
     }
+    scope = research_scope(request.message)
+    if scope:
+        # A retry refreshes only the products that failed; web replays the still-valid
+        # offers it already persisted for the other products, so nothing is re-priced
+        # and no successful work is repeated.
+        query["componentTypes"] = scope
     found: dict[str, object] = {"offers": []}
     try:
         found = await research(sources, request, query)
@@ -662,28 +744,38 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
                         for offer in sourced
                     }
                 )
+                notes_text = " ".join(supplier_status_notes(found.get("outcomes")))
                 return AgentResult.model_validate(
                     {
                         "kind": "answer",
                         "message": "Supplier research returned "
                         f"{len(sourced)} offer(s) for {', '.join(researched)}, but none "
                         "established a complete customer price with verified fees and terms. "
-                        "No incomplete component or zero-cost trip was proposed. Review the "
-                        "unresolved price and eligibility facts before booking; no inventory "
-                        "was reserved.",
+                        "No incomplete component or zero-cost trip was proposed. "
+                        + (notes_text + " " if notes_text else "")
+                        + "Review the unresolved price and eligibility facts before booking; "
+                        "no inventory was reserved.",
                     }
                 )
             raise ValueError("source_unavailable")
-        return AgentResult.model_validate(
-            {
-                "kind": "answer",
-                "message": "Useful supplier research is available for "
-                + ", ".join(sorted(str(kind) for kind in types))
-                + ". Other required transport or stay facts remain unknown, so no incomplete "
-                "component or zero-cost complete trip was proposed. Review source prerequisites "
-                "and current research; no inventory was reserved.",
-            }
+        notes = supplier_status_notes(found.get("outcomes"))
+        retry_hint = (
+            " Retry to refresh only the unavailable steps; your reviewed settings and draft "
+            "stay as they are."
         )
+        researched = sorted(str(kind) for kind in types)
+        parts = [
+            "I could not price the required transport or stay, so the draft was not changed "
+            "and nothing was booked.",
+        ]
+        if researched:
+            parts.append(
+                f"Supplier research is available for {', '.join(researched)}, but the remaining "
+                "required facts stay unknown."
+            )
+        parts.extend(notes)
+        parts.append(retry_hint.strip())
+        return AgentResult.model_validate({"kind": "answer", "message": " ".join(parts)})
     routed: list[dict[str, object]] = []
     cursor = start
     nights, extra = divmod(duration["idealDays"] - 1, len(destinations))
@@ -700,7 +792,24 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
             }
         )
         cursor = departure
-    components = [offer["component"] for offer in offers]
+    components = [cast(dict[str, object], offer["component"]) for offer in offers]
+    from onholidai_agent.telemetry.redaction import redact_for_langsmith
+
+    source_facts = cast(list[dict[str, object]], found.get("researchFacts", []))
+    research_facts = [
+        {**fact, "text": redact_for_langsmith(str(fact.get("text", "")), production=False)}
+        for fact in source_facts
+    ]
+    route = route_sequence(routed, origin)
+    if len(route) > 300:
+        route = route[:299] + "…"
+    suggestions = proposal_suggestions(
+        routed,
+        components,
+        origin,
+        origins=None if snapshot.get("destinationOrder") == "ai" else route_origins,
+        research_facts=research_facts,
+    )
     warnings = [
         "Source eligibility, occupancy, accessibility and cancellation facts require verification."
     ]
@@ -723,25 +832,7 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
             "missing facts remain unknown."
         )
     raw_outcomes = found.get("outcomes", [])
-    if isinstance(raw_outcomes, list):
-        for item in cast(list[object], raw_outcomes)[:16]:
-            if not isinstance(item, dict):
-                continue
-            outcome = cast(dict[str, object], item)
-            kind, status = outcome.get("componentType"), outcome.get("status")
-            if kind in ("flight", "accommodation", "activity", "rail") and status in (
-                "unsupported",
-                "unconfigured",
-                "access_blocked",
-                "rate_limited",
-                "deadline",
-                "error",
-                "no_matches",
-            ):
-                warnings.append(
-                    f"Supplier {kind} research is {status}; related requirements remain "
-                    "unresolved, with no replacement inventory assumed."
-                )
+    warnings.extend(supplier_status_notes(raw_outcomes))
     constraints = cast(list[dict[str, object]], snapshot.get("constraints", []))
     warnings.extend(
         f"Unverified {constraint['priority']} requirement: {str(constraint['statement'])[:850]}"
@@ -749,6 +840,7 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         if constraint.get("status") != "removed"
     )
     rationale = (
+        f"Suggested route: {route}. "
         f"A {duration['idealDays']}-day route uses your "
         + (
             "reviewed maximum duration to give the requested stops enough time "
@@ -775,16 +867,10 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
             "legs and transport feasibility still require verification. Missing destination "
             "or confirmed-departure coordinates preserve the supplied order."
         )
-    source_facts = cast(list[dict[str, object]], found.get("researchFacts", []))
-    if source_facts:
-        from onholidai_agent.telemetry.redaction import redact_for_langsmith
-
+    if research_facts[3:]:
         rationale += " Unverified research context: " + "; ".join(
-            redact_for_langsmith(
-                f"{str(fact.get('text', ''))[:180]} (source: {fact.get('sourceUrl', '')})",
-                production=False,
-            )
-            for fact in source_facts[:3]
+            f"{str(fact.get('text', ''))[:180]} (source: {fact.get('sourceUrl', '')})"
+            for fact in research_facts[3:6]
         )
     flexible = [entry for entry in feasible if entry[0]["preference"] == "flexible"]
     if flexible:
@@ -857,4 +943,5 @@ async def _compose(request: CreateAgentRunRequest, sources: Sources, now: dateti
         rationale,
         warnings,
         now,
+        tradeoffs=suggestions,
     )

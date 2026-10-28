@@ -114,7 +114,7 @@ class SupplierReadTool(Tool):
         try:
             # Custom tools validate raw protocol arguments, before any coercion.
             parsed = SUPPLIER_TOOL_INPUTS[self.name].model_validate(arguments, strict=True)
-            async with asyncio.timeout(12):
+            async with asyncio.timeout(80):
                 result = await self._read(
                     parsed.model_dump(
                         mode="json",

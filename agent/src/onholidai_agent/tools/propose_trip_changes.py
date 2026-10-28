@@ -12,6 +12,7 @@ def propose_trip_changes(
     rationale: str,
     warnings: list[str],
     now: datetime | None = None,
+    tradeoffs: list[str] | None = None,
 ) -> AgentResult:
     for operation in operations:
         target = operation.get("target")
@@ -77,7 +78,10 @@ def propose_trip_changes(
                     "estimated_price",
                 ],
                 "rationale": rationale,
-                "tradeoffs": ["Availability and all prices remain estimated until revalidation."],
+                "tradeoffs": [
+                    "Availability and all prices remain estimated until revalidation.",
+                    *(tradeoffs or []),
+                ],
                 "warnings": warnings[:64],
                 "expiresAt": (timestamp + timedelta(minutes=15)).isoformat().replace("+00:00", "Z"),
             },

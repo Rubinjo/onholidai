@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { normalizePlanningOffer } from "../../server/supply/offers";
+import { DEFAULT_PROVIDER_SEARCH_BUDGET_MS } from "../../server/supply/deadlines";
 import { searchPlanningOffers, type SupplyReadProvider } from "../../server/supply/read";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
@@ -108,7 +109,7 @@ describe("read-only planning supply", () => {
       ],
       query(),
     );
-    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(DEFAULT_PROVIDER_SEARCH_BUDGET_MS);
     expect((await result).outcomes[0].status).toBe("deadline");
   });
 

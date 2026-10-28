@@ -80,6 +80,20 @@ export async function apiResponse(
       headers: { "Cache-Control": "private, no-store", "x-correlation-id": correlationId },
     });
   } catch (error) {
+    if (error instanceof z.ZodError)
+      // Diagnostics only: issue paths and codes, never submitted values.
+      console.warn(
+        JSON.stringify({
+          event: "request_validation_failed",
+          method: request.method,
+          path: new URL(request.url).pathname,
+          issues: error.issues.slice(0, 8).map((issue) => ({
+            path: issue.path.map(String).join("."),
+            code: issue.code,
+            message: issue.message.slice(0, 200),
+          })),
+        }),
+      );
     const safe =
       error instanceof z.ZodError || error instanceof SyntaxError
         ? new ProblemError({

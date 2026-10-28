@@ -34,8 +34,12 @@ def create_app(
             application.state.resources = resources
             client = await resources.enter_async_context(
                 # Matches web's research request bound; each supplier read keeps its own
-                # shorter deadline inside that request.
-                httpx.AsyncClient(base_url=settings.web_base_url, timeout=12)
+                # shorter deadline inside that request. A twelve-second client timeout
+                # aborted healthy Duffel and Viator reads mid-flight.
+                httpx.AsyncClient(
+                    base_url=settings.web_base_url,
+                    timeout=httpx.Timeout(75.0, connect=10.0),
+                )
             )
             store = (
                 store_factory(client, settings)

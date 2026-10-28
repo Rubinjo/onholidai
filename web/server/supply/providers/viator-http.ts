@@ -1,4 +1,5 @@
-import { SupplyReadError, type SupplyReadQuery } from "../read";
+import { SUPPLIER_ATTEMPTS } from "../deadlines";
+import { SupplyReadError, isSupplyReadError, type SupplyReadQuery } from "../read";
 import {
   checkedAt,
   decimalMinor,
@@ -26,7 +27,16 @@ export interface ViatorPaxMix {
 export interface ViatorHttpOptions extends ReadHttpOptions {
   apiKey: string;
   environment?: "production" | "sandbox";
-  resolveDestination: (destinationId: string, query: SupplyReadQuery) => string | null;
+  /**
+   * Trusted destination identity lookup. A single id, or ranked candidates where a
+   * narrower place failed at the supplier and its parent country is a legitimate
+   * wider coverage area.
+   */
+  resolveDestination: (
+    destinationId: string,
+    query: SupplyReadQuery,
+    signal?: AbortSignal,
+  ) => string | readonly string[] | null | undefined | Promise<string | readonly string[] | null>;
   /** Must establish the exact product age bands from trusted traveller facts, not guess adult ages. */
   resolvePaxMix?: (
     query: SupplyReadQuery,
@@ -43,6 +53,7 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
   ) {
     throw new SupplyReadError("unsupported");
   }
+  const http = { ...options, attempts: options.attempts ?? SUPPLIER_ATTEMPTS };
   const base =
     options.environment === "sandbox"
       ? "https://api.sandbox.viator.com/partner"
@@ -142,7 +153,7 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
   async function getProduct(offerId: string, query: SupplyReadQuery, signal: AbortSignal) {
     authorize(offerId, query);
     const url = `${base}/products/${offerId}`;
-    const product = record(await readJson(options, [`GET ${url}`], headers)(url, "GET", signal));
+    const product = record(await readJson(http, [`GET ${url}`], headers)(url, "GET", signal));
     if (product.productCode !== offerId) throw new SupplyReadError("error");
     return product;
   }
@@ -156,27 +167,71 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
     search: (input: SupplyReadQuery, signal: AbortSignal) =>
       safeMapping(async () => {
         const query = validateQuery(input);
-        if (query.destinationIds.length !== 1) throw new SupplyReadError("unsupported");
-        const destination = identifier(
-          options.resolveDestination(query.destinationIds[0], query),
-          /^\d{1,12}$/,
-        );
+        if (query.destinationIds.length !== 1)
+          throw new SupplyReadError("unsupported", undefined, {
+            retryable: false,
+            detail: "multiple_destinations",
+          });
+        const requested = options.resolveDestination(query.destinationIds[0], query, signal);
+        // A synchronous resolver must not yield the event loop: cancellation relies on
+        // the transport being invoked before the caller's abort is observed.
+        const resolved =
+          requested && typeof (requested as Promise<unknown>).then === "function"
+            ? await (requested as Promise<string | readonly string[] | null>)
+            : (requested as string | readonly string[] | null | undefined);
+        const candidates = (Array.isArray(resolved) ? resolved : [resolved])
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => identifier(value, /^\d{1,12}$/))
+          .filter((value, index, all) => all.indexOf(value) === index)
+          .slice(0, 2);
+        if (!candidates.length)
+          throw new SupplyReadError("unsupported", undefined, {
+            retryable: false,
+            detail: "destination_unresolved",
+          });
         const url = `${base}/products/search`;
-        const response = record(
-          await readJson(options, [`POST ${url}`], headers)(url, "POST", signal, {
-            filtering: { destination, startDate: query.startDate, endDate: query.endDate },
-            pagination: { start: 1, count: 32 },
-            currency: query.currency,
-          }),
-        );
-        const hits = list(response.products)
-          .slice(0, 32)
-          .map((product) => mapProduct(product, query));
-        for (const hit of hits) {
-          if (grants.size >= 256) grants.delete(grants.keys().next().value!);
-          grants.set(hit.offerId, queryKey(query));
+        const search = async (destination: string) => {
+          const response = record(
+            await readJson(http, [`POST ${url}`], headers)(url, "POST", signal, {
+              filtering: { destination, startDate: query.startDate, endDate: query.endDate },
+              pagination: { start: 1, count: 32 },
+              currency: query.currency,
+            }),
+          );
+          const products = list(response.products);
+          const hits: WireHit[] = [];
+          let rejected = 0;
+          let firstRejection: SupplyReadError | null = null;
+          // One unusable product record is a partial supplier response, not a failed
+          // search: keep every product that maps cleanly and disclose the shortfall.
+          for (const product of products.slice(0, 32)) {
+            try {
+              hits.push(mapProduct(product, query));
+            } catch (error) {
+              if (!isSupplyReadError(error)) throw error;
+              rejected += 1;
+              firstRejection = firstRejection ?? error;
+            }
+          }
+          if (!hits.length && rejected) throw firstRejection ?? new SupplyReadError("error");
+          return hits;
+        };
+        let failure: unknown;
+        for (const destination of candidates) {
+          try {
+            const hits = await search(destination);
+            for (const hit of hits) {
+              if (grants.size >= 256) grants.delete(grants.keys().next().value!);
+              grants.set(hit.offerId, queryKey(query));
+            }
+            return hits.map((hit) => discoveryHit(hit, "Viator"));
+          } catch (error) {
+            failure = error;
+            const transient = isSupplyReadError(error) && error.retryable && !signal.aborted;
+            if (!transient) throw error;
+          }
         }
-        return hits.map((hit) => discoveryHit(hit, "Viator"));
+        throw isSupplyReadError(failure) ? failure : new SupplyReadError("error");
       }),
     detail: (offerId: string, query: SupplyReadQuery, signal: AbortSignal) =>
       safeMapping(async () => {
@@ -209,7 +264,7 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
           throw new SupplyReadError("unsupported");
         const url = `${base}/availability/check`;
         const response = record(
-          await readJson(options, [`POST ${url}`], headers)(url, "POST", signal, {
+          await readJson(http, [`POST ${url}`], headers)(url, "POST", signal, {
             productCode: offerId,
             travelDate: query.startDate,
             currency: query.currency,

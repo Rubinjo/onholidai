@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       .max(200)
       .parse(new URL(request.url).searchParams.get("name"));
     if (!application.viatorDestinations) return { destinationId: null };
-    const matches = await application.viatorDestinations.lookup(name, AbortSignal.timeout(2500));
+    const matches = await application.viatorDestinations.candidates(name);
     return { destinationId: resolveViatorDestinationId(name, matches) };
   });
 }
