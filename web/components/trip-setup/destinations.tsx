@@ -100,13 +100,15 @@ export function Destinations({
   const [searchKey, setSearchKey] = useState(0),
     [countryChoices, setCountryChoices] = useState<PlaceCandidate[]>([]),
     [moving, setMoving] = useState("");
+  const [focusedPlace, setFocusedPlace] = useState<PlaceCandidate | null>(null);
   const departures = origins?.length ? origins : origin ? [origin] : [];
-  function choose(place: PlaceCandidate) {
+  function choose(place: PlaceCandidate, focus = false) {
     request.current++;
     setBusy(false);
     setCountryChoices([]);
     try {
       onDestinations(selectDestination(destinations, place, replaceId));
+      setFocusedPlace(focus ? place : null);
       setReplaceId(undefined);
       setError("");
     } catch (failure) {
@@ -163,6 +165,7 @@ export function Destinations({
     setReplaceId(undefined);
     setError("");
     setMoving("Destinations cleared.");
+    setFocusedPlace(null);
     setSearchKey((value) => value + 1);
     onDestinations([]);
   }
@@ -233,7 +236,11 @@ export function Destinations({
         <>
           <div className="globe-interface">
             <div className="globe-interface__search">
-              <PlaceSearch key={searchKey} onSelect={choose} onResults={setCandidates} />
+              <PlaceSearch
+                key={searchKey}
+                onSelect={(place) => choose(place, true)}
+                onResults={setCandidates}
+              />
             </div>
             {mapVisible && (
               <DestinationPicker
@@ -243,6 +250,7 @@ export function Destinations({
                       onCountry: (code: string, name: string) => void openCountry(code, name),
                       onCity: choose,
                       candidates,
+                      focusedPlace,
                     }
                   : {})}
               />

@@ -12,11 +12,13 @@ import type { PlaceCandidate } from "@/domain/trip/destination";
 export function DestinationGlobe({
   destinations,
   candidates = [],
+  focusedPlace,
   onCountry,
   onCity,
 }: {
   destinations: TripSnapshot["destinations"];
   candidates?: readonly PlaceCandidate[];
+  focusedPlace?: PlaceCandidate | null;
   onCountry: (code: string, name: string) => void;
   onCity?: (place: PlaceCandidate) => void;
 }) {
@@ -257,6 +259,39 @@ export function DestinationGlobe({
   useEffect(() => {
     if (loaded) updateSources();
   }, [destinations, candidates, loaded, updateSources]);
+  useEffect(() => {
+    const instance = map.current;
+    if (!loaded || !instance || !focusedPlace) return;
+    if (focusedPlace.location) {
+      instance.jumpTo({
+        center: [focusedPlace.location.longitude, focusedPlace.location.latitude],
+      });
+      return;
+    }
+    let stopped = false;
+    // Basemap label positions are camera targets, not verified route coordinates.
+    void (instance.getSource("countries") as GeoJSONSource)
+      .getData()
+      .then((data) => {
+        if (stopped) return;
+        if (data.type !== "FeatureCollection") throw new Error("Invalid country basemap");
+        for (const { properties } of data.features) {
+          const code: unknown = properties?.ISO_A2_EH ?? properties?.ISO_A2;
+          if (code !== focusedPlace.countryCode) continue;
+          const longitude: unknown = properties?.LABEL_X,
+            latitude: unknown = properties?.LABEL_Y;
+          if (typeof longitude === "number" && typeof latitude === "number")
+            instance.jumpTo({ center: [longitude, latitude] });
+          break;
+        }
+      })
+      .catch(() => {
+        if (!stopped) setFailed(true);
+      });
+    return () => {
+      stopped = true;
+    };
+  }, [focusedPlace, loaded]);
   return (
     <section className="destination-globe" aria-label="Globe destination picker">
       {!loaded && !failed && <Skeleton className="globe-skeleton" />}

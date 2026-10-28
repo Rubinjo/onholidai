@@ -8,11 +8,13 @@ import type { PlaceCandidate } from "@/domain/trip/destination";
 export function DestinationPicker({
   destinations,
   candidates,
+  focusedPlace,
   onCountry,
   onCity,
 }: {
   destinations: TripSnapshot["destinations"];
   candidates?: readonly PlaceCandidate[];
+  focusedPlace?: PlaceCandidate | null;
   onCountry?: (code: string, name: string) => void;
   onCity?: (place: PlaceCandidate) => void;
 }) {
@@ -20,6 +22,7 @@ export function DestinationPicker({
     <DestinationGlobe
       destinations={destinations}
       candidates={candidates}
+      focusedPlace={focusedPlace}
       onCountry={onCountry}
       onCity={onCity}
     />
