@@ -28,6 +28,18 @@ def offer(kind: str = "flight") -> dict[str, object]:
     }
 
 
+def test_flights_use_departure_timezone_not_utc_date_for_availability():
+    flight = offer()
+    component = cast(dict[str, object], flight["component"])
+    component["serviceStart"] = "2030-04-30T22:30:00Z"
+    component["serviceEnd"] = "2030-05-08T20:00:00Z"
+    snapshot: dict[str, object] = {"departureOrigin": {"timezone": "Europe/Amsterdam"}}
+    query: dict[str, object] = {"startDate": "2030-05-01", "endDate": "2030-05-08"}
+    assert select_quotes([flight], 50, snapshot=snapshot, query=query) == [flight]
+    component["serviceEnd"] = "2030-05-08T23:00:00Z"
+    assert select_quotes([flight], 50, snapshot=snapshot, query=query) == []
+
+
 @pytest.mark.parametrize(
     "field",
     [

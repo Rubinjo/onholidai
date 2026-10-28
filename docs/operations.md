@@ -74,6 +74,18 @@ Duffel can resolve airport suggestions when a saved IATA mapping is absent. Nuit
 
 Duffel Stays is not an active accommodation source. Previously saved evidence may remain visible, but new stay research uses Nuitee. Rail is not an active supplier integration.
 
+### Multi-destination estimates
+
+Accommodation and activity searches run separately for each stop, in the requested route order.
+The available nights are divided using the same allocation as the estimate; each stop keeps its
+own offer-selection group, dates, and persisted detail query. A failed stop does not discard
+successful stops, and the product status reports partial coverage.
+
+Flight research compares a round trip through the first stop's gateway with an open-jaw return
+from the final stop's gateway. Fuzzy airport suggestions must match the destination country.
+If the supplier has no matching gateway, the bundled OurAirports catalogue can supply a large
+airport within 150 km in the same country.
+
 ### Supplier research timeouts and retries
 
 Supplier latency is dominated by supplier-side queue time, not our own work. A live Duffel search needs an offer request plus a paged offer read (five to nine seconds together), and a Viator product search regularly takes twenty to forty seconds. The shared policy in [deadlines.ts](../web/server/supply/deadlines.ts) keeps every layer aligned, so a source is never cut off by a bound that a different process assumed was generous:
@@ -91,6 +103,10 @@ Reads retry a transient supplier failure (network error, HTTP 408/425/429/5xx, o
 Each product reports its own outcome (`available`, `no_matches`, `deadline`, `rate_limited`, `access_blocked`, `unconfigured`, `unsupported`, `error`). A failed product never discards another product's sourced offers, and one unusable record inside a supplier page is dropped without discarding the rest of that page. Supplier failure diagnostics are logged as JSON with the provider, product, status, duration and an internal cause code — never a URL, credential or supplier body.
 
 When products fail, the draft is not silently changed. The assistant answers with per-product reasons, and the workspace shows the same status with a **Retry** action for the products that can reasonably succeed. A retry re-reads only those products and replays still-valid evidence for the others, so successful work is not repeated and the reviewed settings are untouched.
+
+The dispatch acknowledgement allows 30 seconds for its authenticated web callbacks, including
+cold local compilation. If the acknowledgement is lost but the database already records progress
+or a terminal result, web returns that durable run instead of reporting an unconfirmed request.
 
 ### Give each process only the credentials it needs
 

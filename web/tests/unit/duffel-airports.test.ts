@@ -1,11 +1,47 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 
-import { createDuffelAirportResolver } from "../../server/supply/providers/duffel-airports";
+import {
+  createDuffelAirportResolver,
+  nearbyAirport,
+} from "../../server/supply/providers/duffel-airports";
 
 const suggestion = (value: unknown) => Response.json({ data: [value] });
 
 describe("Duffel gateway airport resolution", () => {
+  it("finds a real nearby Japanese gateway without inventing a Kyoto airport or a ground fare", () => {
+    expect(
+      nearbyAirport({
+        countryCode: "JP",
+        location: { latitude: 35.0116, longitude: 135.7681 },
+      }),
+    ).toBe("ITM");
+    expect(
+      nearbyAirport({
+        countryCode: "GH",
+        location: { latitude: 35.0116, longitude: 135.7681 },
+      }),
+    ).toBeNull();
+    expect(nearbyAirport({ countryCode: "JP" })).toBeNull();
+  });
+
+  it("rejects a fuzzy match in another country and scopes cached results by country", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      suggestion({
+        type: "airport",
+        name: "Kotoka International Airport",
+        city_name: "Accra",
+        iata_code: "ACC",
+        iata_country_code: "GH",
+      }),
+    );
+    const resolver = createDuffelAirportResolver({ readToken: "synthetic", fetch });
+    await expect(resolver.resolve("Kyoto", new AbortController().signal, "GH")).resolves.toBe(
+      "ACC",
+    );
+    await expect(resolver.resolve("Kyoto", new AbortController().signal, "JP")).resolves.toBeNull();
+  });
+
   it("resolves a country to the airport Duffel ranks first for that country", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       suggestion({

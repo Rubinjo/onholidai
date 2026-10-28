@@ -5,7 +5,7 @@ import { lockServiceGrant } from "@/server/auth/planning-resource";
 import { inTransaction } from "@/server/db/transaction";
 import { selectedOffersSchema } from "@/domain/trip/proposal";
 
-import { runContext } from "./run-repository";
+import { RunRepository, runContext } from "./run-repository";
 import { createAgentServiceToken } from "./credentials";
 import {
   AgentRunSchema,
@@ -94,12 +94,16 @@ export async function dispatchEstimate(
           "x-agent-run-id": run.id,
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(8000),
+        // Dispatch validates and persists progress through several web callbacks;
+        // a cold local build must have time to acknowledge that durable work.
+        signal: AbortSignal.timeout(30_000),
         cache: "no-store",
       },
     );
   } catch (error) {
     if (!(error instanceof TypeError) && !(error instanceof DOMException)) throw error;
+    const durable = await new RunRepository(application.database).read(run.ownerUserId, run.id);
+    if (durable.status !== "queued") return;
     throw new ProblemError({
       title: "Research service unavailable",
       status: 503,

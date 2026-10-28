@@ -59,7 +59,15 @@ def test_intercity_legs_recommend_a_mode_for_each_change_of_base():
         "Lyon → Amsterdam",
     ]
     assert "rail" in legs[1]
+    assert "Not supported yet: train/car search and booking" in legs[1]
+    assert "excluded from the estimate" in legs[1]
     assert all("unverified estimate" in leg for leg in legs)
+
+
+def test_multi_stop_advice_does_not_claim_the_cheapest_whole_trip_from_flight_prices():
+    advice = proposal_suggestions([PARIS, LYON], [], ORIGIN)
+    assert any("Lowest flight fare does not" in line for line in advice)
+    assert any("return to the arrival city remain unpriced" in line for line in advice)
 
 
 def test_intercity_legs_scale_the_recommendation_with_distance():

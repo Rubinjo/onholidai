@@ -15,6 +15,7 @@ import { selectedOfferSchema, selectedOffersSchema } from "@/domain/trip/proposa
 import { providerSearchBudgetMs, RESEARCH_BUDGET_MS } from "./deadlines";
 import {
   productReadiness,
+  planningOfferQuery,
   readWithRateLimitRetry,
   searchPlanningOffers,
   supplyReadQuerySchema,
@@ -153,8 +154,8 @@ export async function searchResearch(
       startDate: input.startDate,
       endDate: input.endDate,
       departureOrigin: departureOrigin ?? null,
-      destinations: snapshot.destinations.filter((place) =>
-        input.destinationIds.includes(place.id),
+      destinations: input.destinationIds.map((id) =>
+        snapshot.destinations.find((place) => place.id === id),
       ),
       travellerParty: snapshot.travellerParty,
     });
@@ -247,7 +248,7 @@ export async function searchResearch(
           offerRef: offer.offerRef,
           revision: 1,
           offer: { ...offer },
-          query: { ...basis.query, componentTypes: [offer.component.type] },
+          query: planningOfferQuery(basis.query, offer),
         })
         .execute();
     requireTime(signal);
@@ -317,13 +318,15 @@ async function reusePriorResearch(
       const type = offer.component.type;
       if (retriedTypes.includes(type) || offer.component.offerStatus !== "available") continue;
       const query = row.query as Record<string, unknown> | null;
+      const expected = planningOfferQuery(basis.query, offer);
       if (
         !query ||
-        query.startDate !== basis.query.startDate ||
-        query.endDate !== basis.query.endDate ||
-        query.currency !== basis.query.currency ||
-        JSON.stringify(query.destinationIds) !== JSON.stringify(basis.query.destinationIds) ||
-        JSON.stringify(query.travellerParty) !== JSON.stringify(basis.query.travellerParty) ||
+        query.startDate !== expected.startDate ||
+        query.endDate !== expected.endDate ||
+        query.currency !== expected.currency ||
+        JSON.stringify(query.destinationIds) !== JSON.stringify(expected.destinationIds) ||
+        JSON.stringify(query.departureOrigin) !== JSON.stringify(expected.departureOrigin) ||
+        JSON.stringify(query.travellerParty) !== JSON.stringify(expected.travellerParty) ||
         !isCompletePlanningOffer(offer)
       )
         continue;
@@ -704,6 +707,7 @@ export async function refreshResearchOffer(
             : "unchanged";
   const offer = normalizePlanningOffer({
     ...current,
+    selectionGroup: previous.selectionGroup,
     component: { ...current.component, id: previous.component.id },
     offerRef: record.offerRef,
     revision: record.revision + 1,

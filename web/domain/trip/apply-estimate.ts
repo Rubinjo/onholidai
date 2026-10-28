@@ -20,6 +20,7 @@ import { changeProposalSchema } from "./proposal";
 import { commitTripMutation } from "./commit";
 import { tripSnapshotSchema, type TripSnapshot } from "./schema";
 import { summarizeTripChanges } from "./change-summary";
+import { serviceDate } from "./feasibility-policy";
 
 import type { ServiceTokenContext } from "@/server/agent-client/credentials";
 import type { ChangeProposal as AgentProposal } from "../../../contracts/agent-api/generated";
@@ -53,13 +54,14 @@ export function assertSelectedOfferRequirements(
   for (const offer of offers) {
     if (!isCompletePlanningOffer(offer)) unavailable();
     const { component, eligibility, occupancy } = offer;
+    const timezone = component.type === "flight" ? base.departureOrigin?.timezone : undefined;
     const group = offer.selectionGroup ?? component.id;
     if (groups.has(group)) unavailable();
     groups.add(group);
     if (
       eligibility.status === "ineligible" ||
-      component.serviceStart.slice(0, 10) < start ||
-      component.serviceEnd.slice(0, 10) > end ||
+      serviceDate(component.serviceStart, timezone) < start ||
+      serviceDate(component.serviceEnd, timezone) > end ||
       component.price.finalCustomerAmount.currency !== base.price.currency ||
       offer.evidence?.availability === "unavailable" ||
       offer.evidence?.status === "expired"
@@ -347,22 +349,33 @@ export async function recordEstimate(
   for (const component of candidate.components) {
     const record = records.find((entry) => entry.componentId === component.id);
     const query = record?.query;
+    const offer = offers.find((entry) => entry.component.id === component.id);
+    const stop =
+      ["accommodation", "activity"].includes(component.type) && candidate.destinations.length > 1
+        ? candidate.destinations.find(
+            (_, index) => offer?.selectionGroup === `${component.type}:stop:${index}`,
+          )
+        : undefined;
     // This evidence must describe the same search the traveller's dates, party and route
     // imply. A mismatch means the proposal cannot be priced from the recorded research.
     const mismatch = !query
       ? "missing_evidence"
       : query.currency !== candidate.price.currency
         ? "currency"
-        : query.startDate !== startDate
+        : query.startDate !== (stop?.arrivalDate ?? startDate)
           ? "start_date"
-          : query.endDate !== endDate
+          : query.endDate !== (stop?.departureDate ?? endDate)
             ? "end_date"
             : fingerprint(query.departureOrigin) !== fingerprint(candidate.departureOrigin)
               ? "departure_origin"
               : fingerprint(query.travellerParty) !== fingerprint(candidate.travellerParty)
                 ? "traveller_party"
                 : fingerprint(query.destinationIds) !==
-                    fingerprint(candidate.destinations.map((destination) => destination.id))
+                    fingerprint(
+                      stop
+                        ? [stop.id]
+                        : candidate.destinations.map((destination) => destination.id),
+                    )
                   ? "destinations"
                   : null;
     if (mismatch)

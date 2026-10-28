@@ -5,7 +5,7 @@ import { createDuffelFlightsHttpClient } from "../../server/supply/providers/duf
 import { createDuffelReadProvider } from "../../server/supply/providers/duffel-read";
 import { createConfiguredPlanningProviders } from "../../server/supply/providers";
 import { loadServerConfig } from "../../server/config";
-import { projectPublicPlanningOffer } from "../../server/supply/offers";
+import { normalizePlanningOffer, projectPublicPlanningOffer } from "../../server/supply/offers";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
 import type { SupplyReadQuery } from "../../server/supply/read";
@@ -75,6 +75,79 @@ function paged(offers: unknown[]) {
   });
 }
 describe("Duffel Flights synthetic HTTP wire", () => {
+  it("uses the origin's local day and retries an earlier return when arrival exceeds availability", async () => {
+    let returnDate = "";
+    const transport = vi.fn<typeof fetch>(async (url, init) => {
+      if (String(url).includes("/offer_requests?")) {
+        returnDate = JSON.parse(String(init?.body)).data.slices[1].departure_date;
+        return Response.json({ data: { id: "orq_dates" } });
+      }
+      const source = offer();
+      source.slices[0].segments[0].departing_at = "2030-04-30T23:00:00Z";
+      source.slices[0].segments[0].arriving_at =
+        returnDate === "2030-05-08" ? "2030-05-09T01:00:00Z" : "2030-05-08T01:00:00Z";
+      return Response.json({ data: [source] });
+    });
+    const client = createDuffelFlightsHttpClient({
+      readToken: "synthetic",
+      fetch: transport,
+      now,
+      resolveDestination: () => "HND",
+    });
+    const hits = await client.search(query(), new AbortController().signal);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].serviceStart).toBe("2030-04-30T23:00:00.000Z");
+    expect(hits[0].serviceEnd).toBe("2030-05-08T01:00:00.000Z");
+    expect(
+      transport.mock.calls
+        .filter(([url]) => String(url).includes("/offer_requests?"))
+        .map(([, init]) => JSON.parse(String(init?.body)).data.slices[1].departure_date),
+    ).toEqual(["2030-05-08", "2030-05-07"]);
+  });
+
+  it("compares round-trip and open-jaw fares as alternatives, never as additive flight legs", async () => {
+    const first = "10000000-0000-4000-8000-000000000003";
+    const last = "10000000-0000-4000-8000-000000000099";
+    const transport = vi.fn<typeof fetch>(async (url, init) => {
+      const href = String(url);
+      if (href.includes("/offer_requests?")) {
+        const body = JSON.parse(String(init?.body)) as { data: { slices: { origin: string }[] } };
+        return Response.json({ data: { id: `orq_${body.data.slices[1].origin}` } });
+      }
+      const id = href.includes("orq_ITM") ? "off_openjaw" : "off_roundtrip";
+      return Response.json({ data: [{ ...offer(), id }] });
+    });
+    const provider = createDuffelReadProvider(
+      createDuffelFlightsHttpClient({
+        readToken: "synthetic",
+        fetch: transport,
+        now,
+        resolveDestination: (id) => (id === first ? "HND" : "ITM"),
+      }),
+    );
+    const offers = await provider.search(
+      { ...query(), destinationIds: [first, last] },
+      new AbortController().signal,
+    );
+    const searches = transport.mock.calls.filter(([url]) =>
+      String(url).includes("/offer_requests?"),
+    );
+    expect(searches.map(([, init]) => JSON.parse(String(init?.body)).data.slices)).toEqual([
+      [
+        { origin: "LHR", destination: "HND", departure_date: "2030-05-01" },
+        { origin: "HND", destination: "LHR", departure_date: "2030-05-08" },
+      ],
+      [
+        { origin: "LHR", destination: "HND", departure_date: "2030-05-01" },
+        { origin: "ITM", destination: "LHR", departure_date: "2030-05-08" },
+      ],
+    ]);
+    expect(offers).toHaveLength(2);
+    expect(new Set(offers.map((entry) => normalizePlanningOffer(entry).selectionGroup)).size).toBe(
+      1,
+    );
+  });
+
   it("uses an explicitly reassigned discovery-only token for EUR offers without creating worker authority", async () => {
     const environment = {
       PROVIDER_MODE: "live",

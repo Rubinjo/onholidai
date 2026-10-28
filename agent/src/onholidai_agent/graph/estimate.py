@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import NotRequired, Protocol, TypedDict, cast
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import httpx
 import langsmith
@@ -205,9 +206,23 @@ def select_quotes(
             and cast(int, facts(component["price"])["finalCustomerMinor"]) > budget
         ):
             continue
-        if (
-            query.get("startDate") and str(component["serviceStart"])[:10] < str(query["startDate"])
-        ) or (query.get("endDate") and str(component["serviceEnd"])[:10] > str(query["endDate"])):
+        timezone = (
+            facts(snapshot.get("departureOrigin")).get("timezone") if kind == "flight" else None
+        )
+        start_day, end_day = (
+            (
+                datetime.fromisoformat(str(component[key]))
+                .astimezone(ZoneInfo(str(timezone)))
+                .date()
+                .isoformat()
+                if timezone
+                else str(component[key])[:10]
+            )
+            for key in ("serviceStart", "serviceEnd")
+        )
+        if (query.get("startDate") and start_day < str(query["startDate"])) or (
+            query.get("endDate") and end_day > str(query["endDate"])
+        ):
             continue
         eligibility, occupancy = facts(offer.get("eligibility")), facts(offer.get("occupancy"))
         if eligibility.get("status") == "ineligible":

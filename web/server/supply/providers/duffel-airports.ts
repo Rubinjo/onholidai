@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { identifier, secret } from "./read-http";
+import catalogue from "../geo-catalogue.json" with { type: "json" };
 
 const IATA = /^[A-Z]{3}$/;
 const SUGGESTIONS_URL = "https://api.duffel.com/places/suggestions";
@@ -16,12 +17,14 @@ const suggestionsSchema = z
           .object({
             type: z.string().max(40),
             iata_code: z.string().regex(IATA).nullish(),
+            iata_country_code: z.string().nullish(),
             city_name: z.string().max(120).nullish(),
             airports: z
               .array(
                 z
                   .object({
                     iata_code: z.string().regex(IATA),
+                    iata_country_code: z.string().nullish(),
                     city_name: z.string().max(120).nullish(),
                   })
                   .passthrough(),
@@ -49,7 +52,38 @@ export interface DuffelAirportResolver {
    * place name. Supplier-ranked results are authoritative for reachability, so a
    * country or city name resolves without inventing an airport.
    */
-  resolve(term: string, signal: AbortSignal): Promise<string | null>;
+  resolve(term: string, signal: AbortSignal, countryCode?: string): Promise<string | null>;
+}
+
+/** A nearby airport is a gateway candidate, never proof of a ground transfer or flight. */
+export function nearbyAirport(place: {
+  countryCode: string;
+  location?: { latitude: number; longitude: number } | null;
+}): string | null {
+  const location = place.location;
+  if (!location) return null;
+  const radians = (degrees: number) => (degrees * Math.PI) / 180;
+  const candidates = catalogue.places
+    .filter(
+      (airport) =>
+        airport.kind === "airport" &&
+        airport.airportClass === "large" &&
+        airport.countryCode === place.countryCode &&
+        airport.airportCode,
+    )
+    .map((airport) => {
+      const latitude = radians(airport.location.latitude - location.latitude);
+      const longitude = radians(airport.location.longitude - location.longitude);
+      const arc =
+        Math.sin(latitude / 2) ** 2 +
+        Math.cos(radians(location.latitude)) *
+          Math.cos(radians(airport.location.latitude)) *
+          Math.sin(longitude / 2) ** 2;
+      return { airport, km: 6371 * 2 * Math.asin(Math.sqrt(Math.min(1, arc))) };
+    })
+    .filter((candidate) => candidate.km <= 150)
+    .sort((left, right) => left.km - right.km);
+  return candidates[0]?.airport.airportCode ?? null;
 }
 
 // Official contract: https://duffel.com/docs/api/v2/places
@@ -63,10 +97,10 @@ export function createDuffelAirportResolver(
   const cache = new Map<string, { at: number; airportCode: string | null }>();
 
   return {
-    async resolve(term, signal) {
+    async resolve(term, signal, countryCode) {
       const query = term.trim().slice(0, 200);
-      const key = query.toLocaleLowerCase("en");
-      if (!key) return null;
+      const key = `${countryCode ?? ""}|${query.toLocaleLowerCase("en")}`;
+      if (!query) return null;
       const cached = cache.get(key);
       if (cached && now() - cached.at < CACHE_MS) return cached.airportCode;
       const controller = new AbortController();
@@ -96,11 +130,14 @@ export function createDuffelAirportResolver(
         const parsed = suggestionsSchema.safeParse(JSON.parse(body) as unknown);
         if (!parsed.success) return null;
         for (const suggestion of parsed.data.data) {
+          if (countryCode && suggestion.iata_country_code !== countryCode) continue;
           // A city entry carries a metro code (for example TYO) plus its airports;
           // an offer request leg needs the airport the traveller actually reaches.
           const candidate =
-            suggestion.airports?.find((airport) => airport.iata_code)?.iata_code ??
-            suggestion.iata_code;
+            suggestion.airports?.find(
+              (airport) =>
+                airport.iata_code && (!countryCode || airport.iata_country_code === countryCode),
+            )?.iata_code ?? suggestion.iata_code;
           if (candidate) {
             airportCode = identifier(candidate, IATA);
             break;

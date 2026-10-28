@@ -201,6 +201,41 @@ function offerIdentity(offer: PlanningOffer): string {
   ]);
 }
 
+export function productSearchQueries(
+  query: SupplyReadQuery,
+  type: ComponentType,
+): SupplyReadQuery[] {
+  const scoped = { ...query, componentTypes: [type] };
+  if (!["accommodation", "activity"].includes(type) || query.destinationIds.length === 1)
+    return [scoped];
+  const nights = Math.round((Date.parse(query.endDate) - Date.parse(query.startDate)) / 86_400_000);
+  const perStop = Math.floor(nights / query.destinationIds.length);
+  const extra = nights % query.destinationIds.length;
+  let cursor = Date.parse(query.startDate);
+  return query.destinationIds.map((id, index) => {
+    const startDate = new Date(cursor).toISOString().slice(0, 10);
+    cursor += (perStop + (index < extra ? 1 : 0)) * 86_400_000;
+    return {
+      ...scoped,
+      destinationIds: [id],
+      destinations: query.destinations?.filter((place) => place.id === id),
+      startDate,
+      endDate: new Date(cursor).toISOString().slice(0, 10),
+    };
+  });
+}
+
+export function planningOfferQuery(query: SupplyReadQuery, offer: PlanningOffer): SupplyReadQuery {
+  const type = offer.component.type;
+  const queries = productSearchQueries(query, type);
+  return (
+    queries.find((_, index) => offer.selectionGroup === `${type}:stop:${index}`) ?? {
+      ...query,
+      componentTypes: [type],
+    }
+  );
+}
+
 export async function readWithRateLimitRetry<T>(
   operation: () => Promise<T>,
   signal: AbortSignal,
@@ -498,16 +533,51 @@ export async function searchPlanningOffers(
           },
         ];
       }
-      return selected.map((provider) =>
-        boundedSearch(
-          provider,
-          query,
-          type,
-          now,
-          signal,
-          declared?.mode ?? provider.capabilities.mode,
-        ),
-      );
+      return selected.map(async (provider) => {
+        const queries = productSearchQueries(query, type);
+        const results = await Promise.all(
+          queries.map(async (scoped, index) => {
+            const result = await boundedSearch(
+              provider,
+              scoped,
+              type,
+              now,
+              signal,
+              declared?.mode ?? provider.capabilities.mode,
+            );
+            if (queries.length > 1)
+              result.offers = result.offers.map((offer) => ({
+                ...offer,
+                selectionGroup: `${type}:stop:${index}`,
+              }));
+            return result;
+          }),
+        );
+        if (results.length === 1) return results[0];
+        const available = results.filter((result) => result.offers.length > 0).length;
+        const failed =
+          results.find((result) => result.outcome.retryable) ??
+          results.find((result) => !["available", "no_matches"].includes(result.outcome.status));
+        const summary = failed?.outcome ?? results[0].outcome;
+        return {
+          offers: results.flatMap((result) => result.offers),
+          outcome: {
+            ...summary,
+            status: failed
+              ? summary.status
+              : available
+                ? ("available" as const)
+                : ("no_matches" as const),
+            safeReason: `${available} of ${results.length} destination searches returned offers. ${
+              failed ? summary.safeReason : safeReasons[available ? "available" : "no_matches"]
+            }`,
+            unverifiedCount: results.reduce(
+              (sum, result) => sum + result.outcome.unverifiedCount,
+              0,
+            ),
+          },
+        };
+      });
     },
   );
   const results = await Promise.all(sources);

@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { normalizePlanningOffer } from "../../server/supply/offers";
 import { DEFAULT_PROVIDER_SEARCH_BUDGET_MS } from "../../server/supply/deadlines";
-import { searchPlanningOffers, type SupplyReadProvider } from "../../server/supply/read";
+import {
+  searchPlanningOffers,
+  planningOfferQuery,
+  SupplyReadError,
+  type SupplyReadProvider,
+} from "../../server/supply/read";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 
 function offer() {
@@ -60,6 +65,76 @@ function query() {
 
 describe("read-only planning supply", () => {
   afterEach(() => vi.useRealTimers());
+
+  it("searches each stop's nights and keeps alternatives in separate selection groups", async () => {
+    const snapshot = createSyntheticTripSnapshot();
+    const first = snapshot.destinations[0];
+    const second = { ...first, id: "10000000-0000-4000-8000-000000000099", name: "Porto" };
+    const search = vi.fn<SupplyReadProvider["search"]>(async (input) => {
+      if (input.destinationIds.length !== 1) throw new SupplyReadError("unsupported");
+      const value = offer();
+      value.component.supplierOfferId = input.destinationIds[0];
+      return [value];
+    });
+    const result = await searchPlanningOffers(
+      [
+        {
+          capabilities: { provider: "synthetic", search: ["accommodation"], readOnly: true },
+          search,
+        },
+      ],
+      { ...query(), destinations: [second, first], destinationIds: [first.id, second.id] },
+      new Date("2030-01-01T00:00:00Z"),
+    );
+    expect(result.offers).toHaveLength(2);
+    expect(result.outcomes).toMatchObject([{ status: "available" }]);
+    expect(
+      search.mock.calls.map(([input]) => [input.destinationIds, input.startDate, input.endDate]),
+    ).toEqual([
+      [[first.id], "2030-05-01", "2030-05-05"],
+      [[second.id], "2030-05-05", "2030-05-08"],
+    ]);
+    expect(new Set(result.offers.map((entry) => entry.selectionGroup)).size).toBe(2);
+    const stored = planningOfferQuery(
+      {
+        ...query(),
+        componentTypes: ["accommodation"],
+        destinations: [second, first],
+        destinationIds: [first.id, second.id],
+      },
+      result.offers[1],
+    );
+    expect(stored).toMatchObject({
+      destinationIds: [second.id],
+      startDate: "2030-05-05",
+      endDate: "2030-05-08",
+    });
+  });
+
+  it("preserves successful stops while disclosing and allowing retry of failed stops", async () => {
+    const first = createSyntheticTripSnapshot().destinations[0];
+    const second = { ...first, id: "10000000-0000-4000-8000-000000000099", name: "Porto" };
+    const result = await searchPlanningOffers(
+      [
+        {
+          capabilities: { provider: "synthetic", search: ["accommodation"], readOnly: true },
+          search: async (input) => {
+            if (input.destinationIds.includes(second.id))
+              throw new SupplyReadError("error", undefined, {
+                retryable: false,
+                detail: "invalid_rate",
+              });
+            return [offer()];
+          },
+        },
+      ],
+      { ...query(), destinations: [first, second], destinationIds: [first.id, second.id] },
+      new Date("2030-01-01T00:00:00Z"),
+    );
+    expect(result.offers).toHaveLength(1);
+    expect(result.outcomes).toMatchObject([{ status: "error", retryable: true }]);
+    expect(result.outcomes[0].safeReason).toContain("1 of 2");
+  });
 
   it("preserves source attribution, marks missing facts and expires offers without inventing confirmations", () => {
     const normalized = normalizePlanningOffer(offer(), new Date("2030-01-03T00:00:00Z"));

@@ -16,7 +16,7 @@ import { acceptEstimate, recordEstimate } from "../../domain/trip/apply-estimate
 import { createDuffelReadProvider } from "../../server/supply/providers/duffel-read";
 import { createNuiteeReadProvider } from "../../server/supply/providers/nuitee-read";
 import { syntheticReadClient } from "../../server/supply/providers/synthetic";
-import { searchPlanningOffers } from "../../server/supply/read";
+import { planningOfferQuery, searchPlanningOffers } from "../../server/supply/read";
 import { materializePlanningOffer } from "../../server/supply/offers";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { hasIsolatedDatabaseConfiguration, withIsolatedTestDatabase } from "../helpers/database";
@@ -25,7 +25,7 @@ vi.mock("server-only", () => ({}));
 if (process.env.CI && !hasIsolatedDatabaseConfiguration())
   throw new Error("US1 requires database test credentials");
 describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research", () => {
-  it.each(["manual", "explicit-manual", "automatic", "automatic-stale"] as const)(
+  it.each(["manual", "explicit-manual", "automatic", "automatic-stale", "multi-stop"] as const)(
     "persists a trusted proposal and safely applies or rejects it once (%s)",
     async (policy) => {
       const automatic = policy.startsWith("automatic");
@@ -36,6 +36,20 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research"
         );
         const snapshot = projectCustomerSnapshot(createSyntheticTripSnapshot());
         snapshot.itineraryDays = [];
+        if (policy === "multi-stop") {
+          const first = snapshot.destinations[0];
+          snapshot.destinations = [
+            { ...first, departureDate: "2030-05-05", plannedNights: 4 },
+            {
+              ...first,
+              id: randomUUID(),
+              name: "Porto",
+              routePosition: 1,
+              arrivalDate: "2030-05-05",
+              plannedNights: 3,
+            },
+          ];
+        }
         const trip = await createTrip(database, userId, {
           requestId: randomUUID(),
           title: "Accept estimate",
@@ -85,6 +99,7 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research"
             currency: "GBP",
             departureOrigin: snapshot.departureOrigin,
             destinationIds: snapshot.destinations.map((destination) => destination.id),
+            destinations: snapshot.destinations,
             startDate: "2030-05-01",
             endDate: "2030-05-08",
             travellerParty: snapshot.travellerParty,
@@ -106,14 +121,19 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("durable estimate research"
               runId: run.id,
               componentId: offer.component.id,
               offer: { ...offer },
-              query: {
-                startDate: "2030-05-01",
-                endDate: "2030-05-08",
-                destinationIds: snapshot.destinations.map((destination) => destination.id),
-                currency: "GBP",
-                departureOrigin: snapshot.departureOrigin,
-                travellerParty: snapshot.travellerParty,
-              },
+              query: planningOfferQuery(
+                {
+                  componentTypes: [offer.component.type],
+                  startDate: "2030-05-01",
+                  endDate: "2030-05-08",
+                  destinationIds: snapshot.destinations.map((destination) => destination.id),
+                  currency: "GBP",
+                  departureOrigin: snapshot.departureOrigin,
+                  travellerParty: snapshot.travellerParty,
+                  destinations: snapshot.destinations,
+                },
+                offer,
+              ),
             })
             .execute();
         const components = found.offers.map((offer) => {

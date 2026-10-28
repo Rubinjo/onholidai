@@ -3,7 +3,7 @@ import {
   createDuffelFlightsHttpClient,
   type DuffelFlightsHttpOptions,
 } from "./duffel-read";
-import { createDuffelAirportResolver } from "./duffel-airports";
+import { createDuffelAirportResolver, nearbyAirport } from "./duffel-airports";
 import {
   createNuiteeReadProvider,
   createNuiteeHttpClient,
@@ -85,7 +85,12 @@ export function createConfiguredPlanningProviders(
               if (!place) return null;
               return (
                 storedGateway(place) ??
-                (await airports.resolve(place.name, signal ?? AbortSignal.timeout(3000)))
+                (await airports.resolve(
+                  place.name,
+                  signal ?? AbortSignal.timeout(3000),
+                  place.countryCode,
+                )) ??
+                nearbyAirport(place)
               );
             }),
           resolveOrigin:
@@ -94,7 +99,13 @@ export function createConfiguredPlanningProviders(
               const origin = query.departureOrigin;
               if (!origin) return null;
               if (origin.airportCode) return origin.airportCode;
-              return await airports.resolve(origin.name, signal ?? AbortSignal.timeout(3000));
+              return (
+                (await airports.resolve(
+                  origin.name,
+                  signal ?? AbortSignal.timeout(3000),
+                  origin.countryCode,
+                )) ?? nearbyAirport(origin)
+              );
             }),
         }),
       ),

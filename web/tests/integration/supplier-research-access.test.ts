@@ -37,6 +37,73 @@ vi.mock("server-only", () => ({}));
 describe.skipIf(!hasIsolatedDatabaseConfiguration())(
   "supplier evidence access and immutable revisions",
   () => {
+    it("persists and refreshes the exact per-stop search instead of the full multi-city window", async () => {
+      await withIsolatedTestDatabase(async ({ database }) => {
+        const owner = randomUUID();
+        await sql`INSERT INTO app."user" (id,name,email) VALUES (${owner},'Synthetic',${owner + "@example.invalid"})`.execute(
+          database,
+        );
+        const snapshot = projectCustomerSnapshot(createSyntheticTripSnapshot());
+        snapshot.itineraryDays = [];
+        const first = snapshot.destinations[0];
+        const second = { ...first, id: randomUUID(), name: "Porto", routePosition: 1 };
+        snapshot.destinations = [first, second];
+        const trip = await createTrip(database, owner, {
+          requestId: randomUUID(),
+          title: "Multi-city research",
+          currency: "GBP",
+          snapshot,
+        });
+        const run = await new RunRepository(database).reserve({
+          userId: owner,
+          tripId: trip.tripId,
+          requestId: randomUUID(),
+          baseTripVersion: 1,
+          purpose: "supplier_research",
+          message: "Research both stops",
+        });
+        const actor = { userId: owner, tripId: trip.tripId, baseTripVersion: 1 };
+        const provider = createPlanningProviders("deterministic").find(
+          (entry) => entry.capabilities.provider === "nuitee",
+        )!;
+        const search = vi.spyOn(provider, "search");
+        const detail = vi.spyOn(provider, "detail");
+        const result = await searchResearch(
+          database,
+          [provider],
+          { ...actor, requestId: run.requestId },
+          {
+            componentTypes: ["accommodation"],
+            destinationIds: [second.id, first.id],
+            startDate: "2030-05-01",
+            endDate: "2030-05-08",
+          },
+        );
+        expect(search.mock.calls.map(([query]) => query.destinations?.[0].id)).toEqual([
+          second.id,
+          first.id,
+        ]);
+        expect(result.offers).toHaveLength(2);
+        const selected = result.offers.find(
+          (offer) => offer.selectionGroup === "accommodation:stop:1",
+        )!;
+        const refreshed = await refreshResearchOffer(
+          database,
+          [provider],
+          actor,
+          { offerRef: selected.offerRef, revision: selected.revision },
+          "detail",
+        );
+        expect(detail.mock.calls[0][1]).toMatchObject({
+          destinationIds: [first.id],
+          startDate: "2030-05-05",
+          endDate: "2030-05-08",
+        });
+        expect(refreshed.offer.selectionGroup).toBe(selected.selectionGroup);
+        expect(refreshed.offer.revision).toBe(2);
+      });
+    }, 60_000);
+
     it("persists long selected Nuitee multi-room IDs and changed detail without inventing checkout or expiry", async () => {
       await withIsolatedTestDatabase(async ({ database }) => {
         const owner = randomUUID();

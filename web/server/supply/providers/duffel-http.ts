@@ -1,4 +1,4 @@
-import { qualifiedInstant } from "@/domain/trip/feasibility-policy";
+import { qualifiedInstant, serviceDate } from "@/domain/trip/feasibility-policy";
 
 import { SUPPLIER_ATTEMPTS } from "../deadlines";
 import { SupplyReadError, isSupplyReadError, type SupplyReadQuery } from "../read";
@@ -135,6 +135,13 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
     hit.details = {
       segmentCount: segments.length,
       sliceCount: slices.length,
+      route: slices.map((slice) => {
+        const legs = list(record(slice).segments, 16).map(record);
+        return {
+          origin: text(record(legs[0]?.origin).iata_code, 3),
+          destination: text(record(legs.at(-1)?.destination).iata_code, 3),
+        };
+      }),
       originAirportCode: text(record(record(segments[0]).origin).iata_code, 3),
       destinationAirportCode: text(record(record(segments.at(-1)).destination).iata_code, 3),
       availability: "search_offer_not_reserved",
@@ -178,7 +185,6 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
     search: (input: SupplyReadQuery, signal: AbortSignal) =>
       safeMapping(async () => {
         const query = validateQuery(input);
-        if (query.destinationIds.length !== 1) throw new SupplyReadError("unsupported");
         // A country or city selection carries no IATA code; the trusted resolver
         // supplies the gateway Duffel actually serves so the search is never floated
         // at an invented airport.
@@ -191,42 +197,96 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
           /^[A-Z]{3}$/,
         );
         if (origin === destination) throw new SupplyReadError("unsupported");
+        const lastId = query.destinationIds.at(-1)!;
+        const lastGateway =
+          lastId === query.destinationIds[0]
+            ? destination
+            : await options.resolveDestination(lastId, query, signal);
+        const returnGateways = [...new Set([destination, lastGateway])].filter(
+          (code): code is string => Boolean(code && /^[A-Z]{3}$/.test(code) && code !== origin),
+        );
         const passengers = [
           ...Array.from({ length: query.travellerParty.adults }, () => ({ type: "adult" })),
           ...query.travellerParty.children.map((child) => ({ age: child.ageAtTripStart })),
         ];
-        const response = record(
-          await readJson(http, [`POST ${searchUrl}`], headers)(searchUrl, "POST", signal, {
-            data: {
-              slices: [
-                { origin, destination, departure_date: query.startDate },
-                { origin: destination, destination: origin, departure_date: query.endDate },
-              ],
-              passengers,
-            },
-          }),
-        );
-        const offerRequestId = identifier(record(response.data).id, /^orq_[A-Za-z0-9]{1,64}$/);
-        const pageUrl = offersPageUrl(offerRequestId);
-        const page = record(
-          await readJson(http, [`GET ${pageUrl}`], headers)(pageUrl, "GET", signal),
-        );
-        const hits: ReturnType<typeof mapOffer>[] = [];
-        let rejected = 0;
-        let firstRejection: SupplyReadError | null = null;
-        // One unusable fare record must not discard an entire route's inventory.
-        for (const offer of list(page.data, OFFER_PAGE_LIMIT)) {
-          try {
-            hits.push(mapOffer(offer, query));
-          } catch (error) {
-            if (!isSupplyReadError(error)) throw error;
-            rejected += 1;
-            firstRejection = firstRejection ?? error;
+        const searchRoute = async (
+          returnGateway: string,
+          returnDate = query.endDate,
+        ): Promise<ReturnType<typeof mapOffer>[]> => {
+          const response = record(
+            await readJson(http, [`POST ${searchUrl}`], headers)(searchUrl, "POST", signal, {
+              data: {
+                slices: [
+                  { origin, destination, departure_date: query.startDate },
+                  { origin: returnGateway, destination: origin, departure_date: returnDate },
+                ],
+                passengers,
+              },
+            }),
+          );
+          const offerRequestId = identifier(record(response.data).id, /^orq_[A-Za-z0-9]{1,64}$/);
+          const pageUrl = offersPageUrl(offerRequestId);
+          const page = record(
+            await readJson(http, [`GET ${pageUrl}`], headers)(pageUrl, "GET", signal),
+          );
+          const hits: ReturnType<typeof mapOffer>[] = [];
+          let rejected = 0;
+          let firstRejection: SupplyReadError | null = null;
+          // One unusable fare record must not discard an entire route's inventory.
+          for (const offer of list(page.data, OFFER_PAGE_LIMIT)) {
+            try {
+              hits.push(mapOffer(offer, query));
+            } catch (error) {
+              if (!isSupplyReadError(error)) throw error;
+              rejected += 1;
+              firstRejection = firstRejection ?? error;
+            }
           }
+          // When no fare is usable, the page's own rejection reason is the honest status
+          // (for example an unsupported currency) instead of a generic failure.
+          if (!hits.length && rejected) throw firstRejection ?? new SupplyReadError("error");
+          const timezone = query.departureOrigin?.timezone;
+          const withinWindow = hits.filter(
+            (hit) =>
+              (!hit.serviceStart || serviceDate(hit.serviceStart, timezone) >= query.startDate) &&
+              (!hit.serviceEnd || serviceDate(hit.serviceEnd, timezone) <= query.endDate),
+          );
+          // A last-day departure may land home the next day. Try the preceding
+          // departure date once rather than proposing travel outside the reviewed window.
+          if (!withinWindow.length && hits.length && returnDate === query.endDate) {
+            const earlier = new Date(Date.parse(returnDate) - 86_400_000)
+              .toISOString()
+              .slice(0, 10);
+            if (earlier > query.startDate) return searchRoute(returnGateway, earlier);
+          }
+          return withinWindow;
+        };
+        const routes = await Promise.allSettled(
+          returnGateways.map((gateway) => searchRoute(gateway)),
+        );
+        const successful = routes.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value] : [],
+        );
+        for (const result of routes) {
+          if (result.status !== "rejected") continue;
+          console.warn(
+            JSON.stringify({
+              event: "supplier_flight_route_failed",
+              provider: "duffel",
+              status: isSupplyReadError(result.reason) ? result.reason.status : "error",
+              detail: isSupplyReadError(result.reason) ? result.reason.detail : "unexpected_error",
+            }),
+          );
         }
-        // When no fare is usable, the page's own rejection reason is the honest status
-        // (for example an unsupported currency) instead of a generic failure.
-        if (!hits.length && rejected) throw firstRejection ?? new SupplyReadError("error");
+        if (!successful.some((hits) => hits.length)) {
+          const failure = routes.find((result) => result.status === "rejected");
+          if (failure?.status === "rejected") throw failure.reason;
+        }
+        // Keep both route shapes in the bounded page; they are competing total fares.
+        const hits: ReturnType<typeof mapOffer>[] = [];
+        for (let index = 0; index < OFFER_PAGE_LIMIT && hits.length < OFFER_PAGE_LIMIT; index += 1)
+          for (const route of successful)
+            if (route[index] && hits.length < OFFER_PAGE_LIMIT) hits.push(route[index]);
         for (const hit of hits) {
           if (grants.size >= 256) grants.delete(grants.keys().next().value!);
           grants.set(hit.offerId, queryKey(query));

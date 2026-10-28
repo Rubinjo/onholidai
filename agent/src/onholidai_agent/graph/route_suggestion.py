@@ -85,6 +85,18 @@ def intercity_legs(stops: list[dict[str, object]], origin: dict[str, object] | N
             f"{_name(first)} → {_name(second)}: {mode}, roughly {_hours(hours)} door to door "
             f"({distance:.0f} km; unverified estimate, no transport inventory researched)."
         )
+        if (
+            first in stops
+            and second in stops
+            and distance <= _LONG_LEG_KM
+            and first.get("countryCode") == second.get("countryCode")
+        ):
+            lines[-1] += (
+                " Book a train or consider a rental car "
+                "separately. Not supported yet: train/car search and booking; fares, schedules, "
+                "driving eligibility and availability are unverified and excluded "
+                "from the estimate."
+            )
     return lines
 
 
@@ -204,6 +216,17 @@ def proposal_suggestions(
     lines = [
         *stay_recommendations(stops, components),
         *intercity_legs(stops, origin),
+        *(
+            [
+                "Flight alternatives may return from the arrival gateway or the final stop's "
+                "nearby airport. Check the selected fare's airport codes: airport transfers and "
+                "any return to the arrival city remain unpriced. Lowest flight fare does not "
+                "establish the cheapest or fastest whole trip. Overnight flight dates and hotel "
+                "check-in/out still need alignment before booking."
+            ]
+            if len(stops) > 1
+            else []
+        ),
         *([circuit] if circuit else []),
         *nearby_place_suggestions(research_facts or []),
     ]

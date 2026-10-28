@@ -292,7 +292,29 @@ export function EstimateMap({
           </li>
         ))}
       </ul>
-      {!segments.length && <p>Transport between stops is not yet specified.</p>}
+      {!segments.length && (
+        <div role="status">
+          <p>Transport between stops is not yet specified.</p>
+          {destinations.length > 1 && (
+            <>
+              <ul aria-label="Unpriced transport options">
+                {destinations.slice(1).map((destination, index) => (
+                  <li key={destination.id}>
+                    {destinations[index].name} to {destination.name}:{" "}
+                    {destinations[index].countryCode === destination.countryCode
+                      ? "consider a train or rental car. Search and booking are not supported yet."
+                      : "transport options, schedules and costs still need research."}
+                  </li>
+                ))}
+              </ul>
+              <p>
+                These journeys, airport transfers and any return to your flight gateway are not
+                included in the estimate. Check schedules and costs separately.
+              </p>
+            </>
+          )}
+        </div>
+      )}
       {failed && (
         <div role="status">
           Map unavailable. Your route details remain accessible.

@@ -98,6 +98,12 @@ it("starts centered on the selected stop and focuses an AI-generated route on th
     ),
   );
   expect(runtime.created).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("list", { name: "Unpriced transport options" })).toHaveTextContent(
+    "Lisbon to Porto: consider a train or rental car. Search and booking are not supported yet.",
+  );
+  expect(screen.getByText(/These journeys, airport transfers/)).toHaveTextContent(
+    "not included in the estimate",
+  );
 });
 it("centers country-only selections once basemap data loads without inventing stops", async () => {
   let finish: (data: Awaited<ReturnType<typeof runtime.countries>>) => void = () => {};

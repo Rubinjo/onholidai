@@ -44,6 +44,10 @@ function localAt(instant: number, timezone: string): string {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
+export function serviceDate(instant: string, timezone?: string): string {
+  return timezone ? localAt(Date.parse(instant), timezone).slice(0, 10) : instant.slice(0, 10);
+}
+
 // Try offsets on both sides of a transition. Round-trip checks detect both gaps
 // and repeated local times; an explicit matching offset resolves the latter.
 export function qualifiedInstant(local: string, timezone: string, offset?: string): number | null {

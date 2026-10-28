@@ -9,6 +9,7 @@ import {
 import { expect, it, vi } from "vitest";
 
 import { dispatchEstimate } from "../../server/agent-client/client";
+import { RunRepository } from "../../server/agent-client/run-repository";
 import { createApplication } from "../../server/application";
 
 import type { AgentRun } from "../../../contracts/agent-api/generated";
@@ -28,6 +29,7 @@ it.each([
   "acknowledged",
   "connection failure",
   "timeout",
+  "timeout after durable dispatch",
   "HTTP failure",
   "invalid JSON",
   "invalid shape",
@@ -66,9 +68,14 @@ it.each([
     interruptionReason: null,
     result: null,
   };
+  const read = vi.spyOn(RunRepository.prototype, "read").mockResolvedValue({
+    ...run,
+    status: scenario === "timeout after durable dispatch" ? "running" : run.status,
+  });
   const transport = vi.fn<typeof fetch>(async () => {
     if (scenario === "connection failure") throw new TypeError("private network details");
-    if (scenario === "timeout") throw new DOMException("private timeout details", "TimeoutError");
+    if (scenario.startsWith("timeout"))
+      throw new DOMException("private timeout details", "TimeoutError");
     if (scenario === "HTTP failure")
       return new Response("private upstream details", { status: 500 });
     if (scenario === "invalid JSON") return new Response("<html>not an acknowledgement</html>");
@@ -82,7 +89,7 @@ it.each([
   });
   try {
     const result = dispatchEstimate({ ...root, database }, run, "Estimate my trip", transport);
-    if (["acknowledged", "already running"].includes(scenario))
+    if (["acknowledged", "already running", "timeout after durable dispatch"].includes(scenario))
       await expect(result).resolves.toBeUndefined();
     else
       await expect(result).rejects.toMatchObject(
@@ -102,6 +109,7 @@ it.each([
       });
     }
   } finally {
+    read.mockRestore();
     await Promise.all([root.shutdown(), database.destroy()]);
   }
 });
