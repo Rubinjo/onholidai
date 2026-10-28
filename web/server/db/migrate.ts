@@ -51,7 +51,9 @@ export async function loadMigrationFiles(
         version: Number.parseInt(match.groups.version, 10),
         name: match.groups.name,
         filename,
-        checksum: createHash("sha256").update(sql).digest("hex"),
+        // Checksums must not depend on the checkout's line endings: a CRLF copy of an
+        // applied migration would otherwise fail the applied-history guard.
+        checksum: createHash("sha256").update(sql.replaceAll("\r\n", "\n")).digest("hex"),
         sql,
       };
     }),

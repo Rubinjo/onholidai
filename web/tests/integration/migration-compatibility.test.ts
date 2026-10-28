@@ -44,6 +44,18 @@ describe("migration discovery", () => {
     }
   });
 
+  it("checksums migrations independently of checkout line endings", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "onholidai-migrations-"));
+    try {
+      await writeFile(join(directory, "001_lf.sql"), "SELECT 1;\nSELECT 2;\n");
+      await writeFile(join(directory, "002_crlf.sql"), "SELECT 1;\r\nSELECT 2;\r\n");
+      const migrations = await loadMigrationFiles(directory);
+      expect(migrations[0]?.checksum).toBe(migrations[1]?.checksum);
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
   it("keeps legacy snapshots readable while requiring explicit origin before new flight estimates", () => {
     const legacy = createSyntheticTripSnapshot();
     delete (legacy as Partial<typeof legacy>).departureOrigin;
