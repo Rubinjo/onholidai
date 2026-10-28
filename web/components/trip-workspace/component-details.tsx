@@ -7,8 +7,11 @@ import {
   sourceFacts,
   supplierText,
   type Component,
+  type ComponentDestination,
   type TravelFact,
 } from "./component-facts";
+
+import type { FlightJourney } from "@/domain/trip/itinerary";
 
 const typeLabels: Record<Component["type"], string> = {
   flight: "Flight",
@@ -58,13 +61,100 @@ function TextList({ title, values }: { title: string; values: (string | null)[] 
   );
 }
 
-function ComponentCard({ component }: { component: Component }) {
+function stayDestination(
+  component: Component,
+  destinations: ComponentDestination[],
+): string | null {
+  if (component.type !== "accommodation" || !destinations.length) return null;
+  const start = component.serviceStart.slice(0, 10);
+  const end = component.serviceEnd.slice(0, 10);
+  const scheduled = destinations.filter(
+    (place) => place.arrivalDate !== null && place.departureDate !== null,
+  );
+  const span = (place: ComponentDestination) =>
+    Date.parse(place.departureDate!) - Date.parse(place.arrivalDate!);
+  const contained = scheduled.filter(
+    (place) => place.arrivalDate! <= start && place.departureDate! >= end,
+  );
+  const overlapping = scheduled.filter(
+    (place) => place.arrivalDate! <= end && place.departureDate! >= start,
+  );
+  const match =
+    [...contained, ...overlapping].sort((first, second) => span(first) - span(second))[0] ??
+    (destinations.length === 1 ? destinations[0] : undefined);
+  return match ? `${match.name}, ${match.countryCode}` : null;
+}
+
+const journeyLabels: Record<FlightJourney["direction"], string> = {
+  outbound: "Outbound flight",
+  return: "Return flight",
+  multi_city: "Multi-city flight",
+};
+
+function journeyTimezone(value: string | null): string | null {
+  return value && timezoneSchema.safeParse(value).success ? value : null;
+}
+
+// One fare can cover both directions, so each flown journey is listed with the local
+// clock at its own airports instead of repeating the fare's whole-trip window.
+function FlightJourneys({ journeys }: { journeys: FlightJourney[] }) {
+  return (
+    <ol className="component-card__journeys" aria-label="Flights in this fare">
+      {journeys.map((journey, index) => {
+        const minutes = Math.round(
+          (Date.parse(journey.arrivingAt) - Date.parse(journey.departingAt)) / 60_000,
+        );
+        return (
+          <li key={`${journey.direction}-${index}`}>
+            <h4>{journeyLabels[journey.direction]}</h4>
+            <p className="component-card__route">
+              {journey.origin} → {journey.destination}
+            </p>
+            <dl className="component-card__schedule">
+              <div>
+                <dt>Departs</dt>
+                <dd>
+                  <time dateTime={journey.departingAt}>
+                    {componentDate(journey.departingAt, journeyTimezone(journey.originTimezone))}
+                  </time>
+                </dd>
+              </div>
+              <div>
+                <dt>Arrives</dt>
+                <dd>
+                  <time dateTime={journey.arrivingAt}>
+                    {componentDate(
+                      journey.arrivingAt,
+                      journeyTimezone(journey.destinationTimezone),
+                    )}
+                  </time>
+                </dd>
+              </div>
+            </dl>
+            <p className="component-card__facts">{componentDuration(minutes)}</p>
+            {journey.legs.length > 1 && (
+              <p className="component-card__route">Connects via {journey.legs.join(", ")}</p>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function ComponentCard({
+  component,
+  destinations,
+}: {
+  component: Component;
+  destinations: ComponentDestination[];
+}) {
   const planning = component.planningDetails;
   const timezone =
     planning?.timezone && timezoneSchema.safeParse(planning.timezone).success
       ? planning.timezone
       : null;
-  const source = sourceFacts(component);
+  const source = sourceFacts(component, stayDestination(component, destinations));
   const facts: TravelFact[] = [];
   const add = (label: string, value: unknown) => {
     const text = supplierText(value);
@@ -112,12 +202,15 @@ function ComponentCard({ component }: { component: Component }) {
   const title = supplierText(planning?.locationName) ?? route ?? typeLabels[component.type];
   const money = (minor: number) => componentMoney(minor, component.price.currency);
   const datesOnly = component.type === "accommodation" && component.details === null;
+  const journeys = component.type === "flight" ? (planning?.flightJourneys ?? []) : [];
   const dateLabels =
     component.type === "accommodation"
       ? ["Check-in", "Check-out"]
-      : component.type === "flight" || component.type === "rail" || component.type === "transfer"
-        ? ["Departure", "Arrival"]
-        : ["Starts", "Ends"];
+      : journeys.length > 1
+        ? ["First flight departs", "Last flight arrives"]
+        : component.type === "flight" || component.type === "rail" || component.type === "transfer"
+          ? ["Departure", "Arrival"]
+          : ["Starts", "Ends"];
   const warning =
     component.offerStatus === "unavailable"
       ? "No longer available"
@@ -167,13 +260,14 @@ function ComponentCard({ component }: { component: Component }) {
       </dl>
       {datesOnly ? (
         <p className="component-card__timezone">Check-in and check-out times to be confirmed.</p>
-      ) : timezone ? (
-        <p className="component-card__timezone">Times in {timezone}</p>
       ) : (
         <p className="component-card__timezone">
-          Times use the supplier&apos;s UTC offsets. Local timezone to be confirmed.
+          {timezone
+            ? `Times in ${timezone}`
+            : "Times use the supplier's UTC offsets. Local timezone to be confirmed."}
         </p>
       )}
+      {journeys.length > 0 && <FlightJourneys journeys={journeys} />}
       {facts.length > 0 && (
         <dl className="component-card__facts">
           {facts.map((fact, index) => (
@@ -265,9 +359,11 @@ function ComponentCard({ component }: { component: Component }) {
 
 export function ComponentDetails({
   components,
+  destinations = [],
   version,
 }: {
   components: Component[];
+  destinations?: ComponentDestination[];
   version: number;
 }) {
   return (
@@ -282,7 +378,7 @@ export function ComponentDetails({
       )}
       <div className="component-details__list">
         {components.map((component) => (
-          <ComponentCard key={component.id} component={component} />
+          <ComponentCard key={component.id} component={component} destinations={destinations} />
         ))}
       </div>
     </section>

@@ -12,7 +12,7 @@ import {
 } from "../../server/api";
 import { createServiceToken } from "../../server/agent-client/credentials";
 import { createApplication } from "../../server/application";
-import { planningProblems, problemResponse } from "../../server/errors";
+import { ProblemError, planningProblems, problemResponse } from "../../server/errors";
 
 import type { getSession } from "../../server/auth/auth";
 
@@ -103,6 +103,60 @@ describe("API boundary", () => {
       expect(driver.headers.get("Cache-Control")).toBe("private, no-store");
       expect(driver.headers.has("x-correlation-id")).toBe(true);
     } finally {
+      await application.shutdown();
+    }
+  });
+
+  it("logs a failed callback's safe problem code and never its detail", async () => {
+    const application = createApplication({ NODE_ENV: "test" });
+    const dependencies = { application: () => application, session: vi.fn<typeof getSession>() };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const request = new Request(
+      "http://localhost/api/v1/internal/agent-runs/10000000-0000-4000-8000-000000000001/events/7",
+      { method: "PUT", headers: { "x-correlation-id": "synthetic-correlation-id" } },
+    );
+    try {
+      const rejected = await apiResponse(
+        request,
+        async () => {
+          throw new ProblemError({
+            title: "Estimate evidence does not match the proposed trip",
+            status: 409,
+            code: "estimate_evidence_start_date",
+          });
+        },
+        { dependencies },
+      );
+      expect(rejected.status).toBe(409);
+      expect(warn).toHaveBeenCalledWith(
+        JSON.stringify({
+          event: "request_failed",
+          method: "PUT",
+          route: "/api/v1/internal/agent-runs/:id/events/7",
+          status: 409,
+          code: "estimate_evidence_start_date",
+          correlationId: "synthetic-correlation-id",
+        }),
+      );
+      warn.mockClear();
+      const concealed = await apiResponse(
+        request,
+        async () => {
+          throw new ProblemError({
+            title: "Estimate evidence does not match the proposed trip",
+            status: 409,
+            code: "estimate_evidence_start_date",
+            detail: "supplier amount 991234",
+          });
+        },
+        { dependencies },
+      );
+      expect(concealed.status).toBe(500);
+      const logged = warn.mock.calls.flat().join(" ");
+      expect(logged).toContain("internal_error");
+      expect(logged).not.toContain("991234");
+    } finally {
+      warn.mockRestore();
       await application.shutdown();
     }
   });

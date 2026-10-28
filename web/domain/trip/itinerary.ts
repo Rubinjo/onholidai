@@ -66,6 +66,27 @@ export const segmentGuidanceFields = {
   departureGuidance: text(2000).optional(),
 };
 
+// A fare can cover a whole outbound-and-return journey, so each flown direction keeps
+// its own airports, instants and zones. The component's service window spans them all.
+export const flightJourneySchema = z
+  .object({
+    direction: z.enum(["outbound", "return", "multi_city"]),
+    origin: text(120),
+    destination: text(120),
+    originTimezone: text(120).nullable(),
+    destinationTimezone: text(120).nullable(),
+    departingAt: timestamp,
+    arrivingAt: timestamp,
+    legs: z.array(text(500)).max(16),
+  })
+  .strict()
+  .refine(
+    (journey) => Date.parse(journey.arrivingAt) > Date.parse(journey.departingAt),
+    "A flight journey must arrive after it departs",
+  );
+
+export type FlightJourney = z.infer<typeof flightJourneySchema>;
+
 // Additive optional facts keep immutable v1 snapshots readable. Absence never
 // becomes a verified pass; the finalization oracle discloses it explicitly.
 export const planningDetailsSchema = z
@@ -75,6 +96,7 @@ export const planningDetailsSchema = z
     airportNames: z.array(text(200)).max(8),
     airlines: z.array(text(200)).max(8),
     flightDirection: z.enum(["outbound", "return", "multi_city"]).nullable(),
+    flightJourneys: z.array(flightJourneySchema).max(8).optional(),
     durationMinutes: z.number().int().positive().nullable(),
     layovers: z.array(text(500)).max(8),
     fareConditions: text(2000).nullable(),

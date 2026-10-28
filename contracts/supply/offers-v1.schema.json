@@ -263,6 +263,85 @@
                     }
                   ]
                 },
+                "flightJourneys": {
+                  "maxItems": 8,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "outbound",
+                          "return",
+                          "multi_city"
+                        ]
+                      },
+                      "origin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "destination": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "originTimezone": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "destinationTimezone": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "departingAt": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                      },
+                      "arrivingAt": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                      },
+                      "legs": {
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      }
+                    },
+                    "required": [
+                      "direction",
+                      "origin",
+                      "destination",
+                      "originTimezone",
+                      "destinationTimezone",
+                      "departingAt",
+                      "arrivingAt",
+                      "legs"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
                 "durationMinutes": {
                   "anyOf": [
                     {
@@ -724,33 +803,40 @@
             "details": {
               "anyOf": [
                 {
-                  "type": "object",
-                  "properties": {
-                    "legs": {
-                      "minItems": 1,
-                      "maxItems": 8,
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 500
-                      }
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "legs": {
+                          "minItems": 1,
+                          "maxItems": 8,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          }
+                        },
+                        "baggage": {
+                          "maxItems": 16,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          }
+                        }
+                      },
+                      "required": [
+                        "legs",
+                        "baggage"
+                      ],
+                      "additionalProperties": false
                     },
-                    "baggage": {
-                      "maxItems": 16,
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 500
-                      }
+                    {
+                      "type": "null"
                     }
-                  },
-                  "required": [
-                    "legs",
-                    "baggage"
-                  ],
-                  "additionalProperties": false
+                  ]
                 },
                 {
                   "type": "null"
@@ -876,6 +962,85 @@
                       "type": "null"
                     }
                   ]
+                },
+                "flightJourneys": {
+                  "maxItems": 8,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "outbound",
+                          "return",
+                          "multi_city"
+                        ]
+                      },
+                      "origin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "destination": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "originTimezone": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "destinationTimezone": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "departingAt": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                      },
+                      "arrivingAt": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                      },
+                      "legs": {
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      }
+                    },
+                    "required": [
+                      "direction",
+                      "origin",
+                      "destination",
+                      "originTimezone",
+                      "destinationTimezone",
+                      "departingAt",
+                      "arrivingAt",
+                      "legs"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "durationMinutes": {
                   "anyOf": [
@@ -1338,28 +1503,35 @@
             "details": {
               "anyOf": [
                 {
-                  "type": "object",
-                  "properties": {
-                    "occupancy": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 500
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "occupancy": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        },
+                        "amenities": {
+                          "maxItems": 64,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          }
+                        }
+                      },
+                      "required": [
+                        "occupancy",
+                        "amenities"
+                      ],
+                      "additionalProperties": false
                     },
-                    "amenities": {
-                      "maxItems": 64,
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 120
-                      }
+                    {
+                      "type": "null"
                     }
-                  },
-                  "required": [
-                    "occupancy",
-                    "amenities"
-                  ],
-                  "additionalProperties": false
+                  ]
                 },
                 {
                   "type": "null"
@@ -1485,6 +1657,85 @@
                       "type": "null"
                     }
                   ]
+                },
+                "flightJourneys": {
+                  "maxItems": 8,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "outbound",
+                          "return",
+                          "multi_city"
+                        ]
+                      },
+                      "origin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "destination": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "originTimezone": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "destinationTimezone": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "departingAt": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                      },
+                      "arrivingAt": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                      },
+                      "legs": {
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      }
+                    },
+                    "required": [
+                      "direction",
+                      "origin",
+                      "destination",
+                      "originTimezone",
+                      "destinationTimezone",
+                      "departingAt",
+                      "arrivingAt",
+                      "legs"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "durationMinutes": {
                   "anyOf": [
@@ -1947,24 +2198,31 @@
             "details": {
               "anyOf": [
                 {
-                  "type": "object",
-                  "properties": {
-                    "durationMinutes": {
-                      "type": "integer",
-                      "exclusiveMinimum": 0,
-                      "maximum": 9007199254740991
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "durationMinutes": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "directions": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "durationMinutes",
+                        "directions"
+                      ],
+                      "additionalProperties": false
                     },
-                    "directions": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 2000
+                    {
+                      "type": "null"
                     }
-                  },
-                  "required": [
-                    "durationMinutes",
-                    "directions"
-                  ],
-                  "additionalProperties": false
+                  ]
                 },
                 {
                   "type": "null"
@@ -2090,6 +2348,85 @@
                       "type": "null"
                     }
                   ]
+                },
+                "flightJourneys": {
+                  "maxItems": 8,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "outbound",
+                          "return",
+                          "multi_city"
+                        ]
+                      },
+                      "origin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "destination": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "originTimezone": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "destinationTimezone": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "departingAt": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                      },
+                      "arrivingAt": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                      },
+                      "legs": {
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      }
+                    },
+                    "required": [
+                      "direction",
+                      "origin",
+                      "destination",
+                      "originTimezone",
+                      "destinationTimezone",
+                      "departingAt",
+                      "arrivingAt",
+                      "legs"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "durationMinutes": {
                   "anyOf": [
@@ -2552,30 +2889,37 @@
             "details": {
               "anyOf": [
                 {
-                  "type": "object",
-                  "properties": {
-                    "originStation": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 120
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "originStation": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "destinationStation": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "route": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "originStation",
+                        "destinationStation",
+                        "route"
+                      ],
+                      "additionalProperties": false
                     },
-                    "destinationStation": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 120
-                    },
-                    "route": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 500
+                    {
+                      "type": "null"
                     }
-                  },
-                  "required": [
-                    "originStation",
-                    "destinationStation",
-                    "route"
-                  ],
-                  "additionalProperties": false
+                  ]
                 },
                 {
                   "type": "null"
@@ -2701,6 +3045,85 @@
                       "type": "null"
                     }
                   ]
+                },
+                "flightJourneys": {
+                  "maxItems": 8,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "direction": {
+                        "type": "string",
+                        "enum": [
+                          "outbound",
+                          "return",
+                          "multi_city"
+                        ]
+                      },
+                      "origin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "destination": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "originTimezone": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "destinationTimezone": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "departingAt": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                      },
+                      "arrivingAt": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?Z$"
+                      },
+                      "legs": {
+                        "maxItems": 16,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      }
+                    },
+                    "required": [
+                      "direction",
+                      "origin",
+                      "destination",
+                      "originTimezone",
+                      "destinationTimezone",
+                      "departingAt",
+                      "arrivingAt",
+                      "legs"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "durationMinutes": {
                   "anyOf": [
@@ -3163,30 +3586,37 @@
             "details": {
               "anyOf": [
                 {
-                  "type": "object",
-                  "properties": {
-                    "origin": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 120
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "origin": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "destination": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 120
+                        },
+                        "route": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "origin",
+                        "destination",
+                        "route"
+                      ],
+                      "additionalProperties": false
                     },
-                    "destination": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 120
-                    },
-                    "route": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 500
+                    {
+                      "type": "null"
                     }
-                  },
-                  "required": [
-                    "origin",
-                    "destination",
-                    "route"
-                  ],
-                  "additionalProperties": false
+                  ]
                 },
                 {
                   "type": "null"

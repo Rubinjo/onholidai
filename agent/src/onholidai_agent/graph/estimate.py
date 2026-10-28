@@ -14,6 +14,7 @@ import langsmith
 from langgraph.graph import END, START, StateGraph  # pyright: ignore[reportMissingTypeStubs]
 
 from onholidai_agent.context.build import build_context
+from onholidai_agent.graph.budgets import PLANNING_GRAPH_BUDGET_SECONDS
 from onholidai_agent.graph.route_policy import arrange_destinations
 from onholidai_agent.graph.route_suggestion import proposal_suggestions, route_sequence
 from onholidai_agent.integrations.runtime import EstimateSources
@@ -464,7 +465,7 @@ async def estimate(
         # pages twice, Viator is slow), and an estimate may research a preferred and a
         # flexible date set. The run lease is renewed by progress events, so the bound
         # here only has to cap pathological work.
-        async with asyncio.timeout(210):
+        async with asyncio.timeout(PLANNING_GRAPH_BUDGET_SECONDS):
             result = await graph.compile().ainvoke({"request": request})
     value = result.get("result")
     if value is None:

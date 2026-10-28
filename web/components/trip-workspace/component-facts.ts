@@ -1,6 +1,7 @@
 import type { CustomerSnapshot } from "@/domain/pricing/projections";
 
 export type Component = CustomerSnapshot["components"][number];
+export type ComponentDestination = CustomerSnapshot["destinations"][number];
 export type TravelFact = { label: string; value: string };
 
 // Discovery reads store bounded supplier JSON in fareConditions, including in saved trips.
@@ -27,6 +28,58 @@ function texts(value: unknown): string[] {
         return text ? [text] : [];
       })
     : [];
+}
+
+function airportCodes(value: unknown): string[] {
+  return texts(value).flatMap((code) => (/^[A-Z]{3}$/.test(code) ? [code] : []));
+}
+
+// A fare keeps every slice's ordered airports, so a return or connecting itinerary
+// reads as one chain instead of collapsing to the first origin and last destination.
+function flightRoute(source: Record<string, unknown>): string | null {
+  const codes: string[] = [];
+  const add = (code: string | null) => {
+    if (code && /^[A-Z]{3}$/.test(code) && codes.at(-1) !== code) codes.push(code);
+  };
+  const slices = records(source.route);
+  if (Array.isArray(source.route) && source.route.some((entry) => typeof entry === "string"))
+    airportCodes(source.route).forEach(add);
+  for (const slice of slices) {
+    const ordered = airportCodes(slice.airports);
+    const sliceAirports = ordered.length
+      ? ordered
+      : [supplierText(slice.origin), supplierText(slice.destination)].flatMap((code) =>
+          code ? [code] : [],
+        );
+    sliceAirports.forEach(add);
+  }
+  if (!slices.length) {
+    const segmentCode = (value: unknown) =>
+      typeof value === "object" && value !== null
+        ? supplierText(record(value).iata_code)
+        : supplierText(value);
+    for (const segment of records(source.segments)) {
+      add(segmentCode(segment.origin));
+      add(segmentCode(segment.destination));
+    }
+    airportCodes(source.airports).forEach(add);
+  }
+  if (codes.length) return codes.join(" → ");
+  const origin = supplierText(source.originAirportCode);
+  const destination = supplierText(source.destinationAirportCode);
+  return origin && destination ? `${origin} → ${destination}` : null;
+}
+
+function joinLocation(...values: (string | null)[]): string | null {
+  const parts: string[] = [];
+  for (const value of values) {
+    if (!value) continue;
+    const alreadyIncluded = parts.some((part) =>
+      part.toLocaleLowerCase("en").includes(value.toLocaleLowerCase("en")),
+    );
+    if (!alreadyIncluded) parts.push(value);
+  }
+  return parts.length ? parts.join(", ") : null;
 }
 
 export function componentMoney(minor: number, currency: string): string {
@@ -57,7 +110,10 @@ export function componentDuration(minutes: number): string {
     .join(" ");
 }
 
-export function sourceFacts(component: Component): {
+export function sourceFacts(
+  component: Component,
+  fallbackLocation: string | null = null,
+): {
   facts: TravelFact[];
   route: string | null;
   notice: string | null;
@@ -84,9 +140,7 @@ export function sourceFacts(component: Component): {
     if (value) result.facts.push({ label, value });
   };
   if (component.type === "flight") {
-    const origin = supplierText(source.originAirportCode);
-    const destination = supplierText(source.destinationAirportCode);
-    if (origin && destination) result.route = `${origin} → ${destination}`;
+    result.route = flightRoute(source);
     add("Fare", [...new Set(texts(source.fareBrands))].join(", "));
     const cabins = records(source.passengerFares)
       .map((fare) => supplierText(fare.cabinClass)?.replaceAll("_", " "))
@@ -102,6 +156,16 @@ export function sourceFacts(component: Component): {
     if (source.extraCostsVerified === false) add("Extra costs", "To be confirmed");
   }
   if (component.type === "accommodation") {
+    add(
+      "Location",
+      joinLocation(
+        supplierText(source.address) ??
+          supplierText(source.hotelAddress) ??
+          supplierText(source.location),
+        supplierText(source.city) ?? supplierText(source.hotelCity),
+        supplierText(source.country) ?? supplierText(source.hotelCountry),
+      ) ?? fallbackLocation,
+    );
     const rooms = records(source.roomFacts);
     add(
       "Room",

@@ -148,6 +148,73 @@ describe("Duffel Flights synthetic HTTP wire", () => {
     );
   });
 
+  it("maps each slice to its own journey so a round trip is never one long flight", async () => {
+    const source = {
+      ...offer(),
+      slices: [
+        {
+          segments: [
+            {
+              departing_at: "2030-04-30T23:00:00Z",
+              arriving_at: "2030-05-01T08:30:00Z",
+              origin: { iata_code: "LHR", time_zone: "Europe/London" },
+              destination: { iata_code: "HND", time_zone: "Asia/Tokyo" },
+              marketing_carrier: { name: "Example Air" },
+            },
+          ],
+        },
+        {
+          segments: [
+            {
+              departing_at: "2030-05-08T00:00:00Z",
+              arriving_at: "2030-05-08T08:30:00Z",
+              origin: { iata_code: "HND", time_zone: "Asia/Tokyo" },
+              destination: { iata_code: "LHR", time_zone: "Europe/London" },
+              marketing_carrier: { name: "Example Air" },
+            },
+          ],
+        },
+      ],
+    };
+    const { client } = setup({ data: { offers: [source] } });
+    const [hit] = await client.search(query(), new AbortController().signal);
+    expect(hit.serviceStart).toBe("2030-04-30T23:00:00.000Z");
+    expect(hit.serviceEnd).toBe("2030-05-08T08:30:00.000Z");
+    expect(hit.details).toBeNull();
+    expect(hit.planningDetails).toMatchObject({
+      flightDirection: "return",
+      // The fare's whole-trip window is not a flight duration.
+      durationMinutes: null,
+      airportNames: ["LHR", "HND"],
+      airlines: ["Example Air"],
+      flightJourneys: [
+        {
+          direction: "outbound",
+          origin: "LHR",
+          destination: "HND",
+          originTimezone: "Europe/London",
+          destinationTimezone: "Asia/Tokyo",
+          departingAt: "2030-04-30T23:00:00.000Z",
+          arrivingAt: "2030-05-01T08:30:00.000Z",
+          legs: ["LHR → HND"],
+        },
+        {
+          direction: "return",
+          origin: "HND",
+          destination: "LHR",
+          originTimezone: "Asia/Tokyo",
+          destinationTimezone: "Europe/London",
+          departingAt: "2030-05-08T00:00:00.000Z",
+          arrivingAt: "2030-05-08T08:30:00.000Z",
+          legs: ["HND → LHR"],
+        },
+      ],
+    });
+    expect(Object.keys(JSON.parse(hit.planningDetails!.fareConditions!))).not.toContain(
+      "flightJourneys",
+    );
+  });
+
   it("uses an explicitly reassigned discovery-only token for EUR offers without creating worker authority", async () => {
     const environment = {
       PROVIDER_MODE: "live",
@@ -437,6 +504,7 @@ describe("Duffel Flights synthetic HTTP wire", () => {
     const facts = JSON.parse(hit.planningDetails.fareConditions!);
     expect(facts).toMatchObject({
       fareBrands: ["Synthetic Economy"],
+      route: [{ origin: "LHR", destination: "JFK", airports: ["LHR", "JFK"] }],
       additionalServicesAvailable: true,
       extraCostsVerified: false,
       identityDocumentsRequired: true,

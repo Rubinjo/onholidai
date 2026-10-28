@@ -1,6 +1,7 @@
 import asyncio
+import re
 import time
-from typing import Protocol
+from typing import Protocol, cast
 from urllib.parse import quote
 
 import httpx
@@ -14,6 +15,29 @@ from onholidai_agent.models.api import (
     PersistAgentEventRequest,
     PersistAgentResultRequest,
 )
+
+PROBLEM_CODE = re.compile(r"[a-z][a-z0-9_]{0,119}")
+
+
+class PersistenceRejected(ValueError):
+    """Web refused a persisted callback; carries only its public status and problem code."""
+
+    def __init__(self, status: int, detail: str, code: str | None):
+        super().__init__(detail)
+        self.status = status
+        self.code = code
+
+
+def response_problem_code(response: httpx.Response) -> str | None:
+    """Return the public problem code of a refused callback, never its body."""
+    try:
+        payload: object = response.json()
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    code = cast(dict[str, object], payload).get("code")
+    return code if isinstance(code, str) and PROBLEM_CODE.fullmatch(code) else None
 
 
 class RunStore(Protocol):
@@ -155,8 +179,10 @@ class WebRunStore:
             except httpx.HTTPStatusError as error:
                 # Problem details carry only a public title, status, code and correlation id.
                 detail = error.response.text[:300]
-                raise ValueError(
-                    f"persistence rejected ({error.response.status_code}): {detail}"
+                raise PersistenceRejected(
+                    error.response.status_code,
+                    f"persistence rejected ({error.response.status_code}): {detail}",
+                    response_problem_code(error.response),
                 ) from error
         raise RuntimeError("unreachable")
 

@@ -84,10 +84,8 @@ const internalProblem = {
   code: "internal_error",
 } as const;
 
-export function problemResponse(error: unknown, correlationId: string): Response {
-  const safeCorrelationId = isValidCorrelationId(correlationId) ? correlationId : randomUUID();
-  const safeProblem =
-    isProblemError(error) &&
+export function safeProblemOf(error: unknown): ProblemError | typeof internalProblem {
+  return isProblemError(error) &&
     ![
       error.type,
       error.title,
@@ -96,8 +94,13 @@ export function problemResponse(error: unknown, correlationId: string): Response
       error.nextPath ?? "",
       ...(error.fieldErrors ?? []).flatMap((field) => [field.path, field.message]),
     ].some(containsSensitiveText)
-      ? error
-      : internalProblem;
+    ? error
+    : internalProblem;
+}
+
+export function problemResponse(error: unknown, correlationId: string): Response {
+  const safeCorrelationId = isValidCorrelationId(correlationId) ? correlationId : randomUUID();
+  const safeProblem = safeProblemOf(error);
   const body: Problem = {
     type: safeProblem.type,
     title: safeProblem.title,

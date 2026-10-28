@@ -55,8 +55,9 @@ def test_itinerary_is_a_reviewable_proposal_and_preserves_authoritative_choices(
     days = cast("list[dict[str, Any]]", result.proposal.operations[0].value)
     assert len(days) == 2
     for day in days:
-        assert sum(item["type"] == "meal" for item in day["items"]) >= 2
-        assert any(item["type"] == "free_time" for item in day["items"])
+        titles = sorted(item["title"] for item in day["items"])
+        assert titles == ["Evening meal", "Lunch", "Morning meal"]
+        assert all(item["type"] == "meal" for item in day["items"])
         assert all(item["verificationStatus"] == "unverified" for item in day["items"])
 
 
@@ -192,3 +193,238 @@ def test_lower_priority_activity_changes_are_proposals_and_preserve_supplier_ite
         compose_refinement(planning_request(f"Remove activity {activity_id}"), Reader())
     ).root
     assert result.kind == "clarification"
+
+
+def test_round_trip_fare_plans_both_flights_with_their_own_duration_and_clocks():
+    tokyo_id, flight_id = str(uuid4()), str(uuid4())
+    snapshot: dict[str, Any] = {
+        "departureOrigin": {"name": "London", "timezone": "Europe/London", "airportCode": "LHR"},
+        "availabilityWindows": [
+            {
+                "startDate": "2026-11-01",
+                "endDate": "2026-11-07",
+                "preference": "preferred",
+                "timezone": "Europe/London",
+            }
+        ],
+        "destinations": [
+            {
+                "id": tokyo_id,
+                "name": "Tokyo",
+                "timezone": "Asia/Tokyo",
+                "arrivalDate": "2026-11-01",
+                "departureDate": "2026-11-07",
+                "plannedNights": 6,
+                "location": None,
+            }
+        ],
+        "preferences": {"pace": 50, "discovery": 50, "setting": 50, "independence": 50},
+        "constraints": [],
+        "components": [
+            {
+                "id": flight_id,
+                "type": "flight",
+                "provider": "duffel",
+                "checkedAt": "2026-10-01T00:00:00Z",
+                # The fare's own window spans the whole trip; it is not one flight.
+                "serviceStart": "2026-10-31T23:00:00Z",
+                "serviceEnd": "2026-11-07T08:30:00Z",
+                "details": None,
+                "planningDetails": {
+                    "flightDirection": "return",
+                    "flightJourneys": [
+                        {
+                            "direction": "outbound",
+                            "origin": "LHR",
+                            "destination": "HND",
+                            "originTimezone": "Europe/London",
+                            "destinationTimezone": "Asia/Tokyo",
+                            "departingAt": "2026-10-31T23:00:00Z",
+                            "arrivingAt": "2026-11-01T08:30:00Z",
+                            "legs": ["LHR ? HND"],
+                        },
+                        {
+                            "direction": "return",
+                            "origin": "HND",
+                            "destination": "LHR",
+                            "originTimezone": "Asia/Tokyo",
+                            "destinationTimezone": "Europe/London",
+                            "departingAt": "2026-11-07T00:00:00Z",
+                            "arrivingAt": "2026-11-07T08:30:00Z",
+                            "legs": ["HND ? LHR"],
+                        },
+                    ],
+                },
+            }
+        ],
+    }
+
+    class Reader:
+        async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]:
+            return {"version": 2, "snapshot": snapshot}
+
+    result = asyncio.run(
+        compose_itinerary(planning_request("Prepare itinerary", "finalization"), Reader())
+    ).root
+    assert result.kind == "proposal"
+    days = cast("list[dict[str, Any]]", result.proposal.operations[0].value)
+    assert [day["date"] for day in days] == [
+        "2026-11-01",
+        "2026-11-02",
+        "2026-11-03",
+        "2026-11-04",
+        "2026-11-05",
+        "2026-11-06",
+        "2026-11-07",
+    ]
+    flights = {
+        day["date"]: [item for item in day["items"] if item["type"] == "travel"] for day in days
+    }
+    assert [date for date, items in flights.items() if items] == ["2026-11-01", "2026-11-07"]
+    outbound = flights["2026-11-01"][0]["travelSegment"]
+    assert outbound["durationMinutes"] == 570
+    assert outbound["plannedDeparture"] == "2026-10-31T23:00:00+00:00"
+    assert outbound["plannedArrival"] == "2026-11-01T17:30:00+09:00"
+    assert outbound["origin"] == {
+        "placeId": f"{flight_id}-origin",
+        "name": "LHR",
+        "timezone": "Europe/London",
+        "location": None,
+    }
+    assert outbound["destination"]["timezone"] == "Asia/Tokyo"
+    made_up = [item for day in days for item in day["items"] if item["type"] != "meal"]
+    assert all(item["componentId"] == flight_id for item in made_up if item["type"] == "travel")
+    assert not any(item["type"] in ("activity", "free_time") for item in made_up)
+    returned = flights["2026-11-07"][0]["travelSegment"]
+    assert returned["durationMinutes"] == 510
+    assert returned["plannedDeparture"] == "2026-11-07T09:00:00+09:00"
+    assert returned["plannedArrival"] == "2026-11-07T08:30:00+00:00"
+    assert all(
+        segment["durationMinutes"] < 24 * 60
+        for items in flights.values()
+        for segment in (item["travelSegment"] for item in items)
+    )
+
+
+def test_westbound_flight_lands_on_the_day_it_arrives_without_time_travel_blocks():
+    city_id, flight_id = str(uuid4()), str(uuid4())
+    snapshot: dict[str, Any] = {
+        "availabilityWindows": [
+            {
+                "startDate": "2026-11-01",
+                "endDate": "2026-11-02",
+                "preference": "preferred",
+                "timezone": "Europe/London",
+            }
+        ],
+        "destinations": [
+            {
+                "id": city_id,
+                "name": "New York",
+                "timezone": "America/New_York",
+                "arrivalDate": "2026-11-01",
+                "departureDate": "2026-11-02",
+                "plannedNights": 1,
+                "location": None,
+            }
+        ],
+        "preferences": {"pace": 50, "discovery": 50, "setting": 50, "independence": 50},
+        "constraints": [],
+        "components": [
+            {
+                "id": flight_id,
+                "type": "flight",
+                "provider": "duffel",
+                "checkedAt": "2026-10-01T00:00:00Z",
+                "serviceStart": "2026-11-01T02:00:00Z",
+                "serviceEnd": "2026-11-01T12:00:00Z",
+                "details": None,
+                "planningDetails": {
+                    "flightJourneys": [
+                        {
+                            "direction": "outbound",
+                            "origin": "LHR",
+                            "destination": "JFK",
+                            "originTimezone": "Europe/London",
+                            "destinationTimezone": "America/New_York",
+                            "departingAt": "2026-11-01T02:00:00Z",
+                            "arrivingAt": "2026-11-01T12:00:00Z",
+                            "legs": ["LHR ? JFK"],
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+
+    class Reader:
+        async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]:
+            return {"version": 2, "snapshot": snapshot}
+
+    result = asyncio.run(
+        compose_itinerary(planning_request("Prepare itinerary", "finalization"), Reader())
+    ).root
+    assert result.kind == "proposal"
+    days = cast("list[dict[str, Any]]", result.proposal.operations[0].value)
+    arrival_day = next(day for day in days if day["date"] == "2026-11-01")
+    travel = [item for item in arrival_day["items"] if item["type"] == "travel"]
+    assert len(travel) == 1
+    item = travel[0]
+    assert item["start"] == "2026-11-01T00:00:00"
+    assert item["end"] == "2026-11-01T07:00:00"
+    assert item["travelSegment"]["durationMinutes"] == 600
+    assert item["travelSegment"]["plannedDeparture"] == "2026-11-01T02:00:00+00:00"
+    assert item["travelSegment"]["plannedArrival"] == "2026-11-01T07:00:00-05:00"
+    assert all(entry["start"][:10] == day["date"] for day in days for entry in day["items"])
+
+
+def test_saved_fare_without_journey_facts_warns_instead_of_inventing_a_long_flight():
+    destination_id = str(uuid4())
+    snapshot: dict[str, Any] = {
+        "availabilityWindows": [
+            {
+                "startDate": "2026-11-01",
+                "endDate": "2026-11-03",
+                "preference": "preferred",
+                "timezone": "Asia/Tokyo",
+            }
+        ],
+        "destinations": [
+            {
+                "id": destination_id,
+                "name": "Tokyo",
+                "timezone": "Asia/Tokyo",
+                "arrivalDate": "2026-11-01",
+                "departureDate": "2026-11-03",
+                "plannedNights": 2,
+                "location": None,
+            }
+        ],
+        "preferences": {"pace": 50, "discovery": 50, "setting": 50, "independence": 50},
+        "constraints": [],
+        # A fare saved before per-flight journey facts existed: only its window is known.
+        "components": [
+            {
+                "id": str(uuid4()),
+                "type": "flight",
+                "provider": "duffel",
+                "checkedAt": "2026-10-01T00:00:00Z",
+                "serviceStart": "2026-10-31T23:00:00Z",
+                "serviceEnd": "2026-11-10T10:58:00Z",
+                "details": None,
+                "planningDetails": {"flightDirection": None},
+            }
+        ],
+    }
+
+    class Reader:
+        async def get_trip(self, request: CreateAgentRunRequest) -> dict[str, object]:
+            return {"version": 2, "snapshot": snapshot}
+
+    result = asyncio.run(
+        compose_itinerary(planning_request("Prepare itinerary", "finalization"), Reader())
+    ).root
+    assert result.kind == "proposal"
+    assert any(
+        "Refresh the flights" in warning for warning in result.proposal.warnings
+    ), result.proposal.warnings

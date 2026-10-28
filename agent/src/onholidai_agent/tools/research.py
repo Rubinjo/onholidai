@@ -6,6 +6,7 @@ from typing import Protocol, cast, runtime_checkable
 from onholidai_agent.models.api import CreateAgentRunRequest
 
 
+@runtime_checkable
 class ResearchReader(Protocol):
     async def search(
         self, request: CreateAgentRunRequest, query: dict[str, object]

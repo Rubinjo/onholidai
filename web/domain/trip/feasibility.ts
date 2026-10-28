@@ -33,6 +33,26 @@ export const feasibilityReportSchema = z
 export type FeasibilityReport = z.infer<typeof feasibilityReportSchema>;
 type Item = TripSnapshot["itineraryDays"][number]["items"][number];
 
+// Free time is what the day leaves unallocated rather than a placeholder block, so an
+// itinerary only carrying sourced events and meals can still satisfy policy v1.
+const LEISURE_START_MINUTE = 8 * 60;
+const LEISURE_END_MINUTE = 21 * 60;
+const LEISURE_MINUTES = LEISURE_END_MINUTE - LEISURE_START_MINUTE;
+
+function wallClockMinute(value: string): number {
+  return Number(value.slice(11, 13)) * 60 + Number(value.slice(14, 16));
+}
+
+/** Minutes of an item that fall inside the day's ordinary waking window. */
+function leisureOverlap(start: string, end: string, dayDate: string): number {
+  const from = Math.max(wallClockMinute(start), LEISURE_START_MINUTE);
+  const until =
+    end.slice(0, 10) > dayDate
+      ? LEISURE_END_MINUTE
+      : Math.min(wallClockMinute(end), LEISURE_END_MINUTE);
+  return Math.max(0, until - from);
+}
+
 export function evaluateFeasibility(snapshot: TripSnapshot, now = new Date()): FeasibilityReport {
   const result: FeasibilityReport = {
     policyVersion: "1",
@@ -123,7 +143,7 @@ export function evaluateFeasibility(snapshot: TripSnapshot, now = new Date()): F
       );
     let occupied = 0,
       discretionary = 0,
-      free = 0,
+      scheduled = 0,
       meals = 0,
       prior: { item: Item; end: number } | null = null;
     for (const item of items) {
@@ -143,7 +163,10 @@ export function evaluateFeasibility(snapshot: TripSnapshot, now = new Date()): F
       if (item.type === "activity") discretionary += minutes;
       if (["meal", "activity", "travel"].includes(item.type)) occupied += minutes;
       if (item.type === "meal" && minutes >= policy.mealMinutes) meals++;
-      if (item.type === "free_time") free += minutes;
+      // Notes and explicit free-time blocks are not occupancy: free time is what a day
+      // leaves unallocated, whichever form the plan uses to describe it.
+      if (item.type !== "note" && item.type !== "free_time")
+        scheduled += leisureOverlap(item.start, item.end, day.date);
       if (
         item.verificationStatus !== "verified" ||
         !item.timingEvidence?.length ||
@@ -259,13 +282,20 @@ export function evaluateFeasibility(snapshot: TripSnapshot, now = new Date()): F
           segment.international ?? true,
           segment.providerArrivalMinutes,
         );
-        if (buffer && (departure - start) / 60000 < buffer)
+        if (buffer && (departure - start) / 60000 < buffer) {
+          // A departure just after the day starts cannot hold its airport buffer inside
+          // this plan, so the shortfall is disclosed rather than reported as impossible.
+          const dayStart = qualifiedInstant(`${day.date}T00:00`, day.timezone);
+          const truncated = dayStart !== null && start <= dayStart;
           issue(
-            "blocking",
+            truncated ? "exceptions" : "blocking",
             "arrival_buffer",
-            `Arrive ${buffer} minutes before departure (planning default).`,
+            truncated
+              ? `The ${buffer}-minute airport buffer before departure starts before this day.`
+              : `Arrive ${buffer} minutes before departure (planning default).`,
             [item.id],
           );
+        }
         if (segment.connectionFromItemId) {
           const connection = timing.get(segment.connectionFromItemId)?.item.travelSegment;
           if (!connection || segment.connectionMinimumMinutes == null)
@@ -300,11 +330,11 @@ export function evaluateFeasibility(snapshot: TripSnapshot, now = new Date()): F
         items.map((item) => item.id),
       );
     previousEnd = timed.at(-1)?.end ?? previousEnd;
-    if (meals < 2 || free < 60)
+    if (meals < policy.mealCount || LEISURE_MINUTES - scheduled < policy.freeMinutes)
       issue(
         exception ? "exceptions" : "blocking",
         "daily_rest",
-        "Preserve two 45-minute meals and 60 minutes free time.",
+        "Preserve two 45-minute meals and 60 unallocated daytime minutes.",
         items.map((item) => item.id),
       );
     if (
@@ -434,15 +464,27 @@ export function evaluateFeasibility(snapshot: TripSnapshot, now = new Date()): F
       const scheduled = [...timing.values()].filter(
         (entry) => entry.item.componentId === component.id,
       );
+      // A round-trip fare schedules one item per flown journey; without journey facts
+      // the component's single service window remains the only schedule it can match.
+      const expected = (
+        component.planningDetails?.flightJourneys?.length
+          ? component.planningDetails.flightJourneys.map((journey) => ({
+              start: Date.parse(journey.departingAt),
+              end: Date.parse(journey.arrivingAt),
+            }))
+          : [{ start: Date.parse(component.serviceStart), end: Date.parse(component.serviceEnd) }]
+      ).map((window) => `${window.start}-${window.end}`);
+      const actual = scheduled.map((entry) =>
+        [
+          entry.item.travelSegment
+            ? Date.parse(entry.item.travelSegment.plannedDeparture)
+            : entry.start,
+          entry.end,
+        ].join("-"),
+      );
       if (
-        scheduled.length !== 1 ||
-        scheduled.some(
-          (entry) =>
-            entry.end !== Date.parse(component.serviceEnd) ||
-            (entry.item.travelSegment
-              ? Date.parse(entry.item.travelSegment.plannedDeparture)
-              : entry.start) !== Date.parse(component.serviceStart),
-        )
+        actual.length !== expected.length ||
+        expected.some((window) => !actual.includes(window))
       ) {
         issue(
           "blocking",

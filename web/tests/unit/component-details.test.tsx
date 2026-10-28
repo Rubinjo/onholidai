@@ -8,6 +8,7 @@ import {
   componentDuration,
   componentMoney,
   type Component,
+  type ComponentDestination,
 } from "../../components/trip-workspace/component-facts";
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
@@ -78,6 +79,139 @@ function flight(fareConditions: string | null): Component {
 }
 
 describe("traveler-friendly component details", () => {
+  it("keeps every slice and connecting airport in the flight route", () => {
+    const connecting = flight(
+      JSON.stringify({
+        originAirportCode: "AMS",
+        destinationAirportCode: "AMS",
+        route: [
+          { origin: "AMS", destination: "HND", airports: ["AMS", "FRA", "HND"] },
+          { origin: "HND", destination: "AMS", airports: ["HND", "AMS"] },
+        ],
+      }),
+    );
+    const { unmount } = render(<ComponentDetails components={[connecting]} version={1} />);
+    const card = screen.getByRole("article", { name: "Flight: AMS → FRA → HND → AMS" });
+    expect(within(card).getByRole("heading", { name: "AMS → FRA → HND → AMS" })).toBeVisible();
+    unmount();
+    const legacySlices = flight(
+      JSON.stringify({
+        originAirportCode: "AMS",
+        destinationAirportCode: "AMS",
+        route: [
+          { origin: "AMS", destination: "HND" },
+          { origin: "HND", destination: "AMS" },
+        ],
+      }),
+    );
+    render(<ComponentDetails components={[legacySlices]} version={1} />);
+    expect(
+      within(screen.getByRole("article", { name: "Flight: AMS → HND → AMS" })).getByRole(
+        "heading",
+        { name: "AMS → HND → AMS" },
+      ),
+    ).toBeVisible();
+  });
+
+  it("lists both flown journeys instead of only the departure flight", () => {
+    const roundTrip: Component = {
+      ...flight(null),
+      serviceStart: "2026-10-31T23:00:00Z",
+      serviceEnd: "2026-11-07T08:30:00Z",
+      planningDetails: {
+        ...flight(null).planningDetails!,
+        flightDirection: "return",
+        durationMinutes: null,
+        flightJourneys: [
+          {
+            direction: "outbound",
+            origin: "LHR",
+            destination: "HND",
+            originTimezone: "Europe/London",
+            destinationTimezone: "Asia/Tokyo",
+            departingAt: "2026-10-31T23:00:00Z",
+            arrivingAt: "2026-11-01T08:30:00Z",
+            legs: ["LHR → HND"],
+          },
+          {
+            direction: "return",
+            origin: "HND",
+            destination: "LHR",
+            originTimezone: "Asia/Tokyo",
+            destinationTimezone: "Europe/London",
+            departingAt: "2026-11-07T00:00:00Z",
+            arrivingAt: "2026-11-07T08:30:00Z",
+            legs: ["HND → LHR"],
+          },
+        ],
+      },
+    };
+    render(<ComponentDetails components={[roundTrip]} version={1} />);
+    const card = screen.getByRole("article", { name: /^Flight:/ });
+    expect(within(card).getByRole("heading", { name: "Outbound flight" })).toBeVisible();
+    expect(within(card).getByRole("heading", { name: "Return flight" })).toBeVisible();
+    expect(within(card).getByText("31 Oct 2026, 23:00")).toBeVisible();
+    expect(within(card).getByText("1 Nov 2026, 17:30")).toBeVisible();
+    expect(within(card).getByText("9 hr 30 min")).toBeVisible();
+    expect(within(card).getByText("8 hr 30 min")).toBeVisible();
+    expect(within(card).getByText("First flight departs")).toBeVisible();
+    expect(within(card).getByText("Last flight arrives")).toBeVisible();
+  });
+
+  it("shows the stay address or the sourced city and country", () => {
+    const source = flight(
+      JSON.stringify({
+        address: "1-1 Chiyoda",
+        city: "Tokyo",
+        country: "Japan",
+        roomFacts: [{ roomName: "Twin room" }],
+      }),
+    );
+    const stay: Component = {
+      ...source,
+      id: "stay-with-location",
+      type: "accommodation",
+      details: { occupancy: "2 adults", amenities: [] },
+      planningDetails: { ...source.planningDetails!, locationName: "Palace Hotel" },
+    };
+    render(<ComponentDetails components={[stay]} version={1} />);
+    const card = screen.getByRole("article", { name: "Stay: Palace Hotel" });
+    expect(within(card).getByText("Location")).toBeVisible();
+    expect(within(card).getByText("1-1 Chiyoda, Tokyo, Japan")).toBeVisible();
+  });
+
+  it("falls back to the scheduled destination when the supplier has no address", () => {
+    const source = flight(JSON.stringify({ roomFacts: [{ roomName: "Twin room" }] }));
+    const stay: Component = {
+      ...source,
+      id: "stay-without-location",
+      type: "accommodation",
+      details: { occupancy: "2 adults", amenities: [] },
+      serviceStart: "2030-05-01T00:00:00Z",
+      serviceEnd: "2030-05-05T00:00:00Z",
+      planningDetails: { ...source.planningDetails!, locationName: "Riverside Hotel" },
+    };
+    const destinations: ComponentDestination[] = [
+      {
+        id: "10000000-0000-4000-8000-000000000099",
+        kind: "city",
+        name: "Tokyo",
+        countryCode: "JP",
+        timezone: "Asia/Tokyo",
+        providerPlaceIds: {},
+        location: null,
+        routePosition: 0,
+        arrivalDate: "2030-05-01",
+        departureDate: "2030-05-05",
+        plannedNights: 4,
+      },
+    ];
+    render(<ComponentDetails components={[stay]} destinations={destinations} version={1} />);
+    const card = screen.getByRole("article", { name: "Stay: Riverside Hotel" });
+    expect(within(card).getByText("Location")).toBeVisible();
+    expect(within(card).getByText("Tokyo, JP")).toBeVisible();
+  });
+
   it("turns saved supplier JSON into selected facts without exposing internal fields", () => {
     const component = flight(
       JSON.stringify({

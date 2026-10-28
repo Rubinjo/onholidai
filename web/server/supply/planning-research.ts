@@ -11,6 +11,7 @@ import { fingerprint, runConflict } from "@/server/agent-client/run-repository";
 import { readOwnedTripVersion } from "@/domain/trip/read";
 import { ProblemError } from "@/server/errors";
 import { selectedOfferSchema, selectedOffersSchema } from "@/domain/trip/proposal";
+import { autoSelectCities } from "@/server/trip/auto-destinations";
 
 import { providerSearchBudgetMs, RESEARCH_BUDGET_MS } from "./deadlines";
 import {
@@ -54,6 +55,7 @@ export const researchQuerySchema = z
     departurePlaceId: z.string().min(1).max(256).optional(),
     requirementIds: z.array(z.string().min(1).max(256)).max(32).default([]),
     propertyTypes: z.array(z.string().min(1).max(200)).max(16).default([]),
+    query: z.string().trim().min(2).max(200).optional(),
   })
   .strict()
   .refine((input) => input.endDate >= input.startDate);
@@ -133,8 +135,17 @@ export async function searchResearch(
     if (!run) runConflict();
     const trip = await currentTrip(transaction, actor),
       snapshot = trip.snapshot;
+    // The agent reads country-only selections as sourced city stops (see readAgentTrip),
+    // so accept the same bounded identities when it researches them.
+    const destinationOptions = new Map(
+      [
+        ...snapshot.destinations,
+        ...autoSelectCities(snapshot.destinations, snapshot.duration.idealDays, "live"),
+        ...autoSelectCities(snapshot.destinations, snapshot.duration.idealDays, "deterministic"),
+      ].map((place) => [place.id, place]),
+    );
     if (
-      !input.destinationIds.every((id) => snapshot.destinations.some((place) => place.id === id)) ||
+      !input.destinationIds.every((id) => destinationOptions.has(id)) ||
       !snapshot.availabilityWindows.some(
         (window) => window.startDate <= input.startDate && window.endDate >= input.endDate,
       ) ||
@@ -154,10 +165,12 @@ export async function searchResearch(
       startDate: input.startDate,
       endDate: input.endDate,
       departureOrigin: departureOrigin ?? null,
-      destinations: input.destinationIds.map((id) =>
-        snapshot.destinations.find((place) => place.id === id),
-      ),
+      destinations: input.destinationIds.flatMap((id) => {
+        const place = destinationOptions.get(id);
+        return place ? [place] : [];
+      }),
       travellerParty: snapshot.travellerParty,
+      ...(input.query ? { query: input.query } : {}),
     });
     return { runId: run.id, query };
   });

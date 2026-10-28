@@ -99,6 +99,100 @@ def test_preference_rationale_uses_public_scale_without_changing_legacy_operatio
     assert "/100" not in result.root.proposal.rationale
 
 
+def test_stated_nights_per_stop_proposes_the_whole_dated_route():
+    sources = RefinementSource()
+    before = deepcopy(sources.trip)
+    result = asyncio.run(
+        refine(
+            refinement_request("I want to spend 4 nights in Tokyo and only 2 nights in Kyoto."),
+            sources,
+        )
+    )
+    assert result.root.kind == "proposal"
+    operation = result.root.proposal.operations[0]
+    assert operation.target == "/destinations"
+    routed = [cast(dict[str, object], entry) for entry in cast(list[object], operation.value)]
+    assert [
+        (entry["plannedNights"], entry["arrivalDate"], entry["departureDate"]) for entry in routed
+    ] == [(4, "2030-05-01", "2030-05-05"), (2, "2030-05-05", "2030-05-07")]
+    assert sources.trip == before
+
+
+def test_partial_nights_statement_keeps_the_saved_nights_for_other_stops():
+    result = asyncio.run(refine(refinement_request("Spend 4 nights in Tokyo"), RefinementSource()))
+    assert result.root.kind == "proposal"
+    routed = cast(list[dict[str, object]], result.root.proposal.operations[0].value)
+    assert [(entry["plannedNights"], entry["departureDate"]) for entry in routed] == [
+        (4, "2030-05-05"),
+        (3, "2030-05-08"),
+    ]
+
+
+def test_nights_split_inside_the_recorded_window_proposes_without_a_question():
+    result = asyncio.run(
+        refine(refinement_request("5 nights in Tokyo and 2 nights in Kyoto"), RefinementSource())
+    )
+    assert result.root.kind == "proposal"
+    assert "8 days" in result.root.proposal.rationale
+
+
+def test_request_to_fit_flights_and_stays_to_a_stated_split_proposes_the_route():
+    result = asyncio.run(
+        refine(
+            refinement_request(
+                "Adjust the flights and accommodation to fit 4 nights in Tokyo and "
+                "2 nights in Kyoto."
+            ),
+            RefinementSource(),
+        )
+    )
+    assert result.root.kind == "proposal"
+    operation = result.root.proposal.operations[0]
+    assert operation.target == "/destinations"
+    routed = [cast(dict[str, object], entry) for entry in cast(list[object], operation.value)]
+    assert [entry["plannedNights"] for entry in routed] == [4, 2]
+    assert "7 days" in result.root.proposal.rationale
+
+
+def test_worded_nights_are_read_like_digits():
+    result = asyncio.run(
+        refine(
+            refinement_request("four nights in Tokyo and two nights in Kyoto"), RefinementSource()
+        )
+    )
+    assert result.root.kind == "proposal"
+    routed = cast(list[dict[str, object]], result.root.proposal.operations[0].value)
+    assert [entry["plannedNights"] for entry in routed] == [4, 2]
+
+
+def test_stop_the_traveller_did_not_mention_keeps_its_saved_nights():
+    sources = RefinementSource()
+    snapshot = cast(dict[str, object], sources.trip["snapshot"])
+    destinations = cast(list[dict[str, object]], snapshot["destinations"])
+    destinations.append(
+        {
+            "id": "10000000-0000-4000-8000-000000000007",
+            "name": "Osaka",
+            "plannedNights": 2,
+            "arrivalDate": "2030-05-07",
+            "departureDate": "2030-05-09",
+            "routePosition": 2,
+        }
+    )
+    cast(dict[str, object], snapshot["duration"])["maximumDays"] = 12
+    before = deepcopy(sources.trip)
+    result = asyncio.run(
+        refine(
+            refinement_request("4 nights in Tokyo and 2 nights in Osaka"),
+            sources,
+        )
+    )
+    assert result.root.kind == "proposal"
+    routed = cast(list[dict[str, object]], result.root.proposal.operations[0].value)
+    assert [entry["plannedNights"] for entry in routed] == [4, 3, 2]
+    assert sources.trip == before
+
+
 @pytest.mark.parametrize(
     "fields",
     [

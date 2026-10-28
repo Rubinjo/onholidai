@@ -89,8 +89,16 @@ function WorkspacePanes({
           />
           <details>
             <summary>Daily plans and activities</summary>
-            <DayPlan days={trip.snapshot.itineraryDays} version={trip.version} />
-            <ComponentDetails components={trip.snapshot.components} version={trip.version} />
+            <DayPlan
+              days={trip.snapshot.itineraryDays}
+              destinations={trip.snapshot.destinations}
+              version={trip.version}
+            />
+            <ComponentDetails
+              components={trip.snapshot.components}
+              destinations={trip.snapshot.destinations}
+              version={trip.version}
+            />
           </details>
         </div>
         <div className="trip-workspace__pane trip-workspace__pane--route">

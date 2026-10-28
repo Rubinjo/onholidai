@@ -475,6 +475,7 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
         "015_whole_trip_terms.sql",
         "016_booking_attempt_guards.sql",
         "017_booking_outbox_intents.sql",
+        "018_agent_failure_categories.sql",
       ]);
       const saved = await prior.database
         .selectFrom("bookingAuthorizations")

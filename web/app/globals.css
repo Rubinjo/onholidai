@@ -492,6 +492,17 @@ summary {
 .component-card .component-card__timezone {
   margin-top: 0.5rem;
 }
+/* A round-trip fare lists each flown direction as its own schedule block. */
+.component-card .component-card__journeys {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+.component-card__journeys h4 {
+  font-size: 0.95rem;
+}
 .component-card__practical {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
@@ -511,6 +522,147 @@ summary {
 .component-card__notes ul {
   margin: 0.25rem 0 0;
   padding-inline-start: 1.25rem;
+}
+/* Day plans read as one card per day: the same surface, border and muted meta text as
+   the flight and stay cards, with the clock on a rail instead of prose per period. */
+.day-plan__hint {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.day-plan__days {
+  display: grid;
+  gap: 1rem;
+}
+.day-plan__day {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+.day-plan__day :where(h3, h4, p, ul, ol) {
+  margin: 0;
+}
+.day-plan__header {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+.day-plan__index {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  background: var(--accent);
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.day-plan__header h3 {
+  font-size: 1.1rem;
+  line-height: 1.3;
+}
+.day-plan__place {
+  color: var(--accent-strong);
+  font-size: 0.9rem;
+}
+.day-plan__pace {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.day-plan__item + .day-plan__item {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--surface-hover);
+}
+.day-plan__timeline {
+  display: grid;
+  margin-top: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+.day-plan__item {
+  display: grid;
+  grid-template-columns: 4.25rem 1.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+.day-plan__time {
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+.day-plan__time-end {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.day-plan__time-end::before {
+  content: "to ";
+}
+.day-plan__icon {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--accent);
+  background: var(--surface-muted);
+  border-radius: 50%;
+}
+.day-plan__icon svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+.day-plan__body {
+  min-width: 0;
+}
+.day-plan__title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.day-plan__facts,
+.day-plan__status,
+.day-plan__empty,
+.day-plan__notes {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.day-plan__notes {
+  margin-top: 0.35rem;
+  padding-inline-start: 1rem;
+}
+.day-plan__more > summary {
+  margin-top: 0.35rem;
+  color: var(--accent-strong);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.day-plan__notes--day {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0 0 1rem;
+  border-top: 1px solid var(--surface-hover);
+}
+.day-plan__status,
+.day-plan__warning,
+.day-plan__exception,
+.day-plan__empty {
+  margin-top: 0.5rem;
+}
+.day-plan__status {
+  color: var(--accent-strong);
+}
+.day-plan__status--cancelled,
+.day-plan__warning,
+.day-plan__exception {
+  color: var(--danger);
+  font-size: 0.85rem;
 }
 .trip-workspace__pane--route {
   grid-area: route;

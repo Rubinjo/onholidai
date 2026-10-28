@@ -58,6 +58,12 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
     `https://api.duffel.com/air/offers?offer_request_id=${encodeURIComponent(offerRequestId)}&limit=${OFFER_PAGE_LIMIT}&sort=total_amount`;
   const grants = new Map<string, string>();
 
+  function optionalRecord(value: unknown): Record<string, unknown> | null {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  }
+
   function serviceInstant(value: unknown, airport: Record<string, unknown>): string | null {
     const explicit = instant(value);
     if (explicit) return explicit;
@@ -65,6 +71,38 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
     const timezone = text(airport.time_zone, 120);
     const qualified = timezone ? qualifiedInstant(value, timezone) : null;
     return qualified === null ? null : new Date(qualified).toISOString();
+  }
+
+  // One fare can carry an outbound and a return slice. Keeping each flown direction
+  // with its own airports, instants and zones stops a whole-trip span from being read
+  // as a single flight duration.
+  function sliceJourney(slice: Record<string, unknown>, index: number) {
+    const legs = list(record(slice).segments, 16).map(record);
+    const first = legs[0];
+    const last = legs.at(-1);
+    if (!first || !last) return null;
+    const origin = text(record(first.origin).iata_code, 3);
+    const destination = text(record(last.destination).iata_code, 3);
+    const departingAt = serviceInstant(first.departing_at, record(first.origin));
+    const arrivingAt = serviceInstant(last.arriving_at, record(last.destination));
+    if (!origin || !destination || !departingAt || !arrivingAt) return null;
+    if (Date.parse(arrivingAt) <= Date.parse(departingAt)) return null;
+    const segments = legs.flatMap((leg) => {
+      const from = text(record(leg.origin).iata_code, 3);
+      const to = text(record(leg.destination).iata_code, 3);
+      return from && to ? [`${from} → ${to}`] : [];
+    });
+    if (segments.length !== legs.length) return null;
+    return {
+      direction: index === 0 ? "outbound" : index === 1 ? "return" : "multi_city",
+      origin,
+      destination,
+      originTimezone: text(record(first.origin).time_zone, 120),
+      destinationTimezone: text(record(last.destination).time_zone, 120),
+      departingAt,
+      arrivingAt,
+      legs: segments,
+    };
   }
 
   function mapOffer(value: unknown, query: SupplyReadQuery) {
@@ -101,6 +139,10 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
       record(segments.at(-1)).arriving_at,
       record(record(segments.at(-1)).destination),
     );
+    const journeys = slices.flatMap((slice, index) => {
+      const journey = sliceJourney(record(slice), index);
+      return journey ? [journey] : [];
+    });
     const payment = offer.payment_requirements == null ? null : record(offer.payment_requirements);
     const passengerFares = segments.some((segment) => record(segment).passengers == null)
       ? null
@@ -135,11 +177,30 @@ export function createDuffelFlightsHttpClient(options: DuffelFlightsHttpOptions)
     hit.details = {
       segmentCount: segments.length,
       sliceCount: slices.length,
+      ...(journeys.length === slices.length ? { flightJourneys: journeys } : {}),
+      airlines: [
+        ...new Set(
+          segments.flatMap((segment) => {
+            const carrier = optionalRecord(record(segment).marketing_carrier);
+            const name = text(carrier?.name, 200) ?? text(carrier?.iata_code, 3);
+            return name ? [name] : [];
+          }),
+        ),
+      ],
       route: slices.map((slice) => {
         const legs = list(record(slice).segments, 16).map(record);
+        const airports: string[] = [];
+        for (const leg of legs) {
+          const legAirports = [
+            text(record(leg.origin).iata_code, 3),
+            text(record(leg.destination).iata_code, 3),
+          ];
+          for (const code of legAirports) if (code && airports.at(-1) !== code) airports.push(code);
+        }
         return {
           origin: text(record(legs[0]?.origin).iata_code, 3),
           destination: text(record(legs.at(-1)?.destination).iata_code, 3),
+          airports,
         };
       }),
       originAirportCode: text(record(record(segments[0]).origin).iata_code, 3),

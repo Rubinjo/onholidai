@@ -13,6 +13,13 @@ export async function GET(
     const baseTripVersion = z.coerce.number().int().positive().parse(query.get("baseTripVersion"));
     const detail = agentViewDetailSchema.parse(query.get("detail"));
     const actor = internalActor(application, request, tripId, baseTripVersion, "trip:read");
-    return readAgentTrip(application.database, actor.userId, tripId, baseTripVersion, detail);
+    return readAgentTrip(
+      application.database,
+      actor.userId,
+      tripId,
+      baseTripVersion,
+      detail,
+      application.config.PROVIDER_MODE,
+    );
   });
 }

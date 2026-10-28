@@ -83,6 +83,54 @@ describe("Viator synthetic HTTP wire", () => {
     });
     expect(Object.keys(client).sort()).toEqual(["capabilities", "detail", "revalidate", "search"]);
   });
+  it("reads the supplier text catalogue for one named activity and keeps only located listings", async () => {
+    const trip = createSyntheticTripSnapshot();
+    const transport = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            products: {
+              totalCount: 3,
+              results: [
+                {
+                  ...product,
+                  productCode: "LOCATED1",
+                  title: "Lisbon Traditional Fado Show",
+                  description: "An evening of Portuguese song in Lisbon.",
+                  duration: { fixedDurationInMinutes: 90 },
+                },
+                {
+                  ...product,
+                  productCode: "ELSEWHERE1",
+                  title: "Porto Traditional Fado Show",
+                  description: "The same show in Porto.",
+                },
+                product,
+              ],
+            },
+          }),
+        ),
+    );
+    const client = createViatorHttpClient({
+      apiKey: "synthetic-single-upstream-key",
+      fetch: transport,
+      resolveDestination: () => "1234",
+    });
+    const hits = await client.search(
+      { ...query(), query: "Traditional Fado Show", destinations: trip.destinations },
+      new AbortController().signal,
+    );
+    expect(hits.map((hit) => hit.offerId)).toEqual(["LOCATED1"]);
+    expect(hits[0].planningDetails.durationMinutes).toBe(90);
+    const call = transport.mock.calls[0] as unknown as [string, RequestInit];
+    expect(call[0]).toBe("https://api.viator.com/partner/search/freetext");
+    expect(JSON.parse(call[1].body as string)).toEqual({
+      searchTerm: "Traditional Fado Show",
+      currency: "GBP",
+      searchTypes: [{ searchType: "PRODUCTS", pagination: { start: 1, count: 32 } }],
+    });
+    expect(JSON.stringify(hits)).not.toMatch(/upstream-key|private/);
+  });
   it("reads product detail and availability without bookings, cart, holds or raw economics", async () => {
     const { client, transport } = setup();
     const signal = new AbortController().signal;

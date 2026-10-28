@@ -32,6 +32,7 @@ export async function dispatchEstimate(
     run.tripId,
     run.baseTripVersion,
     "compact",
+    application.config.PROVIDER_MODE,
   );
   const conversation =
     run.purpose === "refinement"

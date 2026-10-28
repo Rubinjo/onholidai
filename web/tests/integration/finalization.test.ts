@@ -89,7 +89,199 @@ describe("feasibility policy v1", () => {
       evaluateFeasibility(snapshot).unverified.some((issue) => issue.code === "unknown_transit"),
     ).toBe(true);
   });
-  it("requires nine hours overnight rest, meals and free time and leaves unknown dietary checks disclosed", () => {
+  it("discloses an airport buffer that starts before the first plan day", () => {
+    const snapshot = createSyntheticTripSnapshot(),
+      day = snapshot.itineraryDays[0];
+    day.items = [
+      {
+        ...day.items[1],
+        id: randomUUID(),
+        type: "travel",
+        start: day.date + "T00:00",
+        end: day.date + "T09:00",
+        travelSegment: {
+          mode: "flight",
+          origin: {
+            placeId: "place-lhr",
+            name: "London Heathrow",
+            timezone: "Europe/London",
+            location: null,
+          },
+          destination: {
+            placeId: "place-lis",
+            name: "Lisbon Airport",
+            timezone: "Europe/Lisbon",
+            location: null,
+          },
+          plannedDeparture: day.date + "T01:00:00+01:00",
+          plannedArrival: day.date + "T08:00:00+01:00",
+          durationMinutes: 420,
+          durationUpperBoundMinutes: null,
+          routeGeometry: null,
+          directionsSummary: "Synthetic route",
+          source: "duffel",
+          freshnessAt: "2029-01-01T00:00:00Z",
+          timingEvidence: ["Synthetic schedule"],
+          verificationStatus: "verified",
+          feasibilityPolicyVersion: "1",
+          international: true,
+        },
+      },
+    ];
+    const report = evaluateFeasibility(snapshot);
+    expect(report.blocking.some((issue) => issue.code === "arrival_buffer")).toBe(false);
+    expect(report.exceptions.some((issue) => issue.code === "arrival_buffer")).toBe(true);
+  });
+  it("matches one itinerary item per flown journey of a round-trip fare", () => {
+    const snapshot = createSyntheticTripSnapshot(),
+      day = snapshot.itineraryDays[0],
+      componentId = randomUUID();
+    const journey = (
+      direction: "outbound" | "return",
+      origin: string,
+      destination: string,
+      departingAt: string,
+      arrivingAt: string,
+    ) => ({
+      direction,
+      origin,
+      destination,
+      originTimezone: "Europe/London",
+      destinationTimezone: "Europe/Lisbon",
+      departingAt,
+      arrivingAt,
+      legs: [`${origin} → ${destination}`],
+    });
+    const outbound = journey(
+      "outbound",
+      "LHR",
+      "LIS",
+      "2030-05-02T09:00:00Z",
+      "2030-05-02T11:30:00Z",
+    );
+    const inbound = journey("return", "LIS", "LHR", "2030-05-02T15:00:00Z", "2030-05-02T17:30:00Z");
+    const travel = (window: {
+      start: string;
+      end: string;
+      departingAt: string;
+      arrivingAt: string;
+      from: string;
+      to: string;
+    }) => ({
+      ...day.items[1],
+      id: randomUUID(),
+      type: "travel" as const,
+      componentId,
+      start: window.start,
+      end: window.end,
+      travelSegment: {
+        mode: "flight" as const,
+        origin: {
+          placeId: window.from,
+          name: window.from,
+          timezone: "Europe/London",
+          location: null,
+        },
+        destination: {
+          placeId: window.to,
+          name: window.to,
+          timezone: "Europe/Lisbon",
+          location: null,
+        },
+        plannedDeparture: window.departingAt,
+        plannedArrival: window.arrivingAt,
+        durationMinutes: 150,
+        durationUpperBoundMinutes: null,
+        routeGeometry: null,
+        directionsSummary: "Synthetic route",
+        source: "duffel",
+        freshnessAt: "2029-01-01T00:00:00Z",
+        timingEvidence: ["Synthetic schedule"],
+        verificationStatus: "verified" as const,
+        feasibilityPolicyVersion: "1" as const,
+        international: true,
+      },
+    });
+    snapshot.components = [
+      {
+        id: componentId,
+        itineraryItemIds: [],
+        provider: "duffel",
+        supplierOfferId: "off_roundtrip",
+        type: "flight",
+        offerStatus: "available",
+        serviceStart: "2030-05-02T09:00:00Z",
+        serviceEnd: "2030-05-02T17:30:00Z",
+        travellerIds: [randomUUID()],
+        bookingRequirements: [],
+        cancellationTerms: "Synthetic terms",
+        price: {
+          supplierAmount: { currency: "GBP", minorUnits: 0 },
+          platformMargin: { currency: "GBP", minorUnits: 0 },
+          customerPayableTaxes: { currency: "GBP", minorUnits: 0 },
+          customerPayableFees: { currency: "GBP", minorUnits: 0 },
+          finalCustomerAmount: { currency: "GBP", minorUnits: 0 },
+          status: "estimated",
+          source: "duffel",
+          checkedAt: "2029-01-01T00:00:00Z",
+          expiresAt: null,
+        },
+        checkedAt: "2029-01-01T00:00:00Z",
+        expiresAt: null,
+        bookingStatus: "unbooked",
+        details: null,
+        planningDetails: {
+          locationName: null,
+          timezone: null,
+          airportNames: ["LHR", "LIS"],
+          airlines: ["Synthetic Air"],
+          flightDirection: "return",
+          flightJourneys: [outbound, inbound],
+          durationMinutes: null,
+          layovers: [],
+          fareConditions: null,
+          accommodationType: null,
+          travelFromStayMinutes: null,
+          eligibility: "unverified",
+          accessibility: "unverified",
+          availability: "unverified",
+          constraintEvidence: [],
+          source: "duffel",
+          checkedAt: "2029-01-01T00:00:00Z",
+          unavailableFacts: [],
+        },
+      },
+    ];
+    const outboundItem = travel({
+      start: day.date + "T07:00",
+      end: day.date + "T12:30",
+      departingAt: "2030-05-02T09:00:00Z",
+      arrivingAt: "2030-05-02T11:30:00Z",
+      from: "LHR",
+      to: "LIS",
+    });
+    const returnItem = travel({
+      start: day.date + "T13:00",
+      end: day.date + "T18:30",
+      departingAt: "2030-05-02T15:00:00Z",
+      arrivingAt: "2030-05-02T17:30:00Z",
+      from: "LIS",
+      to: "LHR",
+    });
+    day.items = [outboundItem, returnItem];
+    expect(
+      evaluateFeasibility(snapshot).blocking.some(
+        (issue) => issue.code === "component_schedule_mismatch",
+      ),
+    ).toBe(false);
+    day.items = [outboundItem];
+    expect(
+      evaluateFeasibility(snapshot).blocking.some(
+        (issue) => issue.code === "component_schedule_mismatch",
+      ),
+    ).toBe(true);
+  });
+  it("requires nine hours overnight rest and two meals while free time stays unallocated", () => {
     const snapshot = createSyntheticTripSnapshot(),
       day = snapshot.itineraryDays[0];
     day.items[1].start = day.date + "T20:00";
@@ -113,6 +305,29 @@ describe("feasibility policy v1", () => {
     nextDay.items[0].start = "2030-05-03T07:00";
     expect(
       evaluateFeasibility(snapshot).blocking.some((issue) => issue.code === "overnight_rest"),
+    ).toBe(true);
+  });
+  it("counts unallocated daytime as free time so sourced-only days stay feasible", () => {
+    const snapshot = createSyntheticTripSnapshot(),
+      day = snapshot.itineraryDays[0],
+      meal = day.items[0],
+      activity = day.items[1];
+    // Two meals and a sourced event, with no generic free-time placeholder.
+    day.items = [
+      meal,
+      activity,
+      { ...meal, id: randomUUID(), start: day.date + "T18:00", end: day.date + "T18:45" },
+    ];
+    const report = evaluateFeasibility(snapshot);
+    expect(report.blocking.some((issue) => issue.code === "daily_rest")).toBe(false);
+    // Two meals are still preserved, but nothing of the day is left unallocated.
+    day.items = [
+      meal,
+      { ...activity, start: day.date + "T08:45", end: day.date + "T21:00" },
+      { ...meal, id: randomUUID(), start: day.date + "T21:00", end: day.date + "T21:45" },
+    ];
+    expect(
+      evaluateFeasibility(snapshot).blocking.some((issue) => issue.code === "daily_rest"),
     ).toBe(true);
   });
   it.each([

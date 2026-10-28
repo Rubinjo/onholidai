@@ -81,6 +81,12 @@ The available nights are divided using the same allocation as the estimate; each
 own offer-selection group, dates, and persisted detail query. A failed stop does not discard
 successful stops, and the product status reports partial coverage.
 
+A destination selected only as a country is a scope, not an overnight stop. When the agent reads
+such a trip, the bundled place catalogue replaces each country with a bounded set of recognised
+cities (one for short breaks, up to three for longer trips), preferring separate population
+centres. Explicit city selections are never changed. The proposal still requires review, so the
+saved trip is not edited automatically.
+
 Flight research compares a round trip through the first stop's gateway with an open-jaw return
 from the final stop's gateway. Fuzzy airport suggestions must match the destination country.
 If the supplier has no matching gateway, the bundled OurAirports catalogue can supply a large
@@ -90,13 +96,13 @@ airport within 150 km in the same country.
 
 Supplier latency is dominated by supplier-side queue time, not our own work. A live Duffel search needs an offer request plus a paged offer read (five to nine seconds together), and a Viator product search regularly takes twenty to forty seconds. The shared policy in [deadlines.ts](../web/server/supply/deadlines.ts) keeps every layer aligned, so a source is never cut off by a bound that a different process assumed was generous:
 
-| Bound                   | Value                              | Applies to                                               |
-| ----------------------- | ---------------------------------- | -------------------------------------------------------- |
-| Supplier attempt        | 20 seconds (Viator 50)             | One HTTP request inside a read                           |
-| Product search budget   | Duffel 35s, Nuitee 30s, Viator 50s | Every call one product needs, including place resolution |
-| Research request budget | 65 seconds                         | All products in parallel, plus persistence               |
-| Agent research call     | 75 seconds                         | The agent's client bound for that request                |
-| Estimate run            | 210 seconds                        | One dispatched estimate, renewed by progress events      |
+| Bound                   | Value                              | Applies to                                                                       |
+| ----------------------- | ---------------------------------- | -------------------------------------------------------------------------------- |
+| Supplier attempt        | 20 seconds (Viator 50)             | One HTTP request inside a read                                                   |
+| Product search budget   | Duffel 35s, Nuitee 30s, Viator 50s | Every call one product needs, including place resolution                         |
+| Research request budget | 65 seconds                         | All products in parallel, plus persistence                                       |
+| Agent research call     | 75 seconds                         | The agent's client bound for that request                                        |
+| Planning run            | 210 seconds                        | One dispatched estimate, refinement or itinerary run, renewed by progress events |
 
 Reads retry a transient supplier failure (network error, HTTP 408/425/429/5xx, or an unusable page) up to three attempts with jittered exponential backoff, honouring a supplier `Retry-After` window. Definitive rejections (401, 403, most 4xx, unsupported coverage) are never retried. **Transaction clients never opt into retries**: a booking call is attempted once, so an uncertain supplier outcome is never replayed automatically.
 
@@ -107,6 +113,30 @@ When products fail, the draft is not silently changed. The assistant answers wit
 The dispatch acknowledgement allows 30 seconds for its authenticated web callbacks, including
 cold local compilation. If the acknowledgement is lost but the database already records progress
 or a terminal result, web returns that durable run instead of reporting an unconfirmed request.
+
+### Failed run categories
+
+A failed run records one category in `agent_runs.error_category`, and that category alone chooses
+the sentence shown to the traveller:
+
+| Category             | Recorded when                                                         |
+| -------------------- | --------------------------------------------------------------------- |
+| `deadline`           | The run exceeded its research bound (`estimate_deadline`)             |
+| `source_unavailable` | No supplier returned usable current inventory                         |
+| `invalid_result`     | Web rejected the proposal because its evidence did not match the trip |
+| `agent_error`        | Any other exception inside the agent                                  |
+| `interrupted`        | The lease expired or an abandoned clarification suspended it          |
+
+The agent classifies its own failure in `failure_code` and reports a fixed safe code, never the
+exception ([runs.py](../agent/src/onholidai_agent/api/runs.py)). `invalid_result` is used only when
+web refuses the proposal with a 409 whose problem code is `estimate_evidence_*` or
+`offer_unavailable`; any other rejection or crash stays `agent_error`, so a traveller is never told
+their supplier evidence was invalid when the run merely failed.
+
+Web logs one `request_failed` line for a 409, a 429 or any 5xx with the method, the route template,
+the status, the sanitized problem code and the correlation id — never the problem detail or a
+request body. Pair that line with the agent's `Estimate run failed (<category> ...)` entry for the
+same time window to see which check rejected the work.
 
 ### Give each process only the credentials it needs
 

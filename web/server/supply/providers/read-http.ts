@@ -1,4 +1,9 @@
 import { currencySchema } from "@/domain/trip/schema";
+import {
+  flightJourneySchema,
+  type FlightJourney,
+  type PlanningDetails,
+} from "@/domain/trip/itinerary";
 
 import {
   retryDelayMs,
@@ -12,8 +17,6 @@ import {
   supplyReadQuerySchema,
   type SupplyReadQuery,
 } from "../read";
-
-import type { PlanningDetails } from "@/domain/trip/itinerary";
 
 export interface ReadHttpOptions {
   fetch?: typeof fetch;
@@ -147,9 +150,28 @@ export function emptyHit(offerId: string, currency: string, checkedAt: string): 
   };
 }
 
+/** Read a bounded list of supplier strings; anything else stays unknown. */
+function textList(value: unknown, length = 200, limit = 8): string[] {
+  if (!Array.isArray(value) || value.length > limit) return [];
+  return value.flatMap((entry) => {
+    const item = text(entry, length);
+    return item ? [item] : [];
+  });
+}
+
+/** Flown directions a fare covers; an unreadable journey never becomes a flight. */
+function flightJourneys(value: unknown): FlightJourney[] {
+  const parsed = flightJourneySchema.array().max(8).safeParse(value);
+  return parsed.success ? parsed.data : [];
+}
+
 /** Keep bounded source pricing/availability conditions without inventing complete component details. */
 export function discoveryHit(hit: WireHit, source: string) {
-  const facts = JSON.stringify(hit.details);
+  // Journey timings are structured facts, so they stay out of the bounded JSON blob
+  // that a busy fare matrix can truncate.
+  const { flightJourneys: rawJourneys, ...sourceDetails } = hit.details;
+  const journeys = flightJourneys(rawJourneys);
+  const facts = JSON.stringify(sourceDetails);
   // A busy multi-passenger fare matrix is larger than the bounded advisory text. The
   // excess is truncated and disclosed instead of discarding otherwise valid inventory.
   const truncated = facts.length > 2000;
@@ -168,10 +190,35 @@ export function discoveryHit(hit: WireHit, source: string) {
     planningDetails: {
       locationName: text(hit.details.name ?? hit.details.title, 500),
       timezone: null,
-      airportNames: [],
-      airlines: [],
-      flightDirection: null,
-      durationMinutes: null,
+      airportNames: journeys.length
+        ? [...new Set(journeys.flatMap((journey) => [journey.origin, journey.destination]))]
+        : textList(hit.details.airportNames, 200),
+      airlines: textList(hit.details.airlines, 200),
+      flightDirection: journeys.length
+        ? journeys.length === 1
+          ? "outbound"
+          : journeys.length === 2
+            ? "return"
+            : "multi_city"
+        : null,
+      ...(journeys.length ? { flightJourneys: journeys } : {}),
+      // A published duration is a bounded catalogue fact, not a priced or dated service.
+      // A single flown direction can disclose its own duration; a round trip keeps it
+      // null so the whole-trip span is never reported as one flight's duration.
+      durationMinutes:
+        journeys.length === 1
+          ? Math.max(
+              1,
+              Math.round(
+                (Date.parse(journeys[0].arrivingAt) - Date.parse(journeys[0].departingAt)) / 60_000,
+              ),
+            )
+          : typeof hit.details.durationMinutes === "number" &&
+              Number.isInteger(hit.details.durationMinutes) &&
+              hit.details.durationMinutes > 0 &&
+              hit.details.durationMinutes <= 10_080
+            ? hit.details.durationMinutes
+            : null,
       layovers: [],
       fareConditions: bounded,
       accommodationType: null,

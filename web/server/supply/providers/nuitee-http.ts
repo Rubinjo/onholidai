@@ -131,6 +131,7 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
     query: SupplyReadQuery,
     input: z.infer<typeof searchSchema>,
     content?: Record<string, unknown>,
+    hotel?: Record<string, unknown>,
   ) {
     const offer = record(raw);
     const offerId = identifier(offer.offerId, opaqueIdPattern);
@@ -281,7 +282,13 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
     hit.serviceStart = `${query.startDate}T00:00:00Z`;
     hit.serviceEnd = `${query.endDate}T00:00:00Z`;
     hit.details = {
-      name: text(content?.name),
+      name: text(content?.name) ?? text(hotel?.name),
+      // LiteAPI includes hotel data for filter searches; keep only the public
+      // location facts the traveller needs to recognise the property.
+      address: text(content?.address, 240) ?? text(hotel?.address, 240),
+      city: text(content?.city, 120) ?? text(hotel?.city_name, 120),
+      country:
+        text(content?.country, 120) ?? text(hotel?.country, 120) ?? text(hotel?.country_code, 120),
       checkInDate: query.startDate,
       checkOutDate: query.endDate,
       roomFacts,
@@ -346,7 +353,7 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
         ? { hotelIds: [hotelId] }
         : hotelIds
           ? { hotelIds }
-          : { placeId: resolvedPlaceId }),
+          : { placeId: resolvedPlaceId, includeHotelData: true }),
       checkin: query.startDate,
       checkout: query.endDate,
       currency: query.currency,
@@ -360,7 +367,15 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
     const response = record(
       await readJson(http, [`POST ${ratesUrl}`], headers)(ratesUrl, "POST", signal, body),
     );
-    return list(response.data, 32);
+    // Filter searches include the hotel name and address alongside the dated rates.
+    const metadata = new Map(
+      (Array.isArray(response.hotels) ? list(response.hotels, 64) : []).flatMap((raw) => {
+        const hotel = record(raw);
+        const id = text(hotel.id, 256);
+        return id ? [[id, hotel] as const] : [];
+      }),
+    );
+    return { rates: list(response.data, 32), metadata };
   }
   return {
     capabilities: {
@@ -372,7 +387,7 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
       safeMapping(async () => {
         const query = validateQuery(raw);
         const input = selection(query);
-        const hotels = await getRates(query, input, signal);
+        const { rates: hotels, metadata } = await getRates(query, input, signal);
         const hits: ReturnType<typeof mapOffer>[] = [];
         const offerHotels = new Map<string, string>();
         // A multi-hotel page can contain one rate whose own totals disagree (a
@@ -387,7 +402,7 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
           for (const offer of list(hotel.roomTypes, 32)) {
             let hit: ReturnType<typeof mapOffer>;
             try {
-              hit = mapOffer(hotelId, offer, query, input);
+              hit = mapOffer(hotelId, offer, query, input, undefined, metadata.get(hotelId));
             } catch (error) {
               if (!isSupplyReadError(error)) throw error;
               rejected = rejected ?? error;
@@ -424,12 +439,19 @@ export function createNuiteeHttpClient(options: NuiteeHttpOptions) {
         );
         if (content.id !== grant.hotelId) throw new SupplyReadError("error");
         const hotels = await getRates(query, input, signal, grant.hotelId);
-        for (const rawHotel of hotels) {
+        for (const rawHotel of hotels.rates) {
           const hotel = record(rawHotel);
           if (hotel.hotelId !== grant.hotelId) throw new SupplyReadError("error");
           for (const rawOffer of list(hotel.roomTypes, 32)) {
             if (record(rawOffer).offerId === offerId)
-              return mapOffer(grant.hotelId, rawOffer, query, input, content);
+              return mapOffer(
+                grant.hotelId,
+                rawOffer,
+                query,
+                input,
+                content,
+                hotels.metadata.get(grant.hotelId),
+              );
           }
         }
         throw new SupplyReadError("unsupported");

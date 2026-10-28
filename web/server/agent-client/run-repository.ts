@@ -46,6 +46,19 @@ export const reserveRunSchema = z
 export function runConflict(): never {
   throw new ProblemError({ title: "Run state conflict", status: 409, code: "run_conflict" });
 }
+export type FailureCategory = NonNullable<AgentRunTable["errorCategory"]>;
+const FAILURE_CATEGORIES: Partial<Record<string, FailureCategory>> = {
+  estimate_deadline: "deadline",
+  source_unavailable: "source_unavailable",
+  invalid_result: "invalid_result",
+};
+// Only a web-rejected proposal proves the supplier evidence was unusable. Any other
+// agent exception is an unexpected service failure and must not claim that cause.
+export function failureCategory(event: AgentEvent): FailureCategory {
+  return event.type === "failed"
+    ? (FAILURE_CATEGORIES[event.safeErrorCode ?? ""] ?? "agent_error")
+    : "agent_error";
+}
 export function fingerprint(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
@@ -580,14 +593,7 @@ export class RunRepository {
           resultCursor: input.eventCursor,
           leaseExpiresAt: null,
           completedAt: input.status === "awaiting_clarification" ? null : this.now(),
-          errorCategory:
-            input.status === "failed"
-              ? event.type === "failed" && event.safeErrorCode === "estimate_deadline"
-                ? "deadline"
-                : event.type === "failed" && event.safeErrorCode === "source_unavailable"
-                  ? "source_unavailable"
-                  : "invalid_result"
-              : null,
+          errorCategory: input.status === "failed" ? failureCategory(event) : null,
         })
         .where("id", "=", runId)
         .execute();

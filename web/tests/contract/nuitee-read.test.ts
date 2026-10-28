@@ -285,6 +285,32 @@ describe("Nuitee safe hotel wire mappings", () => {
     expect(provider.revalidate).toBeUndefined();
   });
 
+  it("keeps sourced property name and location in the stay facts", async () => {
+    const wire = {
+      ...rates(),
+      hotels: [
+        {
+          id: "synthetic_hotel",
+          name: "Synthetic Riverside Hotel",
+          address: "1-1 Riverside",
+          city_name: "Lisbon",
+          country_code: "PT",
+        },
+      ],
+    };
+    const { provider } = setup(wire);
+    const [raw] = await provider.search(query, new AbortController().signal);
+    const offer = projectPublicPlanningOffer(raw);
+    expect(offer.component.planningDetails?.locationName).toBe("Synthetic Riverside Hotel");
+    const facts = JSON.parse(offer.component.planningDetails!.fareConditions!);
+    expect(facts).toMatchObject({
+      name: "Synthetic Riverside Hotel",
+      address: "1-1 Riverside",
+      city: "Lisbon",
+      country: "PT",
+    });
+  });
+
   it("looks up granted property content and rates without prebook, payment, arbitrary URL or cross-query access", async () => {
     const { fetch, client } = setup();
     await client.search(query, new AbortController().signal);
@@ -406,6 +432,7 @@ describe("Nuitee safe hotel wire mappings", () => {
     expect(calls[1]).toBe("POST https://api.liteapi.travel/v3.0/hotels/rates");
     const body = JSON.parse(String((fetch.mock.calls[1][1] as RequestInit).body));
     expect(body.placeId).toBe("synthetic_japan");
+    expect(body.includeHotelData).toBe(true);
     expect(body).not.toHaveProperty("placeName");
     await provider.search(query, new AbortController().signal);
     expect(calls.filter((call) => call.includes("/data/places"))).toHaveLength(1);

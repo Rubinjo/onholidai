@@ -16,7 +16,12 @@ from onholidai_agent.api.security import (
     ServiceTokenError,
     verify_service_token,
 )
-from onholidai_agent.api.store import RunStore, WebRunStore
+from onholidai_agent.api.store import (
+    PersistenceRejected,
+    RunStore,
+    WebRunStore,
+    response_problem_code,
+)
 from onholidai_agent.graph.router import dispatch
 from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import (
@@ -73,6 +78,34 @@ def authorize(http: Request, request: CreateAgentRunRequest) -> None:
         )
         logging.getLogger(__name__).warning("Service authorization rejected (%s)", category)
         raise HTTPException(401, detail="invalid_service_token") from None
+
+
+# Web rejects a proposal whose source evidence does not describe the trip with these
+# safe problem codes. Any other rejection is a run/transport conflict, not bad evidence.
+EVIDENCE_REJECTION_CODES = frozenset({"offer_unavailable"})
+
+
+def problem_code(error: BaseException) -> str | None:
+    """Return the safe problem code of a refused web callback, never its body."""
+    if isinstance(error, PersistenceRejected):
+        return error.code
+    if isinstance(error, httpx.HTTPStatusError):
+        return response_problem_code(error.response)
+    return None
+
+
+def failure_code(error: BaseException) -> str:
+    """Classify a failed run so web can present a truthful cause."""
+    if isinstance(error, TimeoutError):
+        return "estimate_deadline"
+    if isinstance(error, ValueError) and error.args == ("source_unavailable",):
+        return "source_unavailable"
+    rejected = problem_code(error)
+    if rejected is not None and (
+        rejected.startswith("estimate_evidence_") or rejected in EVIDENCE_REJECTION_CODES
+    ):
+        return "invalid_result"
+    return "estimate_unavailable"
 
 
 def scoped_request(http: Request) -> CreateAgentRunRequest:
@@ -249,8 +282,15 @@ class RunService:
         except asyncio.CancelledError:
             raise
         except Exception as error:
+            code = failure_code(error)
+            rejected = problem_code(error)
             # Container logs only: the public event keeps a fixed category, never this detail.
-            logging.getLogger(__name__).exception("Estimate run failed")
+            # The safe problem code is what identifies a rejected proposal without its body.
+            logging.getLogger(__name__).exception(
+                "Estimate run failed (%s%s)",
+                code,
+                f" because web rejected it with {rejected}" if rejected else "",
+            )
             # No raw exception, source response or personal prompt escapes into a public event.
             try:
                 renewal.cancel()
@@ -258,20 +298,7 @@ class RunService:
                 cursor = await self.emit(
                     request,
                     run_id,
-                    {
-                        "type": "failed",
-                        "status": "failed",
-                        "safeErrorCode": (
-                            "estimate_deadline"
-                            if isinstance(error, TimeoutError)
-                            else (
-                                "source_unavailable"
-                                if isinstance(error, ValueError)
-                                and error.args == ("source_unavailable",)
-                                else "estimate_unavailable"
-                            )
-                        ),
-                    },
+                    {"type": "failed", "status": "failed", "safeErrorCode": code},
                 )
                 await self.store.result(
                     request,

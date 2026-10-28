@@ -49,6 +49,16 @@ class EstimateSources:
                 offers.append(offer)
         return offers
 
+    async def activity_search(
+        self, request: CreateAgentRunRequest, query: dict[str, object]
+    ) -> dict[str, object]:
+        """Reads the supplier activity catalogue for one stop and date range."""
+        from .supplier_mcp import supplier_server
+
+        async with asyncio.timeout(45), Client(supplier_server(self.store, request)) as client:
+            response = await client.call_tool("supplier_search", query)
+        return cast(dict[str, object], response.structured_content)
+
     async def search(
         self, request: CreateAgentRunRequest, query: dict[str, object]
     ) -> dict[str, object]:

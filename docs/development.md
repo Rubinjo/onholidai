@@ -73,10 +73,18 @@ uv run --project agent uvicorn onholidai_agent.api.main:app --host 127.0.0.1 --p
 Start the web application in another terminal:
 
 ```bash
-node --env-file=.env web/node_modules/next/dist/bin/next dev web
+(cd web && node --env-file=../.env node_modules/next/dist/bin/next dev)
 ```
 
-Open <http://localhost:3000>. Passing `--env-file` explicitly makes the repository-root configuration available to Node. The Python agent loads the root `.env` when started from this directory. Keep the same `SERVICE_TOKEN_SECRET` in both processes.
+Open <http://localhost:3000>. Next.js must run with `web` as its working directory because server
+code resolves `public/` from the process directory. Passing `--env-file` explicitly makes the
+repository-root configuration available to Node. The Python agent loads the root `.env` when
+started from this directory. Both processes must load the same file: they share
+`SERVICE_TOKEN_SECRET`, and a mismatch makes every agent run fail with a rejected service token
+(`401` on `POST /internal/v1/agent-runs`).
+
+Restart the web process after editing `web/server/**`. The application and its supplier clients are
+created once at startup and kept on `globalThis`, so a hot reload does not replace them.
 
 The booking worker is not needed for setup, planning, research, or account linking. Use the [operations guide](operations.md#booking-and-recovery) when working on booking workflows.
 

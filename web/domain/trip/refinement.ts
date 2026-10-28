@@ -91,9 +91,14 @@ export async function recordRefinement(
       selectedSnapshot,
       selected.map((record) => record.normalizedOffer),
     );
+  // Day-plan-only changes are trusted planning (never supplier facts), so they take the
+  // finalization review instead of a full reprice; anything else re-reads inventory.
+  const dayPlanOnly = proposal.operations.every(
+    (operation) => operation.target === "/itineraryDays",
+  );
   const review = selectedSnapshot
     ? previewDraftEdit(baseSnapshot, context.baseTripVersion, proposal.operations, selectedSnapshot)
-    : proposal.purpose === "finalization"
+    : proposal.purpose === "finalization" || dayPlanOnly
       ? previewFinalization(tripSnapshotSchema.parse(base.snapshot), proposal.operations)
       : await researchDraftImpact(
           tripSnapshotSchema.parse(base.snapshot),

@@ -93,6 +93,20 @@ export function projectPublicComponent(component: Component, now = new Date()): 
             airportNames: component.planningDetails.airportNames.map(publicSupplierText),
             airlines: component.planningDetails.airlines.map(publicSupplierText),
             flightDirection: component.planningDetails.flightDirection,
+            ...(component.planningDetails.flightJourneys
+              ? {
+                  flightJourneys: component.planningDetails.flightJourneys.map((journey) => ({
+                    direction: journey.direction,
+                    origin: publicSupplierText(journey.origin),
+                    destination: publicSupplierText(journey.destination),
+                    originTimezone: journey.originTimezone,
+                    destinationTimezone: journey.destinationTimezone,
+                    departingAt: journey.departingAt,
+                    arrivingAt: journey.arrivingAt,
+                    legs: journey.legs.map(publicSupplierText),
+                  })),
+                }
+              : {}),
             durationMinutes: component.planningDetails.durationMinutes,
             layovers: component.planningDetails.layovers.map(publicSupplierText),
             fareConditions:

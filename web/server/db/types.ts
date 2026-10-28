@@ -325,7 +325,8 @@ export interface AgentRunTable {
   leaseExpiresAt: Timestamp | null;
   startedAt: GeneratedTimestamp;
   completedAt: Timestamp | null;
-  errorCategory: "interrupted" | "deadline" | "source_unavailable" | "invalid_result" | null;
+  errorCategory:
+    "interrupted" | "deadline" | "source_unavailable" | "invalid_result" | "agent_error" | null;
   result: Json<Record<string, unknown> | null>;
 }
 

@@ -16,6 +16,8 @@ const FAILURE_MESSAGES: Record<string, string> = {
     "This update was interrupted before it completed. Retry to run it again; your reviewed settings and draft are unchanged.",
   invalid_result:
     "The returned supplier evidence could not be validated, so nothing was applied. Retry, or adjust the reviewed settings.",
+  agent_error:
+    "Research failed with an unexpected error, so nothing was applied. Retry; your reviewed settings and draft are unchanged.",
 };
 
 interface ResearchSummary {

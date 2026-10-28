@@ -141,6 +141,92 @@ describe("Trip and TripVersion schemas", () => {
     ).toBe(false);
   });
 
+  it("keeps a round-trip fare's flown journeys optional but internally ordered", () => {
+    const component = {
+      id: ids.request,
+      itineraryItemIds: [],
+      provider: "duffel",
+      supplierOfferId: "off_journeys",
+      type: "flight",
+      offerStatus: "available",
+      serviceStart: "2026-10-31T23:00:00Z",
+      serviceEnd: "2026-11-07T08:30:00Z",
+      travellerIds: [ids.user],
+      bookingRequirements: [],
+      cancellationTerms: "Synthetic terms",
+      price: {
+        supplierAmount: zero,
+        platformMargin: zero,
+        customerPayableTaxes: zero,
+        customerPayableFees: zero,
+        finalCustomerAmount: zero,
+        status: "estimated",
+        source: "duffel",
+        checkedAt: timestamp,
+        expiresAt: null,
+      },
+      checkedAt: timestamp,
+      expiresAt: null,
+      bookingStatus: "unbooked",
+      details: null,
+      planningDetails: {
+        locationName: null,
+        timezone: null,
+        airportNames: ["LHR", "HND"],
+        airlines: [],
+        flightDirection: "return",
+        durationMinutes: null,
+        layovers: [],
+        fareConditions: null,
+        accommodationType: null,
+        travelFromStayMinutes: null,
+        eligibility: "unverified",
+        accessibility: "unverified",
+        availability: "unverified",
+        constraintEvidence: [],
+        source: "duffel",
+        checkedAt: timestamp,
+        unavailableFacts: [],
+      },
+    };
+    const outbound = {
+      direction: "outbound",
+      origin: "LHR",
+      destination: "HND",
+      originTimezone: "Europe/London",
+      destinationTimezone: "Asia/Tokyo",
+      departingAt: "2026-10-31T23:00:00Z",
+      arrivingAt: "2026-11-01T08:30:00Z",
+      legs: ["LHR → HND"],
+    };
+    // Journeys stay additive: a snapshot accepted before them remains readable.
+    expect(travelComponentSchema.safeParse(component).success).toBe(true);
+    expect(
+      travelComponentSchema.safeParse({
+        ...component,
+        planningDetails: { ...component.planningDetails, flightJourneys: [outbound] },
+      }).success,
+    ).toBe(true);
+    expect(
+      travelComponentSchema.safeParse({
+        ...component,
+        planningDetails: {
+          ...component.planningDetails,
+          flightJourneys: [{ ...outbound, arrivingAt: outbound.departingAt }],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      travelComponentSchema.safeParse({
+        ...component,
+        planningDetails: {
+          ...component.planningDetails,
+          flightJourneys: [{ ...outbound, departingAt: "2026-10-31T23:00:00+01:00" }],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it("keeps an unverified price breakdown explicit while the payable total stays authoritative", () => {
     const total = { currency: "USD", minorUnits: 12000 };
     const price = {

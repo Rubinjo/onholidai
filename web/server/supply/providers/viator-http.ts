@@ -46,6 +46,29 @@ export interface ViatorHttpOptions extends ReadHttpOptions {
 
 // Official OpenAPI: https://docs.viator.com/partner-api/technical/
 // Products/search, products/{product-code}, availability/check are the complete operation set.
+export function catalogueDuration(value: unknown): number | null {
+  if (value == null) return null;
+  const duration = record(value);
+  for (const key of ["fixedDurationInMinutes", "variableDurationFromMinutes"]) {
+    const minutes = duration[key];
+    if (
+      typeof minutes === "number" &&
+      Number.isInteger(minutes) &&
+      minutes > 0 &&
+      minutes <= 10_080
+    )
+      return minutes;
+  }
+  return null;
+}
+
+function normalizedText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("en");
+}
+
 export function createViatorHttpClient(options: ViatorHttpOptions) {
   if (
     options.environment !== undefined &&
@@ -90,6 +113,7 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
       productOptionCode: null,
       availability: "content_only",
       priceBasis: "from_price_not_party_total",
+      durationMinutes: catalogueDuration(product.duration),
     };
     if (product.pricing != null) {
       const pricing = record(product.pricing);
@@ -190,6 +214,46 @@ export function createViatorHttpClient(options: ViatorHttpOptions) {
             detail: "destination_unresolved",
           });
         const url = `${base}/products/search`;
+        // A named-product request cannot be answered by the destination ranking, so the
+        // supplier's text catalogue is read and every hit is bounded to the stop it was
+        // requested for; an unlocated product is never treated as local inventory.
+        const named = query.query?.trim();
+        const destinationName = query.destinations?.find(
+          (place) => place.id === query.destinationIds[0],
+        )?.name;
+        if (named && destinationName) {
+          const searchUrl = `${base}/search/freetext`;
+          const response = record(
+            await readJson(http, [`POST ${searchUrl}`], headers)(searchUrl, "POST", signal, {
+              searchTerm: named,
+              currency: query.currency,
+              searchTypes: [{ searchType: "PRODUCTS", pagination: { start: 1, count: 32 } }],
+            }),
+          );
+          const found = response.products == null ? {} : record(response.products);
+          const results = list(found.results);
+          const wanted = normalizedText(destinationName);
+          const hits: WireHit[] = [];
+          for (const product of results.slice(0, 32)) {
+            const candidate = record(product);
+            const haystack = normalizedText(
+              `${text(candidate.title, 500)} ${text(candidate.description, 1000)}`,
+            );
+            if (!haystack.includes(wanted)) continue;
+            try {
+              hits.push(mapProduct(candidate, query));
+            } catch (error) {
+              // A single unusable product record is a partial supplier response, not a
+              // failed search: keep every listing that maps cleanly.
+              if (!isSupplyReadError(error)) throw error;
+            }
+          }
+          for (const hit of hits) {
+            if (grants.size >= 256) grants.delete(grants.keys().next().value!);
+            grants.set(hit.offerId, queryKey(query));
+          }
+          return hits.map((hit) => discoveryHit(hit, "Viator"));
+        }
         const search = async (destination: string) => {
           const response = record(
             await readJson(http, [`POST ${url}`], headers)(url, "POST", signal, {

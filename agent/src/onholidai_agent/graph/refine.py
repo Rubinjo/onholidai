@@ -4,8 +4,13 @@ from datetime import date, timedelta
 from typing import cast
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
+import httpx
+
 from onholidai_agent.api.store import WebRunStore
 from onholidai_agent.context.build import build_context
+from onholidai_agent.graph.activity import activity_intent, add_activity
+from onholidai_agent.graph.budgets import PLANNING_GRAPH_BUDGET_SECONDS
+from onholidai_agent.graph.clarify import question
 from onholidai_agent.graph.estimate import (
     EstimateGraph,
     EstimateState,
@@ -19,11 +24,13 @@ from onholidai_agent.graph.estimate import (
     required_rail_question,
     select_quotes,
 )
+from onholidai_agent.graph.route_split import SplitQuestion, plan_route_split
 from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import AgentResult, CreateAgentRunRequest
+from onholidai_agent.models.common import DraftOperation
 from onholidai_agent.tools.get_trip import TripReader, get_trip
 from onholidai_agent.tools.propose_trip_changes import propose_trip_changes
-from onholidai_agent.tools.research import SelectedResearchReader
+from onholidai_agent.tools.research import ResearchReader, SelectedResearchReader
 from onholidai_agent.tools.retrieve_relevant_context import retrieve_relevant_context
 
 # The answer contract caps a message at 12000 characters; trim on a boundary, never mid-word.
@@ -41,14 +48,16 @@ def bounded_answer(text: str) -> str:
     return window.strip()
 
 
-def question(text: str, reason: str = "scope") -> AgentResult:
-    return AgentResult.model_validate(
-        {
-            "kind": "clarification",
-            "message": "A choice is needed before proposing changes.",
-            "clarification": {"id": str(uuid4()), "question": text, "materialReason": reason},
-        }
-    )
+# The workspace's refresh action sends only this instruction, optionally with a
+# "Retry supplier research for: ..." scope, as a refinement once the trip has components.
+RESEARCH_REFRESH_PATTERN = re.compile(
+    r"\s*estimate my reviewed settings and update my draft trip\.?"
+    r"(?:\s+retry supplier research for:\s*[a-z]+(?:\s*,\s*[a-z]+)*\.?)?\s*",
+    re.I,
+)
+# Sourced supplier facts and generated day plans only ever come from deterministic rules
+# that read real inventory: advice must never invent either and have web reject the draft.
+ADVISORY_FORBIDDEN_TARGETS = ("/components", "/itineraryDays")
 
 
 def preserve_manual_destination_order(
@@ -130,7 +139,11 @@ async def refine(request: CreateAgentRunRequest, sources: TripReader) -> AgentRe
 
     # Raw prompt/context must never become implicit LangGraph/LangSmith traces.
     with langsmith.tracing_context(enabled=False):  # pyright: ignore[reportUnknownMemberType]
-        async with asyncio.timeout(30):
+        # A refinement resolves the same inputs as an initial estimate and, for requests the
+        # deterministic router cannot map, asks the live model for operations before web
+        # reprices them. Bounding it tighter than an estimate cut healthy requests off at
+        # thirty seconds; progress events keep the durable run lease alive meanwhile.
+        async with asyncio.timeout(PLANNING_GRAPH_BUDGET_SECONDS):
             result = await graph.compile().ainvoke({"request": request})
     value = result.get("result")
     if value is None:
@@ -152,6 +165,11 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
                 ),
             }
         )
+    if RESEARCH_REFRESH_PATTERN.fullmatch(request.message) and isinstance(sources, ResearchReader):
+        # Refreshing the reviewed settings is a sourced estimate, not free-text advice:
+        # the same deterministic graph as the first generation researches current
+        # inventory and proposes it, so prices never come from a model.
+        return await estimate(request, cast(Sources, sources))
     trip = await get_trip(sources, request)
     context = build_context(request, trip)
     snapshot = cast(dict[str, object], trip["snapshot"])
@@ -258,6 +276,9 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
     rail = required_rail_question(snapshot, deferred=rail_deferred(request))
     if rail and re.search(r"\b(?:rail|train|recommend|supplier)\b", message):
         return question(rail, "feasibility")
+    intent = activity_intent(request.message)
+    if intent is not None:
+        return await add_activity(request, sources, snapshot, intent)
     scheduled_edit = re.search(
         r"\b(remove|move) activity ([0-9a-f-]{36})(?: to (\d{4}-\d{2}-\d{2}) at (\d{2}:\d{2}))?",
         message,
@@ -526,29 +547,73 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
             "Compare read-only planning offers at the requested spend level while "
             "preserving hard constraints. Savings are shown only if repricing supports them."
         )
+    elif (
+        split := plan_route_split(
+            request.message,
+            destinations,
+            cast(dict[str, object], snapshot["duration"]),
+            cast(list[dict[str, object]], snapshot.get("availabilityWindows") or []),
+        )
+    ) is not None:
+        # A stated split must be materialised as a whole dated route: web reallocates
+        # nights evenly whenever a draft changes the schedule without coherent dates,
+        # which would silently discard the traveller's requested split.
+        if isinstance(split, SplitQuestion):
+            return question(split.text, split.reason)
+        operations.append(
+            {"operation": "replace", "target": "/destinations", "value": split.destinations}
+        )
+        nights_total = sum(count for _, count in split.nights)
+        days = nights_total + 1
+        rationale = (
+            f"{'Keep' if nights_total == split.previous_nights else 'Set'} the trip at "
+            f"{days} days: "
+            + ", then ".join(f"{count} in {name}" for name, count in split.nights)
+            + ". Dates follow the existing route order; web reprices every affected offer."
+        )
     else:
         if isinstance(sources, EstimateSources):
             # Token Factory supplies a typed advisory proposal; only the closed operation
             # schema can pass, and web independently validates/reprices before review.
             import json
 
-            advice = await sources.model.complete(
-                [
-                    context[0],
-                    {
-                        "role": "system",
-                        "content": (
-                            "Return JSON only with keys operations (1-32 allowlisted draft "
-                            "JSON patch operations), rationale, warnings. Never change prices "
-                            'or booking state. If ambiguous return {"question":"one focused '
-                            'question"}. Current trip facts override history. Keep rationale '
-                            "to two short sentences about the requested difference; do not "
-                            "repeat the itinerary or claim the proposal has been applied."
-                        ),
-                    },
-                    context[1],
-                ]
-            )
+            advice = ""
+            try:
+                advice = await sources.model.complete(
+                    [
+                        context[0],
+                        {
+                            "role": "system",
+                            "content": (
+                                "Return JSON only with keys operations (1-32 allowlisted draft "
+                                "JSON patch operations), rationale, warnings. Every operation is "
+                                '{"operation": "add"|"replace"|"remove"|"reorder", "target": '
+                                '"/<field>[/<path>]", "value": <JSON>}; target starts with one of '
+                                "departureOrigin, departureOrigins, destinationOrder, "
+                                "availabilityWindows, duration, travellerParty, preferences or "
+                                "constraints. Never change prices, components, daily plans or "
+                                "booking state; sourced inventory and itineraries come only from "
+                                "research. Read the trip facts before asking anything: nights per "
+                                "stop, dates, duration and party are already recorded, so use them "
+                                "instead of asking for values they fix, and keep every stop the "
+                                "traveller did not mention as it is. Never ask the traveller to "
+                                "confirm what they just requested, and never ask whether to make "
+                                "the change they asked for: when the request is satisfiable "
+                                "return the operations that carry it out. Ask one question only "
+                                "when two readings would change a hard constraint: "
+                                '{"question":"one focused question"}. Current trip facts override '
+                                "history. Keep rationale to two short sentences about the "
+                                "requested difference; do not repeat the itinerary or claim the "
+                                "proposal has been applied."
+                            ),
+                        },
+                        context[1],
+                    ]
+                )
+            except (ValueError, TimeoutError, httpx.HTTPError):
+                # Advice is optional. A slow or unusable completion asks for the change
+                # instead of failing a run the traveller can still complete.
+                return question("Which destination, dates, travellers or preference should change?")
             try:
                 parsed = json.loads(advice)
                 if not isinstance(parsed, dict):
@@ -556,7 +621,29 @@ async def compose_refinement(request: CreateAgentRunRequest, sources: TripReader
                 data = cast(dict[str, object], parsed)
                 if isinstance(data.get("question"), str):
                     return question(cast(str, data["question"])[:1000])
-                operations = cast(list[dict[str, object]], data["operations"])
+                raw_operations = data["operations"]
+                if not isinstance(raw_operations, list):
+                    raise ValueError("invalid_refinement")
+                advised = cast(list[object], raw_operations)
+                if not 1 <= len(advised) <= 32:
+                    raise ValueError("invalid_refinement")
+                # Advisory output becomes a draft only when it satisfies the same closed
+                # operation contract web enforces. Unusable advice is one focused question,
+                # never a failed run and never a proposal that cannot be priced.
+                operations = [
+                    cast(
+                        dict[str, object],
+                        DraftOperation.model_validate(operation).model_dump(
+                            mode="json", by_alias=True
+                        ),
+                    )
+                    for operation in advised
+                ]
+                if any(
+                    str(operation["target"]).startswith(ADVISORY_FORBIDDEN_TARGETS)
+                    for operation in operations
+                ):
+                    raise ValueError("advisory_sourced_fact_target")
                 rationale = str(data["rationale"])[:4000]
             except (ValueError, KeyError, TypeError):
                 return question("Which destination, dates, travellers or preference should change?")

@@ -248,6 +248,50 @@ function catalogueCandidate(place: CataloguePlace): PlaceCandidate | null {
   });
 }
 
+// Keep automatic routes readable: a second stop in the same metropolitan area adds
+// nights without adding a destination the traveller would recognise as new.
+const CITY_SUGGESTION_SEPARATION_KM = 80;
+
+function cityDistanceKm(first: PlaceCandidate, second: PlaceCandidate): number {
+  if (!first.location || !second.location) return Number.POSITIVE_INFINITY;
+  const radians = Math.PI / 180;
+  const latitude = ((first.location.latitude + second.location.latitude) / 2) * radians;
+  const latitudeDelta = (first.location.latitude - second.location.latitude) * radians;
+  const longitudeDelta =
+    (first.location.longitude - second.location.longitude) * radians * Math.cos(latitude);
+  return 6371.0088 * Math.sqrt(latitudeDelta ** 2 + longitudeDelta ** 2);
+}
+
+/** Ordered city candidates for a country, reusing the bundled/synthetic place data. */
+export function countryCityCandidates(
+  countryCode: string,
+  mode: "deterministic" | "live",
+  limit: number,
+): readonly PlaceCandidate[] {
+  if (limit <= 0) return [];
+  const available =
+    mode === "deterministic"
+      ? syntheticPlaces.filter(
+          (place) => place.kind === "city" && place.countryCode === countryCode,
+        )
+      : cataloguePlaces
+          .filter((place) => place.kind === "city" && place.countryCode === countryCode)
+          .sort((first, second) => second.rank - first.rank)
+          .flatMap((place) => {
+            const candidate = catalogueCandidate(place);
+            return candidate ? [candidate] : [];
+          });
+  const remaining = [...available];
+  const selected: PlaceCandidate[] = [];
+  while (selected.length < limit && remaining.length) {
+    const index = remaining.findIndex((place) =>
+      selected.every((chosen) => cityDistanceKm(place, chosen) >= CITY_SUGGESTION_SEPARATION_KM),
+    );
+    selected.push(...remaining.splice(index >= 0 ? index : 0, 1));
+  }
+  return selected;
+}
+
 const timezoneCache = new Map<string, string | null>();
 
 function rememberTimezone(key: string, value: string | null): string | null {

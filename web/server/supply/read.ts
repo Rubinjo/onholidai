@@ -27,6 +27,9 @@ export const supplyReadQuerySchema = z
     startDate: z.iso.date(),
     endDate: z.iso.date(),
     travellerParty: travellerPartySchema,
+    // A named-product search inside the scoped destination and dates. Suppliers that
+    // publish a text catalogue use it; the destination and dates still bound every hit.
+    query: z.string().trim().min(2).max(200).optional(),
   })
   .strict()
   .superRefine((query, context) => {

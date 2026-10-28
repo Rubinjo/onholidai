@@ -10,7 +10,7 @@ import {
   verifyServiceToken,
   ServiceTokenError,
 } from "./agent-client/credentials";
-import { ProblemError, problemResponse } from "./errors";
+import { ProblemError, problemResponse, safeProblemOf } from "./errors";
 import { getOrCreateCorrelationId } from "./telemetry";
 import { emitOperationSpan, routeTemplate } from "./telemetry-exporter";
 import { inTransaction } from "./db/transaction";
@@ -56,6 +56,26 @@ function emitRequestSpan(
       "service.name": "onholidai-web",
     },
   });
+}
+
+function logProblemResponse(
+  request: Request,
+  correlationId: string,
+  problem: { status: number; code: string },
+): void {
+  // Routine client rejections stay quiet. A callback conflict, a quota rejection and
+  // any server failure are the evidence needed to explain a failed run later on.
+  if (![409, 429].includes(problem.status) && problem.status < 500) return;
+  console.warn(
+    JSON.stringify({
+      event: "request_failed",
+      method: request.method,
+      route: routeTemplate(new URL(request.url).pathname),
+      status: problem.status,
+      code: problem.code,
+      correlationId,
+    }),
+  );
 }
 
 export async function apiResponse(
@@ -124,6 +144,7 @@ export async function apiResponse(
             })
           : error;
     const response = problemResponse(safe, correlationId);
+    logProblemResponse(request, correlationId, safeProblemOf(safe));
     response.headers.set("Cache-Control", "private, no-store");
     emitRequestSpan(request, correlationId, startedAt, response.status);
     return response;

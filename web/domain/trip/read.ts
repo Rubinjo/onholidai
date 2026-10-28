@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { projectStoredSnapshot } from "@/domain/pricing/projections";
 import { ProblemError } from "@/server/errors";
+import { autoSelectCities } from "@/server/trip/auto-destinations";
 
 import { TripVersionConflictError } from "./commit";
 import { decodeTripSnapshot } from "./schema";
@@ -79,17 +80,33 @@ export async function readAgentTrip(
   tripId: string,
   expectedVersion: number,
   detail: AgentViewDetail,
+  providerMode: "deterministic" | "live" = "live",
 ) {
   agentViewDetailSchema.parse(detail);
   const envelope = await readTrip(database, ownerUserId, tripId, { expectedVersion });
   const snapshot = envelope.snapshot;
+  // A country selection is a scope, not an overnight stop: give the agent concrete
+  // cities it can research, schedule and propose without changing the saved trip.
+  const destinations = autoSelectCities(
+    snapshot.destinations,
+    snapshot.duration.idealDays,
+    providerMode,
+  );
   // Keep the TripEnvelope shape while bounding the detail requested by the tool.
+  // Refinements plan against the day plan, so they also need the accepted components
+  // that fix travel and stay times; a plan built without them would invent timing.
   return {
     ...envelope,
     snapshot: {
       ...snapshot,
+      destinations,
       itineraryDays: detail === "itinerary" ? snapshot.itineraryDays.slice(0, 32) : [],
-      components: detail === "components" ? snapshot.components : [],
+      components:
+        detail === "components"
+          ? snapshot.components
+          : detail === "itinerary"
+            ? snapshot.components.slice(0, 64)
+            : [],
     },
   };
 }

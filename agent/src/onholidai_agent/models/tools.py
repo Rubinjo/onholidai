@@ -97,6 +97,9 @@ class SupplierSearchInput(ContractModel):
     destination_ids: list[UUIDString] = Field(min_length=1, max_length=8)
     start_date: Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
     end_date: Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+    # A named-product search within the trip's scope; suppliers that publish a text
+    # catalogue use it instead of returning their generic destination ranking.
+    query: Text200 | None = None
     departure_place_id: SupplierOfferReference | None = None
     requirement_ids: list[SupplierOfferReference] = Field(default_factory=list, max_length=32)
     property_types: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(

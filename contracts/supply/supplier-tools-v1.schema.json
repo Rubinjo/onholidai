@@ -107,6 +107,12 @@
           "minLength": 1,
           "type": "string"
         },
+        "Text200": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string",
+          "x-nonblank": true
+        },
         "UUIDString": {
           "format": "uuid",
           "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
@@ -158,6 +164,17 @@
           "maxItems": 16,
           "title": "Propertytypes",
           "type": "array"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Text200"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "requirementIds": {
           "items": {
