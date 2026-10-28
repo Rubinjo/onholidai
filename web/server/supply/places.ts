@@ -8,7 +8,7 @@ import {
 import { ProblemError } from "@/server/errors";
 import { timezoneSchema } from "@/domain/trip/schema";
 
-import catalogue from "./geo-catalogue.json";
+import catalogue from "./geo-catalogue.json" with { type: "json" };
 
 const syntheticPlaces: readonly PlaceCandidate[] = [
   {
