@@ -75,9 +75,9 @@ The result is a hackathon prototype with a real application boundary: a guest-to
 - **Docker Engine** or **Docker Desktop** running Linux containers, with **Docker Compose v2** available in your chosen shell.
 - Available ports: `3000` (web), `8000` (agent), `5432` (PostgreSQL), `7233` (Temporal), `8080` (Temporal UI), `16686` (Jaeger), and `4317`, `4318`, `13133` (OpenTelemetry).
 
-The recommended path builds the application inside Docker. Host Node.js and Python installations are not required. Run the commands from the repository root, in order, and let each step succeed before continuing.
+The recommended path builds and runs the application inside Docker. Host Node.js and Python installations are not required. Run commands from the repository root.
 
-### 1. Get the code and local configuration
+### 1. Set up
 
 ```bash
 git clone https://github.com/Rubinjo/onholidai.git
@@ -85,45 +85,17 @@ cd onholidai
 cp .env.example .env
 ```
 
-Already have a checkout or configuration? Use it instead. Do not overwrite an existing `.env`. Leave `PROVIDER_MODE=deterministic` for a credential-free demo. The comments in [`.env.example`](.env.example) explain every setting.
+Already have a checkout? Use it instead. Do not overwrite an existing `.env`. Leave `PROVIDER_MODE=deterministic` for the demo. The example secrets are for local use only.
 
-### 2. Create local Docker secrets
-
-Compose mounts secrets from [the local secrets directory](infra/compose/secrets/) instead of using the template's host-run authentication and database values. This creates a separate random value for each required secret and leaves existing files untouched:
+### 2. Start the app
 
 ```bash
-(
-  set -euo pipefail
-  umask 077
-  mkdir -p infra/compose/secrets
-  for name in \
-    postgres_admin_password app_db_password migration_db_password \
-    temporal_db_password worker_db_password web_auth_secret \
-    service_token_secret pricing_diagnostic_secret
-  do
-    path="infra/compose/secrets/$name.txt"
-    if [ ! -e "$path" ]
-    then
-      value="$(openssl rand -hex 32)"
-      printf '%s' "$value" > "$path"
-    fi
-  done
-)
-```
-
-These files are git-ignored. Keep them private and distinct. PostgreSQL uses the database passwords on its **first initialization**. Replacing files later does not rotate passwords in an existing database.
-
-### 3. Start infrastructure, migrate, then start the app
-
-```bash
-docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure up -d
-docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile migrations run --rm --build migrate
 docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile applications up -d --build
 ```
 
-The migration job applies the full ordered schema. Do not run a second migration runner at the same time. The first build may take a while. A booking worker is **not needed** for guest planning, research, refinement, or account linking.
+The first build may take a while. A booking worker is **not needed** for guest planning, research, refinement, or account linking.
 
-### 4. Open the app and check health
+### 3. Open the app and check health
 
 - **Application:** <http://localhost:3000>
 - **Start a trip:** <http://localhost:3000/trips/new>
@@ -136,23 +108,10 @@ curl -fsS http://localhost:3000/api/health
 curl -fsS http://localhost:8000/health
 ```
 
-The agent response should report `status: ok` and `providerMode: deterministic`. If a service is still starting or a check fails, inspect it rather than assuming the stack is ready:
+The agent response should report `status: ok` and `providerMode: deterministic`. To stop the local stack:
 
 ```bash
-docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile applications ps
-docker compose --env-file .env -f infra/compose/compose.yml logs --tail 80 web agent postgres temporal
-```
-
-For booking-workflow development only, start the separate deterministic worker:
-
-```bash
-docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile booking up -d --build booking-worker
-```
-
-To stop the local stack **without deleting its database volume**:
-
-```bash
-docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile applications --profile booking down
+docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile applications down
 ```
 
 ### Switch to live AI and research
@@ -192,7 +151,7 @@ pnpm install --frozen-lockfile
 uv sync --project agent --frozen
 ```
 
-The environment template has host-run URLs. Docker overrides those with internal service URLs and mounted secrets. When mixing host applications with Docker infrastructure, match the host database URLs to the generated database-role passwords. Next.js and the migration entrypoint do not automatically load the repository-root `.env` when run from another working directory. Pass it explicitly, for example with Node's `--env-file`.
+Host-run web, migration, and worker processes derive their database URLs from the role passwords in `.env`; Compose builds its internal service URLs from those same values. Next.js and the migration entrypoint do not automatically load the repository-root `.env` when run from another working directory. Pass it explicitly, for example with Node's `--env-file`.
 
 Before pushing, reproduce the CI formatting and Python type checks:
 

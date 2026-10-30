@@ -7,15 +7,13 @@ services:
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD in .env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?Set MIGRATION_DB_PASSWORD in .env}
+      TEMPORAL_DB_PASSWORD: ${TEMPORAL_DB_PASSWORD:?Set TEMPORAL_DB_PASSWORD in .env}
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:?Set WORKER_DB_PASSWORD in .env}
     ports:
-      - "5432:5432"
-    secrets:
-      - postgres_admin_password
-      - app_db_password
-      - migration_db_password
-      - temporal_db_password
-      - worker_db_password
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql
       - ../postgres/init:/docker-entrypoint-initdb.d:ro
@@ -30,23 +28,16 @@ services:
   temporal:
     image: temporalio/auto-setup:1.27.2
     profiles: [infrastructure]
-    entrypoint: [/bin/sh, -ec]
-    command:
-      - |
-        export POSTGRES_PWD="$$(cat /run/secrets/temporal_db_password)"
-        # The image's entrypoint only runs auto-setup.sh when the literal argument
-        # "autosetup" is present; otherwise the server starts against an empty schema.
-        exec /etc/temporal/entrypoint.sh autosetup
+    command: [autosetup]
     environment:
       DB: postgres12
       DB_PORT: "5432"
       POSTGRES_USER: temporal
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:?Set TEMPORAL_DB_PASSWORD in .env}
       POSTGRES_SEEDS: postgres
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
     ports:
-      - "7233:7233"
-    secrets:
-      - temporal_db_password
+      - "127.0.0.1:7233:7233"
     volumes:
       - ../temporal/development.yaml:/etc/temporal/config/dynamicconfig/development.yaml:ro
     depends_on:
@@ -67,7 +58,7 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: http://localhost:3000
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       temporal:
         condition: service_healthy
@@ -79,7 +70,7 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "16686:16686"
+      - "127.0.0.1:16686:16686"
     restart: unless-stopped
 
   otel-collector:
@@ -89,9 +80,9 @@ services:
     volumes:
       - ../observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
-      - "4317:4317"
-      - "4318:4318"
-      - "13133:13133"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:13133:13133"
     depends_on:
       - jaeger
     restart: unless-stopped
@@ -101,16 +92,12 @@ services:
       context: ../..
       dockerfile: web/Dockerfile
     profiles: [applications]
-    entrypoint: [/bin/sh, -ec]
-    command:
-      - |
-        export BETTER_AUTH_SECRET="$$(cat /run/secrets/web_auth_secret)"
-        export SERVICE_TOKEN_SECRET="$$(cat /run/secrets/service_token_secret)"
-        export PRICING_DIAGNOSTIC_SECRET="$$(cat /run/secrets/pricing_diagnostic_secret)"
-        export DATABASE_URL="postgresql://onholidai_web:$$(cat /run/secrets/app_db_password)@postgres:5432/onholidai"
-        exec pnpm --filter @onholidai/web start
     environment:
       NODE_ENV: production
+      DATABASE_URL: "postgresql://onholidai_web:${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}@postgres:5432/onholidai"
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+      SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET:?Set SERVICE_TOKEN_SECRET in .env}
+      PRICING_DIAGNOSTIC_SECRET: ${PRICING_DIAGNOSTIC_SECRET:?Set PRICING_DIAGNOSTIC_SECRET in .env}
       PROVIDER_MODE: "${PROVIDER_MODE:-deterministic}"
       BOOKING_DEMO_ENABLED: "${BOOKING_DEMO_ENABLED:-false}"
       GUEST_MAX_ACTIVE_RUNS: "${GUEST_MAX_ACTIVE_RUNS:-2}"
@@ -128,17 +115,14 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     ports:
-      - "3000:3000"
-    secrets:
-      - app_db_password
-      - web_auth_secret
-      - service_token_secret
-      - pricing_diagnostic_secret
+      - "127.0.0.1:3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
       temporal:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       agent:
         condition: service_healthy
     healthcheck:
@@ -160,14 +144,10 @@ services:
       context: ../..
       dockerfile: agent/Dockerfile
     profiles: [applications]
-    entrypoint: [/bin/sh, -ec]
-    command:
-      - |
-        export SERVICE_TOKEN_SECRET="$$(cat /run/secrets/service_token_secret)"
-        exec uvicorn onholidai_agent.api.main:app --host 0.0.0.0 --port 8000
     environment:
       PROVIDER_MODE: "${PROVIDER_MODE:-deterministic}"
       ENVIRONMENT: production
+      SERVICE_TOKEN_SECRET: ${SERVICE_TOKEN_SECRET:?Set SERVICE_TOKEN_SECRET in .env}
       WEB_BASE_URL: http://web:3000
       NEBIUS_BASE_URL: ${NEBIUS_BASE_URL:-https://api.tokenfactory.nebius.com/v1}
       NEBIUS_API_KEY: ${NEBIUS_API_KEY:-}
@@ -180,10 +160,8 @@ services:
       LANGSMITH_AGENT_ID: ${LANGSMITH_AGENT_ID:-onholidai}
       LANGSMITH_AGENT_ENVIRONMENT: ${LANGSMITH_AGENT_ENVIRONMENT:-local}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-    secrets:
-      - service_token_secret
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       temporal:
         condition: service_healthy
@@ -205,17 +183,12 @@ services:
     build:
       context: ../..
       dockerfile: web/Dockerfile
-    profiles: [migrations]
-    entrypoint: [/bin/sh, -ec]
-    command:
-      - |
-        export MIGRATION_DATABASE_URL="postgresql://onholidai_migration:$$(cat /run/secrets/migration_db_password)@postgres:5432/onholidai"
-        exec pnpm --filter @onholidai/web db:migrate
+    profiles: [applications, migrations]
+    command: [pnpm, --filter, "@onholidai/web", db:migrate]
     environment:
       NODE_ENV: production
       PROVIDER_MODE: deterministic
-    secrets:
-      - migration_db_password
+      MIGRATION_DATABASE_URL: "postgresql://onholidai_migration:${MIGRATION_DB_PASSWORD:?Set MIGRATION_DB_PASSWORD in .env}@postgres:5432/onholidai"
     depends_on:
       postgres:
         condition: service_healthy
@@ -226,42 +199,19 @@ services:
       context: ../..
       dockerfile: web/Dockerfile
     profiles: [booking]
-    entrypoint: [/bin/sh, -ec]
-    command:
-      - |
-        export DATABASE_URL="postgresql://onholidai_worker:$$(cat /run/secrets/worker_db_password)@postgres:5432/onholidai"
-        exec pnpm --filter @onholidai/web booking:worker
+    command: [pnpm, --filter, "@onholidai/web", booking:worker]
     environment:
       NODE_ENV: production
       PROVIDER_MODE: deterministic
+      DATABASE_URL: "postgresql://onholidai_worker:${WORKER_DB_PASSWORD:?Set WORKER_DB_PASSWORD in .env}@postgres:5432/onholidai"
       TEMPORAL_ADDRESS: temporal:7233
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-    secrets:
-      - worker_db_password
     depends_on:
       postgres:
         condition: service_healthy
       temporal:
         condition: service_healthy
     restart: unless-stopped
-
-secrets:
-  postgres_admin_password:
-    file: ./secrets/postgres_admin_password.txt
-  app_db_password:
-    file: ./secrets/app_db_password.txt
-  migration_db_password:
-    file: ./secrets/migration_db_password.txt
-  temporal_db_password:
-    file: ./secrets/temporal_db_password.txt
-  worker_db_password:
-    file: ./secrets/worker_db_password.txt
-  web_auth_secret:
-    file: ./secrets/web_auth_secret.txt
-  service_token_secret:
-    file: ./secrets/service_token_secret.txt
-  pricing_diagnostic_secret:
-    file: ./secrets/pricing_diagnostic_secret.txt
 
 volumes:
   postgres-data:

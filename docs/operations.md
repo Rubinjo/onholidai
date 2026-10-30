@@ -12,7 +12,13 @@ Start with the [local quickstart](../README.md#run-it-locally) for setup. This g
 
 ## Start and inspect the local stack
 
-Run commands from the repository root with your configured `.env` and Docker secrets in place.
+Configure `.env` using the [quickstart](../README.md#run-it-locally); local Compose and host processes share its credentials.
+
+If this local database was created with the previous migrations, reset its volume once before proceeding. This deletes local records but preserves `.env` credentials:
+
+```bash
+docker compose --env-file .env -f infra/compose/compose.yml down --volumes
+```
 
 ```bash
 docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure up -d
@@ -20,7 +26,22 @@ docker compose --env-file .env -f infra/compose/compose.yml --profile infrastruc
 docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile applications up -d
 ```
 
-Run one migration job at a time. The migration runner applies the full ordered set in [the migrations directory](../web/server/db/migrations/). An existing database volume keeps its initialized roles and passwords. Changing a secret file does not rotate a database password automatically.
+Run one migration job at a time. The migration runner applies the checked-in files in [the migrations directory](../web/server/db/migrations/). The clean-start baseline does not upgrade databases with the previous migration history. Changing a database password in `.env` does not rotate an existing database role.
+
+The runner compares applied migration names and checksums with the checkout and never resets data. For host-run web development, confirm the schema before starting the server:
+
+```bash
+(
+  cd web
+  node --env-file=../.env --experimental-strip-types server/db/migrate.ts --check
+)
+```
+
+`GET /api/health` reports the same comparison in its `migrations` field and answers `503` with
+`status: "degraded"` when the database is behind the checkout, when the applied history does not
+match it, or when the database is unreachable. The web role is not granted access to the migration
+history, so in the standard deployment that field reports `readable: false` and health stays `ok`;
+run `db:migrate:check` with the migration role to prove a deployment matches its checkout.
 
 ```bash
 docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile applications ps
@@ -130,13 +151,25 @@ the sentence shown to the traveller:
 The agent classifies its own failure in `failure_code` and reports a fixed safe code, never the
 exception ([runs.py](../agent/src/onholidai_agent/api/runs.py)). `invalid_result` is used only when
 web refuses the proposal with a 409 whose problem code is `estimate_evidence_*` or
-`offer_unavailable`; any other rejection or crash stays `agent_error`, so a traveller is never told
-their supplier evidence was invalid when the run merely failed.
+`offer_unavailable`. `source_unavailable` also covers `incomplete_estimate`, which web reports when
+its own repricing finds no complete current transport or stay for the proposed draft; any other
+rejection or crash stays `agent_error`, so a traveller is never told their supplier evidence was
+invalid when the run merely failed.
+
+A run only repeats a callback that web rejects with `run_conflict`, which is the cursor race the
+retry exists for. Any other 409 would repeat the same rejected proposal and the same supplier
+repricing, so the agent stops at the first one.
+
+If the agent stores its failed event but its result receipt never lands, the lease monitor still
+closes the run after the lease expires. It keeps the category recorded by that event instead of
+replacing it with `interrupted`, so the traveller sees the real cause. `interrupted` now means the
+agent left no terminal evidence at all.
 
 Web logs one `request_failed` line for a 409, a 429 or any 5xx with the method, the route template,
-the status, the sanitized problem code and the correlation id — never the problem detail or a
-request body. Pair that line with the agent's `Estimate run failed (<category> ...)` entry for the
-same time window to see which check rejected the work.
+the status, the sanitized problem code, the correlation id and, for a 5xx, the exception class —
+never the problem detail, the exception message or a request body. Pair that line with the agent's
+`Estimate run failed (<category> ...)` entry for the same time window to see which check rejected
+the work.
 
 ### Give each process only the credentials it needs
 
@@ -262,7 +295,7 @@ The base local booking worker stays deterministic. When working on existing work
 docker compose --env-file .env -f infra/compose/compose.yml --profile infrastructure --profile applications --profile booking up -d booking-worker
 ```
 
-Deploy web and worker revisions with compatible schemas and adapters. For a host-run worker, `DATABASE_URL` must contain the worker-role URL. `WORKER_DATABASE_URL` in the template is a convenience value, not a variable the worker reads automatically.
+Deploy web and worker revisions with compatible schemas and adapters. A host-run worker derives its URL from `WORKER_DB_PASSWORD`; set `WORKER_DATABASE_URL` only to intentionally override that connection.
 
 ### Preserve pricing integrity
 

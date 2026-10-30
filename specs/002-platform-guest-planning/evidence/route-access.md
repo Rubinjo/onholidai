@@ -81,7 +81,7 @@ Streams must recheck before delivery; linking must revoke service grants, not re
 Prerequisite script selected the requested feature. Requirements checklist: 16/16 checked.
 Git whitespace check passed for tracked edits at inspection. Node.js/pnpm/Docker test runs are
 skipped by user direction. No fresh/upgrade database or behavioral contract result is available;
-no migration or guest access gate is recorded as passed. Historical migrations 001–010 are intact.
+no migration or guest access gate is recorded as passed. Historical migrations 001–010 were intact at the time of this audit. The current checkout uses a clean-start baseline; older database histories must be recreated.
 
 # Implementation route audit — 2026-10-15
 

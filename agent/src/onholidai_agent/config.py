@@ -37,8 +37,6 @@ class Settings(BaseSettings):
             raise ValueError("LangSmith endpoint must use HTTPS")
         if len(self.service_token_secret.encode()) < 32:
             raise ValueError("Service token secret must contain at least 32 bytes")
-        if self.environment == "production" and self.service_token_secret.startswith("synthetic"):
-            raise ValueError("Production requires explicit scoped service signing credentials")
         if self.provider_mode == "live":
             required = {
                 "nebius_api_key": self.nebius_api_key,

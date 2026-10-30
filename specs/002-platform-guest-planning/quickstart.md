@@ -14,8 +14,9 @@ to that review without changing the trip. Detailed itinerary preparation, feasib
 and acknowledgement happen there, followed by live-term revalidation and separate exact-action
 authorization. GET, sign-in and Book trip navigation do not finalize, reserve or pay.
 
-Deploy reviewed migration `013_automatic_planning.sql` before the matching web revision.
-Its default preserves existing manual runs and its trigger makes the per-run policy immutable.
+The clean-start baseline includes automatic-planning policy schema. Apply it through the
+controlled migration job before starting the matching web revision. Its default keeps
+new runs manual unless explicitly requested.
 No migration/deployment was performed in this implementation pass. See [Phase 11 evidence](evidence/phase11.md)
 for executed checks and still-open database/manual/deployment/participant gates.
 
@@ -63,7 +64,7 @@ services. Default browser runs still validate certificates.
 
 Guest setup, planning, linking, registration and marketing are implemented and verified against a local stack (Node.js 24, pnpm 12, Docker with PostgreSQL/PostGIS and Temporal, and the deterministic agent). See [implementation status](evidence/implementation-status.md), [spec](spec.md), [data model](data-model.md) and [contracts](contracts/README.md) for the executed commands, results and remaining gaps.
 
-Deploy web and booking worker from the same reviewed revision after fresh/upgrade checks for migrations 011/012. No deployment/migration was run here. Guest defaults are two active runs, ten new runs/session-hour and twenty sessions/network-hour. GUEST_TRUST_PROXY_IP defaults false (shared conservative bucket); enable only behind an edge that overwrites x-real-ip. GUEST_NETWORK_SECRET optionally separates the digest key. Keep cookie/Origin/ownership/account-booking protections active.
+Deploy web and booking worker from the same reviewed revision after the clean-start baseline passes on an isolated database. Databases with the prior migration history must be recreated; no deployment/migration was run here. Guest defaults are two active runs, ten new runs/session-hour and twenty sessions/network-hour. GUEST_TRUST_PROXY_IP defaults false (shared conservative bucket); enable only behind an edge that overwrites x-real-ip. GUEST_NETWORK_SECRET optionally separates the digest key. Keep cookie/Origin/ownership/account-booking protections active.
 
 ## Prerequisites and stack
 

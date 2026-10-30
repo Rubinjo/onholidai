@@ -67,6 +67,21 @@ Signing secrets must be explicit, distinct, and at least 32 characters. Keep the
 
 The deployment script merges `.db-passwords` into the Compose environment. Do not replace role separation with an application connection using the database administrator.
 
+The checked-in schema is a clean-start baseline. Before the first deployment, `onholidai` must be empty; a database with the previous migration history is intentionally not upgraded. If one exists, recreate only the `onholidai` database before deploying. This removes its records but preserves PostgreSQL roles, credentials, the Temporal database, and other volume data. The migration job never drops data automatically.
+
+From the release root, run this once on the VPS if it has the previous schema:
+
+```bash
+compose=(docker compose --env-file /srv/onholidai/.env.production --env-file /srv/onholidai/.db-passwords -p onholidai-production -f infra/production/compose.yml)
+"${compose[@]}" up -d --wait postgres
+"${compose[@]}" stop caddy web agent booking-worker
+"${compose[@]}" exec -T postgres psql -U postgres -d postgres -c 'DROP DATABASE onholidai WITH (FORCE)'
+"${compose[@]}" exec -T postgres psql -U postgres -d postgres -c 'CREATE DATABASE onholidai OWNER onholidai_migration'
+"${compose[@]}" exec -T postgres psql -U postgres -d onholidai -c 'CREATE EXTENSION postgis'
+"${compose[@]}" exec -T postgres psql -U postgres -d postgres -c 'REVOKE CONNECT ON DATABASE onholidai FROM PUBLIC'
+"${compose[@]}" exec -T postgres psql -U postgres -d postgres -c 'GRANT CONNECT ON DATABASE onholidai TO onholidai_migration, onholidai_web, onholidai_worker'
+```
+
 ## Deploy immutable releases
 
 The [release workflow](../../.github/workflows/release.yml) builds and publishes the web and agent images on pushes to `main`. Publishing does **not** deploy them automatically.

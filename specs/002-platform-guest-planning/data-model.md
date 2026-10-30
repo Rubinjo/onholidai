@@ -1,6 +1,6 @@
 # Data Model: Platform UX, Guest Planning & Account Creation
 
-Add migrations after 010 in existing app schema; snake_case SQL/camelCase Kysely mappings. Preserve historical snapshots, owner keys, fingerprints, audit/booking evidence and domain validation.
+The current schema is consolidated in `web/server/db/migrations/001_initial_schema.sql`; future changes use numbered migrations after it. Databases with the prior history must be recreated. Keep snake_case SQL/camelCase Kysely mappings and preserve historical snapshots, owner keys, fingerprints, audit/booking evidence and domain validation.
 
 ## Relationships
 
@@ -116,4 +116,4 @@ The immutable draft research_request_id identifies the first reservation, not ev
 
 30-day guest access expiry is distinct from record deletion; 90-day raw messages and 24-month trip/partial-draft review follow existing policy/holds. Session/intent/ledger housekeeping cannot cascade-delete principals/evidence. Privacy export/delete resolves principal authority; team roles stay account-bound. New audit facts distinguish guest/account without secrets; old entries remain unchanged.
 
-011 creates sessions/principals, backfills accounts and repoints planning/legal-hold FKs; create session table before principal session FK. 012 adds drafts/intents/link receipts, run revocation and limits. Preserve migrations 001–010, existing least-privilege grants and immutable guards. Upgrade/fresh tests compare IDs, snapshots, receipts, terms hashes/execution JSON, old account access and new guest ownership. Feature-disable rollback preserves accepted guest records.
+The baseline creates sessions/principals before dependent drafts and intents, with required indexes, grants and immutable guards. Preserve least-privilege access and evidence. Test IDs, snapshots, receipts, terms hashes/execution JSON, account access and guest ownership on a clean database.

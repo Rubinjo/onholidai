@@ -8,7 +8,7 @@ set -e
 port="${1:-8002}"
 web_port="${2:-3100}"
 cd /workspace/agent
-export SERVICE_TOKEN_SECRET="$(cat /run/secrets/service_token_secret)"
+: "${SERVICE_TOKEN_SECRET:?SERVICE_TOKEN_SECRET must be set in the container environment}"
 export WEB_BASE_URL="http://host.docker.internal:${web_port}"
 exec .venv/bin/uvicorn onholidai_agent.api.main:app --host 0.0.0.0 --port "$port" \
   >> /tmp/dev-agent.log 2>&1

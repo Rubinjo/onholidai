@@ -40,7 +40,7 @@ describe("deployment configuration validation", () => {
   });
 
   it.each(["DATABASE_URL", "TEMPORAL_ADDRESS"])("requires explicit production worker %s", (key) => {
-    for (const value of [undefined, "", `synthetic-${key.toLowerCase()}`]) {
+    for (const value of [undefined, ""]) {
       expect(() => loadWorkerConfig({ ...workerEnvironment, [key]: value })).toThrow(key);
     }
   });
@@ -92,6 +92,18 @@ describe("deployment configuration validation", () => {
     expect(demo.BOOKING_DEMO_ENABLED).toBe(true);
     expect(deriveProviderReadiness(demo, {})).toEqual(deriveProviderReadiness(normal, {}));
     expect(() => loadServerConfig({ BOOKING_DEMO_ENABLED: "yes" })).toThrow();
+  });
+
+  it("derives local web and worker database URLs from their role passwords", () => {
+    expect(loadServerConfig({ APP_DB_PASSWORD: "app:local/password" }).DATABASE_URL).toBe(
+      "postgresql://onholidai_web:app%3Alocal%2Fpassword@localhost:5432/onholidai",
+    );
+    expect(
+      loadWorkerConfig({
+        TEMPORAL_ADDRESS: "localhost:7233",
+        WORKER_DB_PASSWORD: "worker-local-password",
+      }).DATABASE_URL,
+    ).toBe("postgresql://onholidai_worker:worker-local-password@localhost:5432/onholidai");
   });
 
   it.each(["true", "false"])(
@@ -270,7 +282,7 @@ describe("deployment configuration validation", () => {
     expect(worker.duffel.products.accommodation.operations.status.access).toBe("verified");
   });
 
-  it("requires explicit, non-synthetic production authentication, database and signing credentials", () => {
+  it("requires explicit production authentication, database and signing credentials", () => {
     for (const key of [
       "DATABASE_URL",
       "BETTER_AUTH_SECRET",
@@ -283,13 +295,18 @@ describe("deployment configuration validation", () => {
         [key]: undefined,
       };
       expect(() => loadServerConfig(environment), key).toThrow(key);
-      expect(
-        () =>
-          loadServerConfig({ ...productionEnvironment, [key]: `synthetic-${key.toLowerCase()}` }),
-        key,
-      ).toThrow(key);
     }
     expect(loadServerConfig({ ...productionEnvironment }).NODE_ENV).toBe("production");
+  });
+
+  it("accepts long synthetic authentication and signing values in production mode", () => {
+    const config = loadServerConfig({
+      ...productionEnvironment,
+      BETTER_AUTH_SECRET: "synthetic-local-web-auth-secret-000000000",
+      SERVICE_TOKEN_SECRET: "synthetic-local-service-secret-000000000",
+      PRICING_DIAGNOSTIC_SECRET: "synthetic-local-pricing-secret-000000000",
+    });
+    expect(config.NODE_ENV).toBe("production");
   });
 
   it("keeps live startup available without pretending missing supplier access is ready", () => {

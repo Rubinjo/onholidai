@@ -42,8 +42,9 @@ refinement/linking tests; record fixture snapshot/version before each run.
 
 Compare trip/version/run/request IDs, snapshots, reversal relationships, proposal
 expiry, receipt fingerprints, terms hashes, execution basis JSON, conversations,
-and booking/provider call counts before and after ownership changes. Test fresh
-schema and upgrades from migrations 001–010. Record all assertion failures/skips.
+and booking/provider call counts before and after ownership changes. Test the
+clean-start baseline on a fresh isolated database; upgrading the previous
+migration history is unsupported. Record all assertion failures/skips.
 
 ## Evidence record
 

@@ -49,9 +49,8 @@ Date: 2026-10-14. Scope: T082–T106 and the US4 remediation items T144–T153. 
 
 ## Validation actually performed
 
-Windows local environment with PostgreSQL 18/PostGIS from `infra/compose`, PostgreSQL credentials read from
-`infra/compose/secrets`, and `TEST_DATABASE_*` pointing at role-scoped connections. Commands were run from the repository
-root unless noted.
+Historical Windows validation used PostgreSQL 18/PostGIS from `infra/compose`, with `TEST_DATABASE_*` pointing at
+role-scoped connections. Commands were run from the repository root unless noted.
 
 | Command                                                | Result                                                                                       |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------- |

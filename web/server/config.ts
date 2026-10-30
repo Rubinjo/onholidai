@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { createLocalDatabaseUrl } from "@/server/db/local-connection-url";
+
 export const SUPPLIER_PROVIDER_IDS = ["duffel", "nuitee", "viator"] as const;
 export const SUPPLIER_OPERATIONS = [
   "search",
@@ -142,6 +144,22 @@ type SupplierConfig = Pick<
   ServerConfig,
   "PROVIDER_MODE" | "VIATOR_ENVIRONMENT" | "NUITEE_ENVIRONMENT" | "SUPPLIER_PROVIDERS"
 >;
+
+function withLocalDatabaseUrl(
+  environment: Record<string, string | undefined>,
+  role: string,
+  passwordKey: string,
+  explicitUrlKey = "DATABASE_URL",
+): Record<string, string | undefined> {
+  if (environment[explicitUrlKey]) {
+    return { ...environment, DATABASE_URL: environment[explicitUrlKey] };
+  }
+  if (environment.NODE_ENV !== "production") {
+    const password = environment[passwordKey];
+    if (password) return { ...environment, DATABASE_URL: createLocalDatabaseUrl(role, password) };
+  }
+  return environment;
+}
 
 export interface ProviderOperationReadiness {
   support: z.infer<typeof operationConfigSchema>["support"];
@@ -308,7 +326,7 @@ function requireProductionConfiguration(
 ): void {
   if (environment.NODE_ENV === "production") {
     for (const key of keys) {
-      if (!environment[key] || environment[key]?.startsWith("synthetic")) {
+      if (!environment[key]) {
         throw new Error(`Production requires explicit ${key}`);
       }
     }
@@ -333,8 +351,14 @@ function validateSupplierSecrets(
 
 export function loadWorkerConfig(environment: Record<string, string | undefined>): WorkerConfig {
   requireProductionConfiguration(environment, ["DATABASE_URL", "TEMPORAL_ADDRESS"]);
-  const config = workerConfigSchema.parse(environment);
-  validateSupplierSecrets(config, environment);
+  const workerEnvironment = withLocalDatabaseUrl(
+    environment,
+    "onholidai_worker",
+    "WORKER_DB_PASSWORD",
+    "WORKER_DATABASE_URL",
+  );
+  const config = workerConfigSchema.parse(workerEnvironment);
+  validateSupplierSecrets(config, workerEnvironment);
   return config;
 }
 
@@ -346,7 +370,8 @@ export function loadServerConfig(environment: Record<string, string | undefined>
     "SERVICE_TOKEN_SECRET",
     "PRICING_DIAGNOSTIC_SECRET",
   ]);
-  const config = serverConfigSchema.parse(environment);
+  const webEnvironment = withLocalDatabaseUrl(environment, "onholidai_web", "APP_DB_PASSWORD");
+  const config = serverConfigSchema.parse(webEnvironment);
   validateSupplierSecrets(config, environment);
   if (config.SERVICE_TOKEN_SECRET === config.PRICING_DIAGNOSTIC_SECRET) {
     throw new Error("Pricing diagnostics require an independent signing secret");

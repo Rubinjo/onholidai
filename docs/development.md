@@ -34,7 +34,7 @@ Keep `PROVIDER_MODE=deterministic` for routine development. This uses synthetic 
 
 ## Run the applications with hot reload
 
-First complete the configuration and Docker-secret steps in the [quickstart](../README.md#run-it-locally). Keep application containers stopped when running the same services on the host.
+Copy `.env.example` to `.env`; its synthetic credentials are local-only. Compose and host processes share them. Keep application containers stopped when running the same services on the host.
 
 Start only the infrastructure:
 
@@ -44,16 +44,17 @@ docker compose --env-file .env -f infra/compose/compose.yml --profile infrastruc
 
 For host processes, check your local `.env` against these settings:
 
-| Setting                           | Host-run value                                                                        |
-| --------------------------------- | ------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                    | PostgreSQL URL for `onholidai_web`, using the generated application database password |
-| `MIGRATION_DATABASE_URL`          | PostgreSQL URL for `onholidai_migration`, using the generated migration password      |
-| `TEMPORAL_ADDRESS`                | `localhost:7233`                                                                      |
-| `AGENT_BASE_URL`                  | `http://localhost:8000`                                                               |
-| `WEB_BASE_URL`, `BETTER_AUTH_URL` | `http://localhost:3000`                                                               |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`     | `http://localhost:4318`                                                               |
+| Setting                           | Host-run value                                                      |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `APP_DB_PASSWORD`                 | Password used to derive the host web URL for `onholidai_web`        |
+| `MIGRATION_DB_PASSWORD`           | Password used to derive the migration URL for `onholidai_migration` |
+| `WORKER_DB_PASSWORD`              | Password used to derive the worker URL for `onholidai_worker`       |
+| `TEMPORAL_ADDRESS`                | `localhost:7233`                                                    |
+| `AGENT_BASE_URL`                  | `http://localhost:8000`                                             |
+| `WEB_BASE_URL`, `BETTER_AUTH_URL` | `http://localhost:3000`                                             |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`     | `http://localhost:4318`                                             |
 
-The database URLs use `localhost:5432/onholidai`. Docker creates the database roles on first initialization. Passwords must match the Docker secret files created during the [quickstart](../README.md#run-it-locally). The [environment template](../.env.example) explains the remaining settings.
+Host processes and Compose derive role-specific database URLs from these passwords. Keep them unchanged when reusing a database volume. Explicit database URLs can override host connections. See [`.env.example`](../.env.example) for other settings.
 
 Apply migrations with the migration role. Do not run this alongside another migration job:
 
@@ -63,6 +64,20 @@ Apply migrations with the migration role. Do not run this alongside another migr
   node --env-file=../.env --experimental-strip-types server/db/migrate.ts
 )
 ```
+
+Confirm the schema matches the checkout before starting the web application, with the same migration role and `--env-file`:
+
+```bash
+(
+  cd web
+  node --env-file=../.env --experimental-strip-types server/db/migrate.ts --check
+)
+```
+
+The check exits non-zero and names the pending files when the database is behind. `GET /api/health`
+reports the same comparison in its `migrations` field and answers `503` while the database is behind
+or unreachable. The web role cannot read the migration history, so that field reports
+`readable: false` here; the check above is the authoritative one.
 
 Start the agent in one terminal:
 
@@ -129,7 +144,7 @@ pnpm test:contracts
 
 ## Test against a disposable database
 
-Database tests must never use the application database, production credentials, or customer data. The helper creates a new database for each fixture and applies the full ordered migration set.
+Database tests must never use the application database, production credentials, or customer data. The helper creates a new database for each fixture and applies the checked-in migrations.
 
 This Bash example starts a uniquely named, disposable PostGIS container, creates the synthetic test roles, runs the database foundation checks, and stops the container on exit. Environment changes stay inside the subshell:
 

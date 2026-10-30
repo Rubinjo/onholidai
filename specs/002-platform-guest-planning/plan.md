@@ -18,7 +18,7 @@ Use source-owned Radix shadcn components and existing CSS tokens. Reuse MapLibre
 
 **Primary Dependencies**: Existing Better Auth 1.7.7, Kysely 0.29.6, pg 8.23.1, Zod 4.6.5, MapLibre 6.13.0, Radix UI 1.7.0, Tailwind 4.3.3, React Day Picker 10.0.2, TanStack React Query 5.104.1, Temporal 1.24.0. Add only source-required `class-variance-authority`, `clsx`, `tailwind-merge` and matching `@tailwindcss/postcss` for the missing v4 pipeline; pin reviewed versions/lockfile during implementation. No initial Motion dependency or replacement technology.
 
-**Storage**: PostgreSQL 18/PostGIS, existing `app` schema. Add migrations after 010 for principals/sessions, partial drafts, intents/link receipts, quota records and run-access revocation. Preserve snapshots, receipts, outbox and immutable evidence.
+**Storage**: PostgreSQL 18/PostGIS, existing `app` schema. The current schema is consolidated in `web/server/db/migrations/001_initial_schema.sql`; future changes use numbered migrations after it. Databases with the prior migration history must be recreated. Preserve snapshots, receipts, outbox and immutable evidence.
 
 **Testing**: Existing Vitest/Testing Library, isolated PostgreSQL/migration fixtures, Playwright desktop/mobile projects, contracts, pytest and deterministic agent/provider doubles. Add isolation, draft conflict, linking/race/replay and dual-identity booking coverage. Manual assistive-technology and participant checks remain release gates.
 

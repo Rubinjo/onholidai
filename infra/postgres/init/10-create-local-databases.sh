@@ -1,12 +1,15 @@
 #!/bin/sh
 set -eu
 
-# Compose supplies these through the environment in production; the local
-# development stack mounts the same values as Docker secret files instead.
-app_password="${APP_DB_PASSWORD:-$(cat /run/secrets/app_db_password)}"
-migration_password="${MIGRATION_DB_PASSWORD:-$(cat /run/secrets/migration_db_password)}"
-temporal_password="${TEMPORAL_DB_PASSWORD:-$(cat /run/secrets/temporal_db_password)}"
-worker_password="${WORKER_DB_PASSWORD:-$(cat /run/secrets/worker_db_password)}"
+: "${APP_DB_PASSWORD:?APP_DB_PASSWORD must be set}"
+: "${MIGRATION_DB_PASSWORD:?MIGRATION_DB_PASSWORD must be set}"
+: "${TEMPORAL_DB_PASSWORD:?TEMPORAL_DB_PASSWORD must be set}"
+: "${WORKER_DB_PASSWORD:?WORKER_DB_PASSWORD must be set}"
+
+app_password="$APP_DB_PASSWORD"
+migration_password="$MIGRATION_DB_PASSWORD"
+temporal_password="$TEMPORAL_DB_PASSWORD"
+worker_password="$WORKER_DB_PASSWORD"
 
 psql --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \
   --set=app_password="$app_password" --set=migration_password="$migration_password" \

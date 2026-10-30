@@ -15,7 +15,7 @@ browser journeys across five projects.
 | FR-019–023   | intent, link, continuation, revocation              | `account-linking.test.ts`, `planning-link-repository`, `auth/continue` journey in `refinement.spec.ts`/`guest-planning.spec.ts`                                          | cross-replica race timing                              |
 | FR-024       | booking actor, domain, routes, workers              | `booking-planning-identity.test.ts`, `booking-authorization.test.ts`, `booking-workflows.test.ts` (Temporal activities)                                                  | coordinated worker deployment (T068)                   |
 | FR-025–028   | theme, states, accessibility, motion                | `platform-ux.spec.ts`, `accessibility.spec.ts`, `setup-accessibility.spec.ts`, `workspace-propagation.test.tsx` (two-second convergence)                                 | manual AT/forced-colour/zoom (T079), SC-010 timings    |
-| FR-029       | principal joins, migrations 011–012                 | `migration-compatibility.test.ts` (22 cases, fresh and 001–010 upgrade)                                                                                                  | —                                                      |
+| FR-029       | principal joins and clean-start schema baseline     | `migration-compatibility.test.ts` (26 cases, fresh baseline)                                                                                                             | —                                                      |
 
 Success criteria: SC-004 persistence and validation, SC-005 ownership, SC-006 linking,
 SC-008 transaction safety and SC-009 automated access checks are exercised by the suites

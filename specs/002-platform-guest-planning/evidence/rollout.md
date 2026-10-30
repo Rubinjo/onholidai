@@ -1,6 +1,6 @@
-# Rollout — executed against the local stack
+# Historical rollout — executed against the local stack
 
-Migrations 011 (`planning_ownership`) and 012 (`guest_drafts_and_linking`) were applied with
+At the time, migrations 011 (`planning_ownership`) and 012 (`guest_drafts_and_linking`) were applied with
 `pnpm --dir web db:migrate` against a database that already carried 001–010, and the fresh
 and upgraded paths are both exercised by
 `web/tests/integration/migration-compatibility.test.ts` (22 cases, passing). Unchanged trip,
@@ -8,9 +8,12 @@ version, run and request identifiers, snapshots, receipt fingerprints, terms has
 execution JSON and existing account access all survive; the new guest foreign keys and the
 session/principal set-once guards behave as specified.
 
-Deployment ordering, still requiring a coordinated release:
+Current deployment uses the clean-start baseline; the previous migration history is not
+upgradeable. Recreate only the `onholidai` database before deploying.
 
-1. Apply migrations 011 and 012 with the migration role before starting either revision.
+Deployment ordering:
+
+1. Apply the baseline with the migration role before starting application services.
 2. Deploy the reviewed `web` and `booking-worker` revisions together. Do not enable linked
    bookings against a worker that assumes account ids are principal ids, and do not run two
    migration runners concurrently.

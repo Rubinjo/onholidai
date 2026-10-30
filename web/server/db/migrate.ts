@@ -5,6 +5,8 @@ import { resolve } from "node:path";
 
 import { Pool, type PoolClient } from "pg";
 
+import { createLocalDatabaseUrl } from "./local-connection-url.ts";
+
 const migrationFilePattern = /^(?<version>\d{3,})_(?<name>[a-z][a-z0-9_]*)\.sql$/;
 const migrationLockId = "761742826539061";
 const expectedMigrationRole = "onholidai_migration";
@@ -273,13 +275,24 @@ export async function migrationStatus(
   }
 }
 
+export function resolveMigrationConnectionString(
+  environment: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  return (
+    environment.MIGRATION_DATABASE_URL ??
+    (environment.NODE_ENV !== "production" && environment.MIGRATION_DB_PASSWORD
+      ? createLocalDatabaseUrl("onholidai_migration", environment.MIGRATION_DB_PASSWORD)
+      : environment.DATABASE_URL)
+  );
+}
+
 function isEntrypoint(): boolean {
   const entrypoint = process.argv[1];
   return Boolean(entrypoint && pathToFileURL(resolve(entrypoint)).href === import.meta.url);
 }
 
 if (isEntrypoint()) {
-  const connectionString = process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
+  const connectionString = resolveMigrationConnectionString(process.env);
 
   if (!connectionString) {
     throw new Error("MIGRATION_DATABASE_URL or DATABASE_URL is required");

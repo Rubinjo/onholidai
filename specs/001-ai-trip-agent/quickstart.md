@@ -13,7 +13,9 @@ This guide defines the runnable end-to-end evidence expected after implementatio
 
 ## Start the Local Stack
 
-The web application requires independent `service_token_secret.txt` and `pricing_diagnostic_secret.txt` files in `infra/compose/secrets/`, alongside `web_auth_secret.txt`. Each contains at least 32 characters; use distinct values. The service key is shared with the agent transport; the pricing key stays in web/authorized diagnostic callers. Local non-container development uses synthetic defaults in `.env.example`. Production web startup requires explicit database/auth/service/diagnostic configuration. The booking worker uses a separate initializer: it requires explicit `DATABASE_URL` and `TEMPORAL_ADDRESS` in production, but no web auth or signing secrets. Keep its Compose secret mounts limited to `worker_db_password`. Build-only credentials in CI and Dockerfile are placeholders for shell compilation and are not installed as runtime environment values. The current schema is migrations 001–010; always apply the full ordered migration set through the controlled migration command.
+Local Compose and host processes share synthetic demo credentials from `.env.example`. Do not reuse them in production, which uses separate protected configuration and mounted signing keys.
+
+The service key is shared with the agent transport; the pricing key stays in web/authorized diagnostic callers. Production web startup requires explicit database/auth/service/diagnostic configuration. The booking worker requires explicit `DATABASE_URL` and `TEMPORAL_ADDRESS` in production, but no web auth or signing secrets. Build-only credentials in CI and Dockerfile are placeholders for shell compilation and are not installed as runtime environment values. The schema is a clean-start baseline; apply it through the controlled migration command. Databases with the prior migration history must be recreated first.
 
 Readiness is staged. After setup, install locked dependencies, start `--profile infrastructure` and run web/agent shell health checks with `pnpm dev`; no migration job, application container profile or booking worker is required. After foundation, run the `migrations` profile. The complete commands below require all story implementations through US4; `applications` runs containerized app services and `booking` runs the worker. Compose only resolves a `depends_on` target inside a profile that is enabled for that invocation, so every stage command names the profiles it needs — the migration job depends on `postgres`, so it enables `infrastructure` as well as `migrations`.
 
@@ -33,12 +35,15 @@ To run the applications on the host while PostgreSQL stays in Docker, start the 
 
 ```bash
 docker compose -f infra/compose/compose.yml --profile infrastructure up -d postgres
-pnpm --dir web db:migrate                 # uses MIGRATION_DATABASE_URL from .env
+(
+  cd web
+  node --env-file=../.env --experimental-strip-types server/db/migrate.ts
+)
 uv run --project agent uvicorn onholidai_agent.api.main:app --host 127.0.0.1 --port 8000
 pnpm dev                                  # or: pnpm --dir web build && pnpm --dir web start
 ```
 
-`docker compose ... --profile infrastructure up -d postgres` creates the least-privileged roles, the `onholidai` database and PostGIS from `infra/postgres/` on first start, using `infra/compose/secrets/*.txt`. Those secrets are git-ignored; recreate them from `.env` (see `.env.example`) if the compose command reports a missing secret file. `infra/postgres/init/10-create-local-databases.sh` must keep LF line endings — `.gitattributes` enforces that, because a CRLF shebang makes the container's init step fail silently and leaves no database to sign in against.
+`docker compose ... --profile infrastructure up -d postgres` creates the least-privileged roles, the `onholidai` database and PostGIS from `infra/postgres/` on first start, using role passwords from `.env`. Changing a database password in `.env` does not rotate the password of an existing database volume. `infra/postgres/init/10-create-local-databases.sh` must keep LF line endings — `.gitattributes` enforces that, because a CRLF shebang makes the container's init step fail silently and leaves no database to sign in against.
 
 Run baseline checks in separate commands:
 
