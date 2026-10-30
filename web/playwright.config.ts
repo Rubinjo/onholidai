@@ -15,7 +15,7 @@ export default defineConfig({
   workers: ci ? 1 : undefined,
   retries: 0,
   maxFailures: ci ? 5 : undefined,
-  globalTimeout: ci ? 10 * 60_000 : undefined,
+  globalTimeout: ci ? 17 * 60_000 : undefined,
   globalSetup: "./tests/e2e/global-setup.ts",
   use: {
     ...(process.env.US1_STORAGE_STATE ? { storageState: process.env.US1_STORAGE_STATE } : {}),

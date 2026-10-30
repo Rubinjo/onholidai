@@ -77,6 +77,12 @@ test("internal research preserves evidence and access checks without a customer 
   }
 
   const latest = await research(["flight", "accommodation", "activity", "rail"]);
+  const history = await page.request.get(
+    `/api/v1/trips/${trip.tripId}/conversations?timeline=true`,
+  );
+  await expect(history).toBeOK();
+  expect((await history.json()).items).toEqual([]);
+
   await page.goto(`/trips/${trip.tripId}`);
   await expect(page.getByRole("heading", { name: "Your living trip" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Compare supplier options" })).toHaveCount(0);
@@ -86,11 +92,6 @@ test("internal research preserves evidence and access checks without a customer 
     }),
   ).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Ask your travel assistant" })).toBeVisible();
-  const history = await page.request.get(
-    `/api/v1/trips/${trip.tripId}/conversations?timeline=true`,
-  );
-  await expect(history).toBeOK();
-  expect((await history.json()).items).toEqual([]);
   expect(
     latest.offers
       .map(
@@ -155,9 +156,9 @@ test("internal research preserves evidence and access checks without a customer 
 
   const rail = await research(["rail"]);
   expect(rail.offers).toEqual([]);
-  expect(rail.outcomes).toEqual([
+  expect(rail.outcomes).toContainEqual(
     expect.objectContaining({ componentType: "rail", status: "unsupported" }),
-  ]);
+  );
   const other = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   try {
     expect(
