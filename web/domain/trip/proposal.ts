@@ -40,27 +40,21 @@ export const customerSnapshotSchema = z
   })
   .strict()
   .superRefine((snapshot, context) => {
-    // Validate aggregate relationships without introducing internal costs into the public contract.
+    // Keep unavailable breakdowns unknown while validating the public snapshot.
     const money = (minorUnits: number) => ({ currency: snapshot.price.currency, minorUnits });
     const components = snapshot.components.map((component) => ({
       ...component,
       price: {
-        supplierAmount: {
-          currency: component.price.currency,
-          minorUnits:
-            component.price.finalCustomerMinor -
-            (component.price.taxesMinor ?? 0) -
-            (component.price.feesMinor ?? 0),
-        },
-        platformMargin: { currency: component.price.currency, minorUnits: 0 },
-        customerPayableTaxes: {
-          currency: component.price.currency,
-          minorUnits: component.price.taxesMinor ?? 0,
-        },
-        customerPayableFees: {
-          currency: component.price.currency,
-          minorUnits: component.price.feesMinor ?? 0,
-        },
+        supplierAmount: null,
+        platformMargin: null,
+        customerPayableTaxes:
+          component.price.taxesMinor === null || component.price.taxesMinor === undefined
+            ? null
+            : money(component.price.taxesMinor),
+        customerPayableFees:
+          component.price.feesMinor === null || component.price.feesMinor === undefined
+            ? null
+            : money(component.price.feesMinor),
         finalCustomerAmount: {
           currency: component.price.currency,
           minorUnits: component.price.finalCustomerMinor,
@@ -77,14 +71,16 @@ export const customerSnapshotSchema = z
       warnings: snapshot.warnings.slice(0, 64),
       price: {
         currency: snapshot.price.currency,
-        supplierTotal: money(
-          snapshot.price.finalCustomerMinor -
-            (snapshot.price.taxesMinor ?? 0) -
-            (snapshot.price.feesMinor ?? 0),
-        ),
-        platformMarginTotal: money(0),
-        customerPayableTaxesTotal: money(snapshot.price.taxesMinor ?? 0),
-        customerPayableFeesTotal: money(snapshot.price.feesMinor ?? 0),
+        supplierTotal: null,
+        platformMarginTotal: null,
+        customerPayableTaxesTotal:
+          snapshot.price.taxesMinor === null || snapshot.price.taxesMinor === undefined
+            ? null
+            : money(snapshot.price.taxesMinor),
+        customerPayableFeesTotal:
+          snapshot.price.feesMinor === null || snapshot.price.feesMinor === undefined
+            ? null
+            : money(snapshot.price.feesMinor),
         finalCustomerTotal: money(snapshot.price.finalCustomerMinor),
         status: snapshot.price.status,
         checkedAt: snapshot.price.checkedAt,

@@ -75,7 +75,23 @@ describe("US1 privacy projections", () => {
       customerPayableFeesTotal: amount(45),
       finalCustomerTotal: amount(1874755),
     };
+    const incompleteBreakdown = structuredClone(snapshot.components[0]);
+    incompleteBreakdown.id = "10000000-0000-4000-8000-000000000024";
+    incompleteBreakdown.supplierOfferId = "synthetic-unknown-breakdown";
+    incompleteBreakdown.price = {
+      ...incompleteBreakdown.price,
+      supplierAmount: amount(0),
+      platformMargin: amount(0),
+      customerPayableTaxes: null,
+      customerPayableFees: null,
+      finalCustomerAmount: amount(0),
+    };
+    snapshot.components.push(incompleteBreakdown);
+    snapshot.price.customerPayableTaxesTotal = null;
+    snapshot.price.customerPayableFeesTotal = null;
     const publicSnapshot = projectCustomerSnapshot(snapshot);
+    expect(publicSnapshot.price.taxesMinor).toBeNull();
+    expect(publicSnapshot.price.feesMinor).toBeNull();
     const cache = JSON.stringify(publicSnapshot);
     expect(cache).not.toMatch(/supplierAmount|supplierTotal|platformMargin|marginMinor/);
     expect(cache).not.toMatch(/991199|883388/);
