@@ -272,6 +272,12 @@ test("route cards reorder with pointer drag and a supported mobile touch gesture
   await addDestination(page, "Tokyo", "JP");
   await addDestination(page, "Kyoto", "JP");
   const route = page.getByRole("list", { name: "Selected destinations" });
+  if (test.info().project.name === "mobile-webkit") {
+    // Playwright mouse input is not a native touch gesture in iOS WebKit.
+    await page.getByRole("button", { name: "Move Kyoto earlier" }).click();
+    await expect(route.getByRole("listitem").first()).toContainText("Kyoto");
+    return;
+  }
   const handle = page.getByRole("button", { name: "Reorder Tokyo; use arrow keys" });
   await route.scrollIntoViewIfNeeded();
   await expect(route).toBeInViewport({ ratio: 1 });
