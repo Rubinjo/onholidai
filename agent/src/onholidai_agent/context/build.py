@@ -36,6 +36,96 @@ STABLE_INSTRUCTIONS = (
 )
 READ_ONLY_TOOLS = ("get_trip", "research", "propose_trip_changes", "retrieve_relevant_context")
 
+# A day plan and its components carry supplier evidence — fare conditions, ticket
+# terms, per-item notes — that never informs a planning decision but that every prompt
+# would pay for. The model receives the scheduling facts; the saved trip keeps the
+# evidence for the tools that fetch it deliberately.
+DAY_FIELDS = ("date", "destinationId", "timezone", "paceAssessment")
+ITEM_FIELDS = (
+    "id",
+    "type",
+    "title",
+    "start",
+    "end",
+    "startOffset",
+    "endOffset",
+    "componentId",
+    "status",
+    "priority",
+    "verificationStatus",
+    "travelSegment",
+)
+COMPONENT_FIELDS = (
+    "id",
+    "type",
+    "provider",
+    "supplierOfferId",
+    "offerStatus",
+    "bookingStatus",
+    "serviceStart",
+    "serviceEnd",
+    "price",
+    "details",
+)
+PLANNING_DETAIL_FIELDS = (
+    "source",
+    "locationName",
+    "durationMinutes",
+    "airlines",
+    "airportNames",
+    "availability",
+    "accessibility",
+    "eligibility",
+    "timezone",
+)
+
+
+def mapping(value: object) -> dict[str, object]:
+    return cast(dict[str, object], value) if isinstance(value, dict) else {}
+
+
+def projected(entry: dict[str, object], fields: tuple[str, ...]) -> dict[str, object]:
+    return {field: entry[field] for field in fields if field in entry}
+
+
+def planning_day(day: object) -> dict[str, object]:
+    entry = mapping(day)
+    items = entry.get("items")
+    return {
+        **projected(entry, DAY_FIELDS),
+        "items": (
+            [projected(mapping(item), ITEM_FIELDS) for item in cast(list[object], items)]
+            if isinstance(items, list)
+            else []
+        ),
+    }
+
+
+def planning_component(component: object) -> dict[str, object]:
+    entry = mapping(component)
+    result = projected(entry, COMPONENT_FIELDS)
+    planning = entry.get("planningDetails")
+    if isinstance(planning, dict):
+        result["planningDetails"] = projected(
+            mapping(cast(dict[object, object], planning)), PLANNING_DETAIL_FIELDS
+        )
+    return result
+
+
+def planning_trip(trip: dict[str, object]) -> dict[str, object]:
+    """The trip as a planner needs it: scheduling facts in, evidence blobs out."""
+    snapshot = mapping(trip.get("snapshot"))
+    compact = dict(snapshot)
+    days = snapshot.get("itineraryDays")
+    if isinstance(days, list):
+        compact["itineraryDays"] = [planning_day(day) for day in cast(list[object], days)]
+    components = snapshot.get("components")
+    if isinstance(components, list):
+        compact["components"] = [
+            planning_component(component) for component in cast(list[object], components)
+        ]
+    return {**trip, "snapshot": compact}
+
 
 def minimized_model_data(value: object) -> object:
     if isinstance(value, str):
@@ -65,8 +155,10 @@ def build_context(request: CreateAgentRunRequest, trip: dict[str, object]) -> li
         request.context.context_budget.maximum_tokens,
     )
     constraints = cast(list[dict[str, object]], snapshot.get("constraints", []))
+    compact = planning_trip(trip)
+    snapshot = mapping(compact.get("snapshot"))
     compact = {
-        **trip,
+        **compact,
         "snapshot": {
             **snapshot,
             "constraints": [

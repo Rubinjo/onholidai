@@ -5,7 +5,12 @@ import { z } from "zod";
 
 import { inTransaction } from "@/server/db/transaction";
 import { fingerprint, runConflict } from "@/server/agent-client/run-repository";
-import { searchPlanningOffers, type SupplyReadProvider } from "@/server/supply/read";
+import {
+  destinationPlaces,
+  searchPlanningOffers,
+  type SupplyReadProvider,
+} from "@/server/supply/read";
+import { RESEARCH_BUDGET_MS } from "@/server/supply/deadlines";
 import { isCompletePlanningOffer } from "@/server/supply/offers";
 import { projectCustomerSnapshot } from "@/domain/pricing/projections";
 
@@ -16,6 +21,7 @@ import { commitTripMutation } from "./commit";
 import { priceEstimate } from "./apply-estimate";
 import { tripSnapshotSchema, type TripSnapshot } from "./schema";
 
+import type { SupplierReadiness } from "@/server/config";
 import type { Database } from "@/server/db/database";
 
 export const editPreviewSchema = z
@@ -37,6 +43,7 @@ export async function researchDraftImpact(
   version: number,
   operations: readonly unknown[],
   providers: readonly SupplyReadProvider[],
+  options: { readiness?: SupplierReadiness; signal?: AbortSignal } = {},
 ) {
   const review = previewDraftEdit(base, version, operations);
   if (review.researchRequired) {
@@ -54,15 +61,27 @@ export async function researchDraftImpact(
       new Date(Date.parse(startDate + "T00:00:00Z") + (candidate.duration.idealDays - 1) * 86400000)
         .toISOString()
         .slice(0, 10);
-    const found = await searchPlanningOffers(providers, {
-      startDate,
-      endDate,
-      componentTypes: ["flight", "accommodation", "activity", "rail"],
-      currency: candidate.price.currency,
-      departureOrigin: candidate.departureOrigin,
-      travellerParty: candidate.travellerParty,
-      destinationIds: candidate.destinations.map((destination) => destination.id),
-    });
+    const destinationIds = candidate.destinations.map((destination) => destination.id);
+    const found = await searchPlanningOffers(
+      providers,
+      {
+        startDate,
+        endDate,
+        componentTypes: ["flight", "accommodation", "activity", "rail"],
+        currency: candidate.price.currency,
+        departureOrigin: candidate.departureOrigin,
+        travellerParty: candidate.travellerParty,
+        destinationIds,
+        // Live adapters resolve supplier ids from the place name and country, so the
+        // repriced stop identities must travel with their ids.
+        destinations: destinationPlaces(destinationIds, candidate.destinations),
+      },
+      new Date(),
+      {
+        signal: options.signal ?? AbortSignal.timeout(RESEARCH_BUDGET_MS),
+        ...(options.readiness ? { readiness: options.readiness } : {}),
+      },
+    );
     const complete = found.offers.filter(isCompletePlanningOffer);
     const groups = new Map<string, typeof complete>();
     for (const offer of complete) {
@@ -121,6 +140,7 @@ export async function previewEdit(
   tripId: string,
   raw: unknown,
   providers: readonly SupplyReadProvider[],
+  options: { readiness?: SupplierReadiness } = {},
 ) {
   const input = editPreviewSchema.parse(raw),
     base = await readOwnedTripVersion(database, userId, tripId);
@@ -150,6 +170,7 @@ export async function previewEdit(
     input.expectedVersion,
     input.operations,
     providers,
+    options,
   );
   void _research;
   const publicReview = {

@@ -51,7 +51,35 @@ export const supplyReadQuerySchema = z
         });
       }
     }
+    // Every live adapter resolves a supplier identity (IATA gateway, Nuitee place,
+    // Viator destination) from the place itself. A query that names only ids silently
+    // fails every provider, so a partial place list is a programming error, not a read.
+    if (query.destinations) {
+      const known = new Set(query.destinations.map((place) => place.id));
+      if (query.destinationIds.some((id) => !known.has(id))) {
+        context.addIssue({
+          code: "custom",
+          path: ["destinations"],
+          message: "Every researched stop needs its place identity",
+        });
+      }
+    }
   });
+
+/**
+ * The place identities that belong to the researched stops. Live adapters resolve
+ * supplier ids from these names and country codes, so callers must never send ids alone.
+ */
+export function destinationPlaces<T extends { id: string }>(
+  destinationIds: readonly string[],
+  known: Iterable<T>,
+): T[] {
+  const byId = new Map(Array.from(known, (place) => [place.id, place]));
+  return destinationIds.flatMap((id) => {
+    const place = byId.get(id);
+    return place ? [place] : [];
+  });
+}
 
 export const readCapabilitiesSchema = z
   .object({

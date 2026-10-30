@@ -5,6 +5,7 @@ from typing import Any, cast
 from uuid import uuid4
 
 from onholidai_agent.graph.activity import activity_intent
+from onholidai_agent.graph.clarify import compose_resumed_message
 from onholidai_agent.graph.refine import refine
 from onholidai_agent.models.api import CreateAgentRunRequest
 
@@ -199,6 +200,103 @@ def test_equally_close_candidates_become_a_focused_choice_between_titles():
     assert "Tokyo Traditional Geisha Show" in result.clarification.question
     assert "Tokyo Traditional Geisha Dinner" in result.clarification.question
     assert result.clarification.question.count("?") == 1
+
+
+def test_a_polite_lead_in_is_not_part_of_the_experience_name():
+    intent = activity_intent("Can we add a traditional Geisha show in Tokyo?")
+    assert intent is not None
+    assert intent.name == "traditional Geisha show"
+    assert intent.answers == ()
+
+
+def test_an_answer_is_kept_apart_from_the_request():
+    intent = activity_intent(
+        compose_resumed_message("Add a geisha show in Tokyo", "Tokyo Traditional Geisha Show")
+    )
+    assert intent is not None
+    assert intent.name == "geisha show"
+    assert intent.answers == ("Tokyo Traditional Geisha Show",)
+
+
+def test_the_reported_clarification_adds_the_listing_the_traveller_named():
+    # Trip 3d1ea5d6 asked this forever: the traveller answered with the exact title and
+    # the same question came back because the answer never reached the selection.
+    offered = "Tokyo Traditional Geisha Show and Japanese Food Experience"
+    source = ActivitySource(
+        offers=[
+            activity_offer("5557073P1", offered, 150),
+            activity_offer("352022P58", "TOKYO:Traditional Geisha Show & Japanese Dinner", 90),
+        ]
+    )
+    result = asyncio.run(
+        refine(
+            request(
+                compose_resumed_message("Can we add a traditional Geisha show in Tokyo?", offered)
+            ),
+            source,
+        )
+    ).root
+    assert result.kind == "proposal"
+    days = cast(list[dict[str, Any]], result.proposal.operations[0].value)
+    titles = [item.get("title") for day in days for item in day["items"]]
+    assert offered in titles
+    assert "TOKYO:Traditional Geisha Show & Japanese Dinner" not in titles
+
+
+def test_an_answered_choice_selects_the_named_title():
+    source = ActivitySource(
+        offers=[
+            activity_offer("427786P52", "Tokyo Traditional Geisha Show", 60),
+            activity_offer("427786P10", "Tokyo Traditional Geisha Dinner", 60),
+        ]
+    )
+    result = asyncio.run(
+        refine(
+            request(
+                compose_resumed_message(
+                    "Add a traditional geisha show dinner to my stay in Tokyo",
+                    "Tokyo Traditional Geisha Dinner",
+                )
+            ),
+            source,
+        )
+    ).root
+    assert result.kind == "proposal"
+    days = cast(list[dict[str, Any]], result.proposal.operations[0].value)
+    titles = [item.get("title") for day in days for item in day["items"]]
+    assert "Tokyo Traditional Geisha Dinner" in titles
+    assert "Tokyo Traditional Geisha Show" not in titles
+
+
+def test_an_answer_that_names_no_listing_ends_the_run_instead_of_asking_again():
+    source = ActivitySource(
+        offers=[
+            activity_offer("427786P52", "Tokyo Traditional Geisha Show", 60),
+            activity_offer("427786P10", "Tokyo Traditional Geisha Dinner", 60),
+        ]
+    )
+    result = asyncio.run(
+        refine(
+            request(
+                compose_resumed_message(
+                    "Add a traditional geisha show dinner to my stay in Tokyo", "the first one"
+                )
+            ),
+            source,
+        )
+    ).root
+    assert result.kind == "answer"
+    assert "nothing changed" in result.message
+    assert "Which sourced Tokyo activity" in result.message
+
+
+def test_an_answered_stop_is_used_instead_of_asking_which_stop():
+    source = ActivitySource(offers=[activity_offer("130036P2", "Geisha Show", 60)])
+    result = asyncio.run(
+        refine(request(compose_resumed_message("Add a geisha show to my trip", "Osaka")), source)
+    ).root
+    assert result.kind == "proposal"
+    assert source.queries[0]["destinationIds"] == [OSAKA]
 
 
 def test_a_listing_named_for_the_stop_wins_a_tied_text_match():

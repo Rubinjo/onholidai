@@ -30,6 +30,34 @@ def test_extra_nights_and_required_mornings_produce_reviewable_operations():
     assert source.trip == before
 
 
+def test_a_balanced_night_shift_keeps_the_demo_trip_length():
+    # The demo refinement must move one night without changing the trip length.
+    source = RefinementSource()
+    before = deepcopy(source.trip)
+    result = asyncio.run(
+        refine(
+            refinement_request(
+                "Give Kyoto one more night and Tokyo one less, "
+                "keeping the total trip length the same."
+            ),
+            source,
+        )
+    )
+    assert result.root.kind == "proposal"
+    operation = result.root.proposal.operations[0]
+    assert operation.target == "/destinations"
+    routed = [cast(dict[str, object], entry) for entry in cast(list[object], operation.value)]
+    assert [
+        (entry["name"], entry["plannedNights"], entry["arrivalDate"], entry["departureDate"])
+        for entry in routed
+    ] == [
+        ("Tokyo", 2, "2030-05-01", "2030-05-03"),
+        ("Kyoto", 4, "2030-05-03", "2030-05-07"),
+    ]
+    assert "Keep the trip at 7 days" in result.root.proposal.rationale
+    assert source.trip == before
+
+
 @pytest.mark.parametrize("budget", [False, True])
 def test_selected_supplier_research_uses_proposals_without_model_prices_or_a_forced_choice(
     budget: bool,

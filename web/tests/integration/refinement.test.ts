@@ -10,10 +10,40 @@ import { previewEdit, applyEdit, researchDraftImpact } from "../../domain/trip/e
 import { undoDraft } from "../../domain/trip/undo";
 import { projectCustomerSnapshot } from "../../domain/pricing/projections";
 import { createPlanningProviders } from "../../server/supply/providers";
+import { createDuffelReadProvider } from "../../server/supply/providers/duffel-read";
+import { createNuiteeReadProvider } from "../../server/supply/providers/nuitee-read";
+import { createViatorReadProvider } from "../../server/supply/providers/viator-read";
+import { syntheticReadClient } from "../../server/supply/providers/synthetic";
+import { SupplyReadError, type SupplyReadProvider } from "../../server/supply/read";
 import { createSyntheticTripSnapshot } from "../fixtures/trips";
 import { hasIsolatedDatabaseConfiguration, withIsolatedTestDatabase } from "../helpers/database";
 
 vi.mock("server-only", () => ({}));
+
+/**
+ * The deterministic client accepts any query, so it cannot catch a search that omits the
+ * researched places. Live adapters resolve a supplier identity (IATA gateway, Nuitee
+ * place, Viator destination) from the place itself and fail without it.
+ */
+function placeResolvingClient(type: "flight" | "accommodation" | "activity") {
+  const synthetic = syntheticReadClient(type);
+  return {
+    ...synthetic,
+    async search(query: Parameters<typeof synthetic.search>[0], signal: AbortSignal) {
+      const place = query.destinations?.find((entry) => entry.id === query.destinationIds[0]);
+      if (!place) throw new SupplyReadError("unsupported");
+      if (type === "accommodation" && (!place.name || !place.countryCode))
+        throw new SupplyReadError("access_blocked");
+      return synthetic.search(query, signal);
+    },
+  };
+}
+
+const placeResolvingProviders: readonly SupplyReadProvider[] = createPlanningProviders("live", [
+  createDuffelReadProvider(placeResolvingClient("flight")),
+  createNuiteeReadProvider(placeResolvingClient("accommodation")),
+  createViatorReadProvider(placeResolvingClient("activity")),
+]);
 
 describe("read-only refinement repricing", () => {
   it("recalculates party offers and customer totals without mutating its base", async () => {
@@ -59,6 +89,33 @@ describe("read-only refinement repricing", () => {
         [],
       ),
     ).rejects.toThrow();
+  });
+  it("reprices a route change through providers that need the researched places", async () => {
+    const base = createSyntheticTripSnapshot(),
+      prior = structuredClone(base);
+    const review = await researchDraftImpact(
+      base,
+      1,
+      [
+        {
+          operation: "replace",
+          target: "/destinations",
+          value: [
+            {
+              ...base.destinations[0],
+              departureDate: "2030-05-06",
+              plannedNights: 5,
+            },
+          ],
+        },
+      ],
+      placeResolvingProviders,
+    );
+    expect(base).toEqual(prior);
+    expect(new Set(review.snapshot.components.map((entry) => entry.type))).toEqual(
+      new Set(["flight", "accommodation", "activity"]),
+    );
+    expect(review.priceImpact.afterMinor).toBeGreaterThan(0);
   });
   it("reviews a confirmed origin change with refreshed unbooked transport and stay prices", async () => {
     const base = createSyntheticTripSnapshot();

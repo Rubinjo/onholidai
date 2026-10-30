@@ -9,6 +9,7 @@ export async function POST(request: Request, route: { params: Promise<{ tripId: 
       (await route.params).tripId,
       await requestJson(request),
       application.planningProviders,
+      { readiness: application.providerReadiness },
     ),
   );
 }

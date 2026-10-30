@@ -24,12 +24,21 @@ def rejection(status: int, body: object) -> httpx.HTTPStatusError:
     [
         ("estimate_evidence_start_date", "invalid_result"),
         ("offer_unavailable", "invalid_result"),
+        ("incomplete_estimate", "source_unavailable"),
         ("run_conflict", "estimate_unavailable"),
         ("guest_research_limited", "estimate_unavailable"),
     ],
 )
 def test_only_a_rejected_proposal_reports_invalid_evidence(code: str, expected: str) -> None:
     assert failure_code(PersistenceRejected(409, "persistence rejected (409)", code)) == expected
+
+
+def test_a_reprice_without_complete_inventory_is_a_source_outage() -> None:
+    # Web refuses the proposal when its own repricing finds no complete current
+    # inventory; the traveller can retry, so this is not an unexpected failure.
+    error = rejection(409, {"code": "incomplete_estimate"})
+    assert problem_code(error) == "incomplete_estimate"
+    assert failure_code(error) == "source_unavailable"
 
 
 def test_deadline_empty_sources_and_unexpected_errors_stay_distinct() -> None:

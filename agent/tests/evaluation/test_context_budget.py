@@ -1,4 +1,5 @@
 import asyncio
+import json
 from copy import deepcopy
 from typing import cast
 
@@ -113,6 +114,95 @@ def test_context_stays_within_budget_without_truncating_authoritative_facts():
     assert len(dynamic.encode("utf-8")) <= min(32768, 24000 * 2)
     with pytest.raises(ValueError, match="context_budget_exceeded"):
         build_context(request(1, [], 1000), trip(1, "N" * 4000))
+
+
+def planned_trip() -> dict[str, object]:
+    """A ten-day planned trip whose supplier evidence alone used to exhaust the budget."""
+    days = [
+        {
+            "date": f"2030-05-{index:02d}",
+            "destinationId": "30000000-0000-4000-8000-000000000001",
+            "timezone": "Asia/Tokyo",
+            "paceAssessment": 50,
+            "items": [
+                {
+                    "id": f"60000000-0000-4000-8000-{index:02d}{slot:010d}",
+                    "type": "activity",
+                    "title": f"Day {index} stop {slot}",
+                    "start": f"2030-05-{index:02d}T{9 + slot:02d}:00:00",
+                    "end": f"2030-05-{index:02d}T{10 + slot:02d}:30:00",
+                    "startOffset": "+09:00",
+                    "endOffset": "+09:00",
+                    "componentId": None,
+                    "status": "planned",
+                    "priority": "preference",
+                    "verificationStatus": "unverified",
+                    "practicalNotes": ["n" * 400],
+                    "constraintEvidence": [{"statement": "e" * 400}],
+                    "timingEvidence": ["t" * 400],
+                    "location": {"latitude": 35.6895, "longitude": 139.6917},
+                }
+                for slot in range(1, 4)
+            ],
+        }
+        for index in range(1, 11)
+    ]
+    components = [
+        {
+            "id": f"70000000-0000-4000-8000-00000000000{index}",
+            "type": "accommodation",
+            "provider": "nuitee",
+            "supplierOfferId": f"stay-tokyo-{index}",
+            "offerStatus": "available",
+            "bookingStatus": "unbooked",
+            "serviceStart": "2030-05-01T00:00:00Z",
+            "serviceEnd": "2030-05-11T00:00:00Z",
+            "planningDetails": {
+                "source": "Nuitee",
+                "locationName": "Synthetic Stay",
+                "fareConditions": "f" * 4000,
+            },
+        }
+        for index in range(1, 4)
+    ]
+    base = trip(1)
+    return {
+        **base,
+        "snapshot": {
+            **cast(dict[str, object], base["snapshot"]),
+            "itineraryDays": days,
+            "components": components,
+        },
+    }
+
+
+def test_a_planned_trip_reaches_the_model_within_budget():
+    # Regression: a ten-day plan plus its components exceeded the 32 KiB bound, so every
+    # later refinement failed before the model ever saw the trip.
+    raw = planned_trip()
+    unprojected = len(json.dumps(raw, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    assert unprojected > min(32768, 24000 * 2)
+    dynamic = build_context(request(1, [], 24000), raw)[1]["content"]
+    assert len(dynamic.encode("utf-8")) <= min(32768, 24000 * 2)
+
+
+def test_the_model_payload_keeps_scheduling_facts_and_drops_supplier_evidence():
+    dynamic = build_context(request(1, [], 24000), planned_trip())[1]["content"]
+    payload = cast(dict[str, object], json.loads(dynamic))
+    snapshot = cast(dict[str, object], cast(dict[str, object], payload["trip"])["snapshot"])
+    first_day = cast(dict[str, object], cast(list[object], snapshot["itineraryDays"])[0])
+    first_item = cast(dict[str, object], cast(list[object], first_day["items"])[0])
+    assert first_item["title"] == "Day 1 stop 1"
+    assert first_item["start"] == "2030-05-01T10:00:00"
+    assert "practicalNotes" not in first_item
+    assert "constraintEvidence" not in first_item
+    assert first_day["timezone"] == "Asia/Tokyo"
+    component = cast(dict[str, object], cast(list[object], snapshot["components"])[0])
+    assert component["type"] == "accommodation"
+    assert component["serviceStart"] == "2030-05-01T00:00:00Z"
+    planning = cast(dict[str, object], component["planningDetails"])
+    assert planning["locationName"] == "Synthetic Stay"
+    assert "fareConditions" not in planning
 
 
 class Reader:

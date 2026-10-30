@@ -35,6 +35,7 @@ export async function PUT(
             runId,
             input.event.proposal,
             application.planningProviders,
+            { readiness: application.providerReadiness },
           )
         : recordEstimate(application.database, actor, runId, input.event.proposal));
     }

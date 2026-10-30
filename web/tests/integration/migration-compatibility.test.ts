@@ -51,6 +51,9 @@ describe("migration discovery", () => {
       await writeFile(join(directory, "002_crlf.sql"), "SELECT 1;\r\nSELECT 2;\r\n");
       const migrations = await loadMigrationFiles(directory);
       expect(migrations[0]?.checksum).toBe(migrations[1]?.checksum);
+      expect(migrations[0]?.legacyChecksums).toEqual([]);
+      // History written before checksums were normalised recorded the CRLF bytes.
+      expect(migrations[1]?.legacyChecksums).toHaveLength(1);
     } finally {
       await rm(directory, { force: true, recursive: true });
     }
@@ -238,11 +241,29 @@ describe.skipIf(!hasIsolatedDatabaseConfiguration())("PostgreSQL migration compa
     });
   });
 
-  it("reruns safely and rejects changed applied migration checksums", async () => {
+  it("rejects changed migration SQL but repairs pre-normalisation checksums", async () => {
     await expect(migrate(fixture.migrationConnectionString)).resolves.toEqual([]);
     const directory = await mkdtemp(join(tmpdir(), "onholidai-migrations-"));
     try {
       const migrations = await loadMigrationFiles();
+      const legacy = migrations[0]?.legacyChecksums[0];
+      expect(legacy).toBeDefined();
+      const admin = new Pool({ connectionString: fixture.adminConnectionString, max: 1 });
+      try {
+        await admin.query(
+          `UPDATE onholidai_migrations.applied_migrations SET checksum = $1 WHERE version = 1`,
+          [legacy],
+        );
+        // A pre-normalisation row describes the same SQL, so the history is repaired in place.
+        await expect(migrate(fixture.migrationConnectionString)).resolves.toEqual([]);
+        const repaired = await admin.query<{ checksum: string }>(
+          `SELECT checksum FROM onholidai_migrations.applied_migrations WHERE version = 1`,
+        );
+        expect(repaired.rows[0]?.checksum).toBe(migrations[0]?.checksum);
+      } finally {
+        await admin.end();
+      }
+
       for (const migration of migrations) {
         await writeFile(
           join(directory, migration.filename),

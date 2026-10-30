@@ -4,8 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { normalizePlanningOffer } from "../../server/supply/offers";
 import { DEFAULT_PROVIDER_SEARCH_BUDGET_MS } from "../../server/supply/deadlines";
 import {
+  destinationPlaces,
   searchPlanningOffers,
   planningOfferQuery,
+  supplyReadQuerySchema,
   SupplyReadError,
   type SupplyReadProvider,
 } from "../../server/supply/read";
@@ -192,5 +194,30 @@ describe("read-only planning supply", () => {
     await expect(
       searchPlanningOffers([], { ...query(), componentTypes: ["flight"], departureOrigin: null }),
     ).rejects.toThrow();
+  });
+
+  it("refuses a place list that does not cover every researched stop", () => {
+    const snapshot = createSyntheticTripSnapshot(),
+      place = snapshot.destinations[0];
+    expect(() => supplyReadQuerySchema.parse({ ...query(), destinations: [] })).toThrow(
+      /place identity/,
+    );
+    expect(() =>
+      supplyReadQuerySchema.parse({
+        ...query(),
+        destinations: [{ ...place, id: "10000000-0000-4000-8000-000000000098" }],
+      }),
+    ).toThrow(/place identity/);
+    expect(supplyReadQuerySchema.parse({ ...query(), destinations: [place] }).destinations).toEqual(
+      [place],
+    );
+  });
+
+  it("keeps only the place identities that belong to the researched stops", () => {
+    const snapshot = createSyntheticTripSnapshot(),
+      place = snapshot.destinations[0];
+    expect(destinationPlaces([place.id, "10000000-0000-4000-8000-000000000097"], [place])).toEqual([
+      place,
+    ]);
   });
 });

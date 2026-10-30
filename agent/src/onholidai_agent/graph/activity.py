@@ -14,6 +14,7 @@ from typing import Protocol, cast
 from uuid import NAMESPACE_URL, uuid4, uuid5
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from onholidai_agent.graph.clarify import answered_choices, original_request
 from onholidai_agent.graph.finalize import build_itinerary_days
 from onholidai_agent.models.api import AgentResult, CreateAgentRunRequest
 from onholidai_agent.tools.propose_trip_changes import propose_trip_changes
@@ -55,6 +56,9 @@ STOPWORDS = frozenset(
 # choice between cited options instead of a guessed booking.
 CLEAR_MATCH = 0.95
 CLOSEST_MATCH = 0.4
+# An answered choice decides the listing only when it describes that title clearly
+# better than any other; vaguer answers must not silently pick a product.
+ANSWER_MATCH = 0.6
 DEFAULT_DURATION_MINUTES = 120
 MAXIMUM_DURATION_MINUTES = 480
 
@@ -69,6 +73,7 @@ class ActivityCatalogue(Protocol):
 class ActivityIntent:
     name: str
     message: str
+    answers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,14 +91,20 @@ def activity_intent(message: str) -> ActivityIntent | None:
     deterministic rules, so it is deliberately not treated as an activity request.
     """
     text = message.strip()
-    if SETTING_WORDS.search(text):
+    # An answer only resolves a choice this run already asked about; it is never a new
+    # instruction, so the request itself decides which experience was named.
+    asked = original_request(text)
+    if SETTING_WORDS.search(asked):
         return None
-    if not re.search(rf"\b{ADD_VERBS}\b", text, re.I):
+    if not re.search(rf"\b{ADD_VERBS}\b", asked, re.I):
         return None
-    if not re.search(rf"\b{ACTIVITY_NOUNS}\b", text, re.I):
+    if not re.search(rf"\b{ACTIVITY_NOUNS}\b", asked, re.I):
         return None
-    prefix = rf"^[\s\W]*(?:(?:please|can you|could you|i'd like to)\s+)?{ADD_VERBS}\s+"
-    name = re.sub(prefix, "", text, flags=re.I)
+    prefix = (
+        rf"^[\s\W]*(?:(?:please|can|could|would|will)\s+(?:you|we|i)\s+"
+        rf"|(?:i'd|we'd)\s+like\s+to\s+|i\s+want\s+to\s+)?{ADD_VERBS}\s+"
+    )
+    name = re.sub(prefix, "", asked, flags=re.I)
     name = re.split(
         r"\s+(?:to|into|in|for|during)\s+(?:my|our|the)\s+"
         r"(?:stay|trip|itinerary|plan|visit|days?|schedule)\b",
@@ -112,7 +123,7 @@ def activity_intent(message: str) -> ActivityIntent | None:
     name = re.sub(r"^(?:a|an|the)\s+", "", name.strip(), flags=re.I).strip(" .,!?:;")
     if len(name) < 3:
         return None
-    return ActivityIntent(name=name, message=text)
+    return ActivityIntent(name=name, message=text, answers=answered_choices(text))
 
 
 def select_destination(
@@ -175,6 +186,31 @@ def rank_offers(
     # supplier's own relevance order instead of inventing a commercial tie-break.
     ranked.sort(key=lambda entry: (not entry.located, -entry.score))
     return ranked
+
+
+def answered_offer(offers: list[RankedOffer], answers: tuple[str, ...]) -> RankedOffer | None:
+    """The listing the traveller chose when answering this run's own question.
+
+    Only an answer that describes one title clearly better than every other resolves the
+    choice; anything vaguer stays unresolved instead of guessing a product.
+    """
+    for answer in reversed(answers):
+        wanted = set(_terms(answer))
+        if not wanted:
+            continue
+        scored = sorted(
+            (
+                (len(wanted & set(_terms(offer.title))) / len(wanted), index, offer)
+                for index, offer in enumerate(offers)
+            ),
+            key=lambda entry: (-entry[0], entry[1]),
+        )
+        if scored[0][0] < ANSWER_MATCH:
+            continue
+        if len(scored) > 1 and scored[1][0] >= scored[0][0]:
+            continue
+        return scored[0][2]
+    return None
 
 
 def offer_duration(offer: dict[str, object]) -> int:
@@ -446,10 +482,11 @@ async def add_activity(
 ) -> AgentResult:
     destination, ambiguity = select_destination(snapshot, intent)
     if ambiguity:
-        return _clarification(ambiguity)
+        return _ask(intent, ambiguity)
     if destination is None:
-        return _clarification(
-            f"Which stop should {intent.name} be added to? Reply with the destination name."
+        return _ask(
+            intent,
+            f"Which stop should {intent.name} be added to? Reply with the destination name.",
         )
     planned = _planned_activity(snapshot, destination, intent)
     if planned is not None:
@@ -468,8 +505,10 @@ async def add_activity(
     arrival = destination.get("arrivalDate")
     departure = destination.get("departureDate")
     if not isinstance(arrival, str) or not isinstance(departure, str):
-        return _clarification(
-            f"Which dates should {intent.name} in {destination.get('name')} use?", "feasibility"
+        return _ask(
+            intent,
+            f"Which dates should {intent.name} in {destination.get('name')} use?",
+            "feasibility",
         )
     query: dict[str, object] = {
         "componentTypes": ["activity"],
@@ -503,18 +542,24 @@ async def add_activity(
             f"({arrival} to {departure}) and found no listing for {intent.name}. "
             f"{researched}Nothing was added to the itinerary."
         )
+    chosen = answered_offer(ranked, intent.answers)
     best = ranked[0]
     close = [
         entry
         for entry in ranked[1:]
         if entry.score >= best.score - 0.15 and entry.located == best.located
     ]
-    if best.score < CLEAR_MATCH and close:
+    if chosen is not None:
+        # The traveller has already chosen between these listings, so adding the one they
+        # named is the answer to their request, not another question.
+        best = chosen
+    elif best.score < CLEAR_MATCH and close:
         options = [best, *close][:3]
-        return _clarification(
+        return _ask(
+            intent,
             f"Which sourced {destination.get('name')} activity should I add: "
             + "; ".join(entry.title for entry in options)
-            + "?"
+            + "?",
         )
     if best.score < CLOSEST_MATCH:
         researched = _researched(found)
@@ -532,7 +577,7 @@ async def add_activity(
     if not days:
         planned = build_itinerary_days(snapshot, request.message, request.request_id)
         if isinstance(planned, str):
-            return _clarification(planned, "feasibility")
+            return _ask(intent, planned, "feasibility")
         days = [dict(entry) for entry in planned[0]]
     slots: list[tuple[dict[str, object], str, int, list[str]]] = []
     for day in _candidate_days(days, destination):
@@ -543,7 +588,8 @@ async def add_activity(
         if slot is not None:
             slots.append((day, day_date, slot[0], slot[1]))
     if not slots:
-        return _clarification(
+        return _ask(
+            intent,
             f"Which day of your {destination.get('name')} stay should {best.title} use? "
             "The planned days have no free "
             f"{duration}-minute slot.",
@@ -570,6 +616,16 @@ def _researched(found: dict[str, object]) -> str:
         if isinstance(status, str) and status not in ("available", "no_matches"):
             labels.append(status.replace("_", " "))
     return f"The supplier reported {', '.join(labels)}. " if labels else ""
+
+
+def _ask(intent: ActivityIntent, text: str, reason: str = "scope") -> AgentResult:
+    """Asks for a choice only once: a run that already has the answer must not ask again."""
+    if intent.answers:
+        return _answer(
+            f"I could not resolve {intent.name} from that answer, so nothing changed. {text} "
+            "Send a new request with the choice you want."
+        )
+    return _clarification(text, reason)
 
 
 def _clarification(text: str, reason: str = "scope") -> AgentResult:

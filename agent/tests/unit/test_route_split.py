@@ -55,6 +55,40 @@ def test_stated_nights_reads_digits_words_and_either_word_order():
     }
 
 
+def test_more_and_less_adjust_the_saved_nights_instead_of_restating_them():
+    destinations = [TOKYO, KYOTO]
+    # "one more night" is a change to the saved plan, not a total of one night.
+    assert stated_nights("Give Kyoto one more night", destinations) == {KYOTO["id"]: 4}
+    assert stated_nights("Give Tokyo one less", destinations) == {TOKYO["id"]: 2}
+    assert stated_nights("Add two more nights in Kyoto", destinations) == {KYOTO["id"]: 5}
+
+
+def test_a_balanced_shift_keeps_the_saved_trip_length():
+    # The demo refinement: one stop gains a night, the other loses one, total unchanged.
+    split = plan_route_split(
+        "Give Kyoto one more night and Tokyo one less, keeping the total trip length the same.",
+        [TOKYO, KYOTO],
+        LONG_TRIP,
+        WINDOWS,
+    )
+    assert not isinstance(split, (SplitQuestion, type(None)))
+    assert split.nights == [("Tokyo", 2), ("Kyoto", 4)]
+    assert (split.start, split.end) == (date(2030, 5, 1), date(2030, 5, 7))
+    assert [place["plannedNights"] for place in split.destinations] == [2, 4]
+    assert [place["departureDate"] for place in split.destinations] == ["2030-05-03", "2030-05-07"]
+
+
+def test_an_unbalanced_shift_cannot_silently_change_the_stated_total():
+    split = plan_route_split(
+        "Give Kyoto one more night, keeping the total trip length the same.",
+        [TOKYO, KYOTO],
+        LONG_TRIP,
+        WINDOWS,
+    )
+    assert isinstance(split, SplitQuestion)
+    assert "trip length" in split.text
+
+
 def test_stated_nights_ignores_a_clause_that_names_more_than_one_stop():
     assert stated_nights("4 nights in Tokyo/Kyoto", [TOKYO, KYOTO]) == {}
 

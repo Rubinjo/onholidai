@@ -16,6 +16,7 @@ import { previewDraftEdit } from "./impact";
 
 import type { SupplyReadProvider } from "@/server/supply/read";
 import type { ServiceTokenContext } from "@/server/agent-client/credentials";
+import type { SupplierReadiness } from "@/server/config";
 import type { Database } from "@/server/db/database";
 import type { Kysely } from "kysely";
 import type { ChangeProposal as AgentProposal } from "@contracts/agent-api/generated";
@@ -26,6 +27,7 @@ export async function recordRefinement(
   runId: string,
   proposal: AgentProposal,
   providers: readonly SupplyReadProvider[],
+  options: { readiness?: SupplierReadiness } = {},
 ) {
   if (
     !["refinement", "finalization"].includes(proposal.purpose) ||
@@ -105,6 +107,7 @@ export async function recordRefinement(
           context.baseTripVersion,
           proposal.operations,
           providers,
+          options,
         );
   if (selected.length) {
     const ids = new Set(selected.map((record) => record.componentId));

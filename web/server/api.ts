@@ -62,6 +62,7 @@ function logProblemResponse(
   request: Request,
   correlationId: string,
   problem: { status: number; code: string },
+  error: unknown,
 ): void {
   // Routine client rejections stay quiet. A callback conflict, a quota rejection and
   // any server failure are the evidence needed to explain a failed run later on.
@@ -74,8 +75,15 @@ function logProblemResponse(
       status: problem.status,
       code: problem.code,
       correlationId,
+      // The exception class is diagnostic; its message may hold supplier or user text.
+      ...(problem.status >= 500 ? { errorName: errorNameOf(error) } : {}),
     }),
   );
+}
+
+function errorNameOf(error: unknown): string {
+  if (error instanceof Error) return error.name.slice(0, 80);
+  return typeof error;
 }
 
 export async function apiResponse(
@@ -144,7 +152,7 @@ export async function apiResponse(
             })
           : error;
     const response = problemResponse(safe, correlationId);
-    logProblemResponse(request, correlationId, safeProblemOf(safe));
+    logProblemResponse(request, correlationId, safeProblemOf(safe), safe);
     response.headers.set("Cache-Control", "private, no-store");
     emitRequestSpan(request, correlationId, startedAt, response.status);
     return response;

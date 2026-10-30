@@ -22,12 +22,15 @@ from onholidai_agent.api.store import (
     WebRunStore,
     response_problem_code,
 )
+from onholidai_agent.graph.clarify import compose_resumed_message
 from onholidai_agent.graph.router import dispatch
 from onholidai_agent.integrations.runtime import EstimateSources
 from onholidai_agent.models.api import (
     AgentEvent,
+    AgentResult,
     AgentRun,
     AnswerClarificationRequest,
+    ClarificationEvent,
     CreateAgentRunRequest,
     PersistAgentResultRequest,
 )
@@ -85,6 +88,15 @@ def authorize(http: Request, request: CreateAgentRunRequest) -> None:
 EVIDENCE_REJECTION_CODES = frozenset({"offer_unavailable"})
 
 
+# Web rejects a proposal when its own repricing cannot establish complete current
+# inventory for the proposed draft. That is a source outage the traveller can retry,
+# not a bad agent result and not an unexpected service failure.
+SOURCE_REJECTION_CODES = frozenset({"incomplete_estimate"})
+# A rejected callback cursor is the only 409 a retry can resolve; every other 409
+# repeats the same rejected work.
+CURSOR_CONFLICT_CODE = "run_conflict"
+
+
 def problem_code(error: BaseException) -> str | None:
     """Return the safe problem code of a refused web callback, never its body."""
     if isinstance(error, PersistenceRejected):
@@ -94,6 +106,24 @@ def problem_code(error: BaseException) -> str | None:
     return None
 
 
+def without_repeated_question(result: AgentResult, answered: str | None) -> AgentResult:
+    """A resumed run never asks the question it just received an answer for.
+
+    Asking again would leave the traveller with the same choice and no way out, so the
+    run reports the blockage as its outcome instead of another clarification.
+    """
+    if answered is None or result.root.kind != "clarification":
+        return result
+    if result.root.clarification.question != answered:
+        return result
+    return AgentResult.model_validate(
+        {
+            "kind": "answer",
+            "message": "I could not resolve this from your answer, so nothing changed. " + answered,
+        }
+    )
+
+
 def failure_code(error: BaseException) -> str:
     """Classify a failed run so web can present a truthful cause."""
     if isinstance(error, TimeoutError):
@@ -101,10 +131,11 @@ def failure_code(error: BaseException) -> str:
     if isinstance(error, ValueError) and error.args == ("source_unavailable",):
         return "source_unavailable"
     rejected = problem_code(error)
-    if rejected is not None and (
-        rejected.startswith("estimate_evidence_") or rejected in EVIDENCE_REJECTION_CODES
-    ):
-        return "invalid_result"
+    if rejected is not None:
+        if rejected.startswith("estimate_evidence_") or rejected in EVIDENCE_REJECTION_CODES:
+            return "invalid_result"
+        if rejected in SOURCE_REJECTION_CODES:
+            return "source_unavailable"
     return "estimate_unavailable"
 
 
@@ -167,7 +198,13 @@ class RunService:
                 try:
                     receipt = await self.store.event(request, event)
                 except httpx.HTTPStatusError as error:
-                    if error.response.status_code == 409 and attempt < 2:
+                    # Only a lost cursor race is worth repeating. A rejection on evidence
+                    # grounds would replay the same expensive repricing and fail again.
+                    if (
+                        error.response.status_code == 409
+                        and attempt < 2
+                        and response_problem_code(error.response) == CURSOR_CONFLICT_CODE
+                    ):
                         await asyncio.sleep(0.05 * (attempt + 1))
                         continue
                     raise
@@ -221,11 +258,21 @@ class RunService:
                 },
             )
 
-    async def work(self, request: CreateAgentRunRequest, run_id: str) -> None:
+    async def work(
+        self,
+        request: CreateAgentRunRequest,
+        run_id: str,
+        receipt: dict[str, object] | None = None,
+    ) -> None:
         started = time.monotonic()
         outcome = "failed"
         renewal = asyncio.create_task(self.renew(request, run_id))
         try:
+            # Reading the answered question happens off the resume request path so the
+            # caller's short timeout never waits for another service round trip.
+            answered = (
+                None if receipt is None else await self.pending_question(request, run_id, receipt)
+            )
             await self.emit(
                 request,
                 run_id,
@@ -235,7 +282,7 @@ class RunService:
                     "message": "Searching planning sources",
                 },
             )
-            result = await dispatch(request, self.sources)
+            result = without_repeated_question(await dispatch(request, self.sources), answered)
             renewal.cancel()
             await asyncio.gather(renewal, return_exceptions=True)
             if result.root.kind == "proposal":
@@ -292,6 +339,7 @@ class RunService:
                 f" because web rejected it with {rejected}" if rejected else "",
             )
             # No raw exception, source response or personal prompt escapes into a public event.
+            failure_body: PersistAgentResultRequest | None = None
             try:
                 renewal.cancel()
                 await asyncio.gather(renewal, return_exceptions=True)
@@ -300,25 +348,32 @@ class RunService:
                     run_id,
                     {"type": "failed", "status": "failed", "safeErrorCode": code},
                 )
-                await self.store.result(
-                    request,
-                    run_id,
-                    PersistAgentResultRequest.model_validate(
-                        {
-                            "version": "1",
-                            "userId": request.actor.user_id,
-                            "tripId": request.actor.trip_id,
-                            "requestId": request.request_id,
-                            "baseTripVersion": request.actor.base_trip_version,
-                            "eventCursor": cursor,
-                            "status": "failed",
-                            "result": None,
-                        }
-                    ),
+                failure_body = PersistAgentResultRequest.model_validate(
+                    {
+                        "version": "1",
+                        "userId": request.actor.user_id,
+                        "tripId": request.actor.trip_id,
+                        "requestId": request.request_id,
+                        "baseTripVersion": request.actor.base_trip_version,
+                        "eventCursor": cursor,
+                        "status": "failed",
+                        "result": None,
+                    }
                 )
-            except Exception:
-                # An uncertain receipt becomes interrupted when the durable lease expires.
-                pass
+                await self.store.result(request, run_id, failure_body)
+            except Exception as persistence_error:
+                # A durable failed event without its result receipt leaves the run open
+                # until the lease expires; log it so the lease monitor's verdict is not
+                # the only evidence of what happened.
+                logging.getLogger(__name__).error(
+                    "Failed run result not persisted (%s, run %s, attempt %s)",
+                    type(persistence_error).__name__,
+                    run_id,
+                    "retry" if failure_body is not None else "none",
+                )
+                if failure_body is not None:
+                    with suppress(Exception):
+                        await self.store.result(request, run_id, failure_body)
         finally:
             renewal.cancel()
             await asyncio.gather(renewal, return_exceptions=True)
@@ -336,6 +391,25 @@ class RunService:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def pending_question(
+        self, request: CreateAgentRunRequest, run_id: str, receipt: dict[str, object]
+    ) -> str | None:
+        """The question this resume answers, so the run cannot ask it again."""
+        cursor = receipt.get("eventCursor")
+        if not isinstance(cursor, int) or cursor < 1:
+            return None
+        try:
+            events = await self.store.events(request, run_id, cursor - 1)
+        except Exception:
+            # The answer is already recorded, so losing this guard must not lose the run.
+            logging.getLogger(__name__).warning("Pending question unavailable for run %s", run_id)
+            return None
+        for event in events:
+            root = event.root
+            if root.cursor == cursor and isinstance(root, ClarificationEvent):
+                return root.clarification.question
+        return None
 
     async def resume(
         self, request: CreateAgentRunRequest, run_id: str, answer: AnswerClarificationRequest
@@ -374,11 +448,11 @@ class RunService:
                         "message": (
                             answer.answer
                             if request.purpose in ("initial_estimate", "supplier_research")
-                            else request.message + "\nClarification: " + answer.answer
+                            else compose_resumed_message(request.message, answer.answer)
                         )
                     }
                 )
-                task = asyncio.create_task(self.work(updated, run_id))
+                task = asyncio.create_task(self.work(updated, run_id, receipt))
                 self.tasks[run_id] = task
                 task.add_done_callback(lambda _: self.tasks.pop(run_id, None))
             return await self.store.read(request, run_id)

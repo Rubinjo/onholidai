@@ -15,6 +15,7 @@ import { autoSelectCities } from "@/server/trip/auto-destinations";
 
 import { providerSearchBudgetMs, RESEARCH_BUDGET_MS } from "./deadlines";
 import {
+  destinationPlaces,
   productReadiness,
   planningOfferQuery,
   readWithRateLimitRetry,
@@ -165,10 +166,7 @@ export async function searchResearch(
       startDate: input.startDate,
       endDate: input.endDate,
       departureOrigin: departureOrigin ?? null,
-      destinations: input.destinationIds.flatMap((id) => {
-        const place = destinationOptions.get(id);
-        return place ? [place] : [];
-      }),
+      destinations: destinationPlaces(input.destinationIds, destinationOptions.values()),
       travellerParty: snapshot.travellerParty,
       ...(input.query ? { query: input.query } : {}),
     });

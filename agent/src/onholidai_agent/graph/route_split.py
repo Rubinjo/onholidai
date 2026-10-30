@@ -32,6 +32,19 @@ NUMBER_WORDS = {
 NIGHTS_PATTERN = re.compile(
     r"\b(?P<count>\d{1,2}|" + "|".join(NUMBER_WORDS) + r")\s+(?:more\s+|extra\s+)?nights?\b"
 )
+# "Give Kyoto one more night and Tokyo one less": here the count adjusts the saved plan
+# instead of restating it, and a bare "one less" still means one night.
+MORE_PATTERN = re.compile(
+    r"\b(?P<count>\d{1,2}|" + "|".join(NUMBER_WORDS) + r")\s+(?:more|extra|additional)\b"
+)
+LESS_PATTERN = re.compile(
+    r"\b(?P<count>\d{1,2}|" + "|".join(NUMBER_WORDS) + r")\s+(?:fewer|less)\b"
+)
+# "keeping the total trip length the same" is an explicit instruction about the total.
+SAME_TOTAL_PATTERN = re.compile(
+    r"\b(?:same|unchanged)\b[^.]{0,40}\b(?:total|length|duration)\b"
+    r"|\b(?:total|length|duration)\b[^.]{0,40}\b(?:same|unchanged)\b"
+)
 CLAUSE_SEPARATOR = re.compile(r"[,;]|\band\b|\bthen\b|\bplus\b|\bwith\b|\balso\b")
 
 Destination = dict[str, object]
@@ -70,6 +83,11 @@ def _nights(destination: Destination) -> int:
     return max(0, _as_int(destination.get("plannedNights")))
 
 
+def _count(match: re.Match[str]) -> int:
+    raw = match.group("count")
+    return int(raw) if raw.isdigit() else NUMBER_WORDS[raw]
+
+
 def _name_keys(destination: Destination) -> set[str]:
     """Name spellings the message may use for one stop."""
     name = str(destination.get("name", "")).strip().casefold()
@@ -91,15 +109,13 @@ def stated_nights(message: str, destinations: list[Destination]) -> dict[str, in
     """Nights the message states per stop, keyed by destination id.
 
     A clause with one stop and one night count binds them, whichever order they
-    appear in. A clause naming more than one stop or no count states nothing, so
-    that stop keeps the plan already saved for it.
+    appear in. "One more" and "one less" are read as changes to the saved plan, which
+    is what a traveller means when they adjust an existing itinerary. A clause naming
+    more than one stop or no count states nothing, so that stop keeps the saved plan.
     """
     keys = [(str(place.get("id", "")), _name_keys(place)) for place in destinations]
     stated: dict[str, int] = {}
     for clause in CLAUSE_SEPARATOR.split(message.casefold()):
-        match = NIGHTS_PATTERN.search(clause)
-        if match is None:
-            continue
         named = [
             destination_id
             for destination_id, names in keys
@@ -107,8 +123,17 @@ def stated_nights(message: str, destinations: list[Destination]) -> dict[str, in
         ]
         if len(named) != 1:
             continue
-        raw = match.group("count")
-        stated[named[0]] = int(raw) if raw.isdigit() else NUMBER_WORDS[raw]
+        place = next(place for place in destinations if str(place.get("id", "")) == named[0])
+        if (more := MORE_PATTERN.search(clause)) is not None:
+            stated[named[0]] = _nights(place) + _count(more)
+            continue
+        if (less := LESS_PATTERN.search(clause)) is not None:
+            stated[named[0]] = _nights(place) - _count(less)
+            continue
+        match = NIGHTS_PATTERN.search(clause)
+        if match is None:
+            continue
+        stated[named[0]] = _count(match)
     return stated
 
 
@@ -197,6 +222,13 @@ def plan_route_split(
         counts.update(kept)
 
     nights = sum(counts.values())
+    if SAME_TOTAL_PATTERN.search(message.casefold()) and nights != current:
+        # The traveller fixed the trip length, so changing it silently would break
+        # the instruction. Ask which stop takes the difference.
+        return SplitQuestion(
+            "Those nights would change the trip length you asked me to keep. "
+            "Which stop should take the difference?"
+        )
     span_days = nights + 1
     if maximum and span_days > maximum:
         return SplitQuestion(

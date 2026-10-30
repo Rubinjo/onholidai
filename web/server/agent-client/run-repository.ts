@@ -199,6 +199,22 @@ export class RunRepository {
       row.status === "awaiting_clarification" &&
       row.phaseStartedAt.getTime() + CLARIFICATION_IDLE_MS <= this.now().getTime();
     if (expiredLease || abandonedClarification) {
+      // A run whose agent recorded a failed event but could not record its result is
+      // interrupted here. Keep that recorded cause instead of replacing it with the
+      // transport-level verdict, so the traveller sees the real reason.
+      const lastEvent = expiredLease
+        ? await transaction
+            .selectFrom("agentRunEvents")
+            .select("event")
+            .where("runId", "=", row.id)
+            .where("cursor", "=", row.eventCursor)
+            .executeTakeFirst()
+        : undefined;
+      const recordedFailure = lastEvent ? AgentEventSchema.safeParse(lastEvent.event) : undefined;
+      const category: FailureCategory =
+        recordedFailure?.success && recordedFailure.data.type === "failed"
+          ? failureCategory(recordedFailure.data)
+          : "interrupted";
       const cursor = row.eventCursor + 1;
       const event = AgentEventSchema.parse({
         version: "1",
@@ -228,7 +244,7 @@ export class RunRepository {
         .updateTable("agentRuns")
         .set({
           status: "failed",
-          errorCategory: "interrupted",
+          errorCategory: category,
           eventCursor: cursor,
           leaseExpiresAt: null,
           completedAt: this.now(),
@@ -254,7 +270,7 @@ export class RunRepository {
               Number(row.activeElapsedMs) +
               Math.max(0, this.now().getTime() - row.phaseStartedAt.getTime()),
             resultKind: "failed",
-            errorCategory: "interrupted",
+            errorCategory: category,
           },
         })
         .execute();
