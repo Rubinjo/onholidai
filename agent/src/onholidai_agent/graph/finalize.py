@@ -110,15 +110,16 @@ def travel_windows(component: dict[str, object]) -> list[dict[str, object]]:
     raw = flight_journeys(component)
     if raw:
         windows: list[dict[str, object]] = []
-        for entry in cast(list[object], raw):
-            journey = entry if isinstance(entry, dict) else None
-            departing = parse_moment(journey.get("departingAt")) if journey else None
-            arriving = parse_moment(journey.get("arrivingAt")) if journey else None
-            origin = journey.get("origin") if journey else None
-            destination = journey.get("destination") if journey else None
+        for entry in raw:
+            if not isinstance(entry, dict):
+                return []
+            journey = cast(dict[str, object], entry)
+            departing = parse_moment(journey.get("departingAt"))
+            arriving = parse_moment(journey.get("arrivingAt"))
+            origin = journey.get("origin")
+            destination = journey.get("destination")
             if (
-                not isinstance(journey, dict)
-                or departing is None
+                departing is None
                 or arriving is None
                 or arriving <= departing
                 or not isinstance(origin, str)

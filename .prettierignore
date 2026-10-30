@@ -29,6 +29,7 @@ contracts/agent-api/tools.schema.json
 contracts/supply/supplier-tools-v1.schema.json
 contracts/supply/offers-v1.schema.json
 contracts/supply/public-offers-v1.schema.json
+contracts/trip-domain/booking-review-v2.schema.json
 contracts/trip-domain/snapshot-v1.schema.json
 contracts/trip-domain/itinerary-v1.schema.json
 specs/001-ai-trip-agent/contracts/agent-api.openapi.yaml

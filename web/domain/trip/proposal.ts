@@ -71,8 +71,8 @@ export const customerSnapshotSchema = z
       warnings: snapshot.warnings.slice(0, 64),
       price: {
         currency: snapshot.price.currency,
-        supplierTotal: null,
-        platformMarginTotal: null,
+        supplierTotal: snapshot.components.length === 0 ? money(0) : null,
+        platformMarginTotal: snapshot.components.length === 0 ? money(0) : null,
         customerPayableTaxesTotal:
           snapshot.price.taxesMinor === null || snapshot.price.taxesMinor === undefined
             ? null
