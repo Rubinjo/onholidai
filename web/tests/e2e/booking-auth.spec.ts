@@ -19,7 +19,12 @@ test("free registration asks for identity only and offers an existing-account pa
 
 test("Book trip continues from a draft through free sign-up and same-trip linking without booking consent", async ({
   page,
+  browserName,
 }) => {
+  test.skip(
+    browserName !== "chromium",
+    "Account linking is exercised once to avoid auth throttling.",
+  );
   test.setTimeout(120000);
   await completeSetup(page, { title: "Same-trip account continuation" });
   await expect(savedVersion(page, 2)).toBeVisible({ timeout: 35000 });

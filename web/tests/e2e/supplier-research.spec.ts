@@ -106,6 +106,13 @@ test("internal research preserves evidence and access checks without a customer 
   expect(JSON.stringify(latest)).not.toMatch(
     /supplierAmount|platformMargin|SecretRef|NUITEE_SECRET/,
   );
+  const rail = await research(["rail"]);
+  expect(rail.offers.map((offer: { offerRef: string }) => offer.offerRef).sort()).toEqual(
+    latest.offers.map((offer: { offerRef: string }) => offer.offerRef).sort(),
+  );
+  expect(rail.outcomes).toContainEqual(
+    expect.objectContaining({ componentType: "rail", status: "unsupported" }),
+  );
   const stay = latest.offers.find(
     (offer: { component: { type: string } }) => offer.component.type === "accommodation",
   );
@@ -154,13 +161,6 @@ test("internal research preserves evidence and access checks without a customer 
     ).status(),
   ).toBe(409);
 
-  const rail = await research(["rail"]);
-  expect(rail.offers.map((offer: { offerRef: string }) => offer.offerRef).sort()).toEqual(
-    latest.offers.map((offer: { offerRef: string }) => offer.offerRef).sort(),
-  );
-  expect(rail.outcomes).toContainEqual(
-    expect.objectContaining({ componentType: "rail", status: "unsupported" }),
-  );
   const other = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   try {
     expect(
