@@ -351,7 +351,7 @@ describe("explicit application composition", () => {
       // suggestions, LiteAPI place data), so a missing injected mapping no longer
       // blocks a source by itself. An unreachable supplier still fails closed.
       expect(result.outcomes.map((source) => source.status)).toEqual([
-        "unsupported",
+        "error",
         "error",
         "unsupported",
         "unsupported",
@@ -379,7 +379,7 @@ describe("explicit application composition", () => {
       loadServerConfig({
         NODE_ENV: "production",
         DATABASE_URL: "postgresql://local/db",
-        BETTER_AUTH_SECRET: "synthetic-development-secret-000000",
+        BETTER_AUTH_URL: "https://onholidai.example",
       }),
     ).toThrow("BETTER_AUTH_SECRET");
     const local = loadServerConfig({ NODE_ENV: "test" });
