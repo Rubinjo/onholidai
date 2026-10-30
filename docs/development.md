@@ -125,11 +125,11 @@ uv run --project agent pytest agent/tests/contract
 Before pushing, reproduce the CI formatting and Python type checks:
 
 ```bash
-pnpm --filter @onholidai/web format:check
+pnpm format:check
 uv run --project agent pyright --project agent
 ```
 
-The formatting command covers maintained source, configuration, and documentation across the repository. Use `pnpm format` to apply the existing Prettier and Black formatters.
+At the repository root, `pnpm format:check` runs Prettier across maintained source, configuration, and documentation, then checks Python formatting with Black. Use `pnpm format` to apply both formatters.
 
 Broader checks are available when your change needs them:
 
@@ -202,7 +202,7 @@ pnpm --dir web exec playwright test --project=chromium
 
 Supply a synthetic `DATABASE_URL` for that dedicated database and consistent authentication, service-token, and pricing-diagnostic secrets before starting the run. The test runner can start the deterministic agent and development web server, or reuse existing local services. Do not let it reuse your personal demo stack accidentally.
 
-The [Playwright configuration](../web/playwright.config.ts) defines five desktop/mobile projects, managed-service settings, and optional base-URL overrides. CI uses a production build and disposable localhost TLS to exercise production cookies across browsers. Certificate exceptions are limited to that local test certificate, not live services.
+The [Playwright configuration](../web/playwright.config.ts) defines five desktop/mobile projects, manages the local web and agent servers, and supports base-URL overrides. CI uses a production build and disposable localhost TLS to exercise production cookies across browsers. Certificate exceptions are limited to that local test certificate, not live services.
 
 Browser preflight checks real guest-session and database access as well as agent mode. A healthy web process is not enough. Fix failed preflight dependencies before increasing timeouts. Review local failure artifacts in [test results](../web/test-results/) when present.
 

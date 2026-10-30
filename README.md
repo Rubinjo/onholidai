@@ -140,7 +140,7 @@ Live requests may incur provider charges. Missing supplier access, unsupported d
 | Live model inference      | Nebius Token Factory, OpenAI-compatible API                          |
 | Durable application state | PostgreSQL 18 + PostGIS, versioned trip snapshots and offer evidence |
 | Booking orchestration     | Temporal with a separate TypeScript worker                           |
-| Observability             | OpenTelemetry collector, Jaeger, redacted LangSmith traces           |
+| Observability             | OpenTelemetry collector, Jaeger, optional redacted LangSmith traces  |
 
 ### Development and validation
 
@@ -156,11 +156,11 @@ Host-run web, migration, and worker processes derive their database URLs from th
 Before pushing, reproduce the CI formatting and Python type checks:
 
 ```bash
-pnpm --filter @onholidai/web format:check
+pnpm format:check
 uv run --project agent pyright --project agent
 ```
 
-Despite the package filter, the formatting command checks maintained source, configuration, and documentation across the repository. Use `pnpm --filter @onholidai/web format` to apply formatting. Correct Python type errors rather than disabling strict checks.
+`pnpm format:check` runs Prettier across maintained source, configuration, and documentation, then checks Python formatting with Black. Use `pnpm format` to apply both formatters. Correct Python type errors rather than disabling strict checks.
 
 Run the relevant application suites with the stack and test prerequisites in place:
 
