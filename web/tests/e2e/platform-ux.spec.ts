@@ -23,9 +23,14 @@ for (const width of [320, 390, 768, 1440]) {
     for (const path of ["/", "/trips/new", "/sign-in", "/sign-up"]) {
       await page.goto(path);
       await expect(page.locator("h1")).toBeVisible();
+      const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
       expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-      ).toBe(true);
+        scrollWidth,
+        `${path} should fit the layout viewport (${scrollWidth}px content, ${clientWidth}px viewport)`,
+      ).toBeLessThanOrEqual(clientWidth);
       const skip = page.getByRole("link", { name: "Skip to main content" });
       // WebKit keeps Safari's default of tabbing through form controls only, so the
       // first-Tab ordering assertion applies to engines that include links.

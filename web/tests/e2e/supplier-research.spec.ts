@@ -155,7 +155,9 @@ test("internal research preserves evidence and access checks without a customer 
   ).toBe(409);
 
   const rail = await research(["rail"]);
-  expect(rail.offers).toEqual([]);
+  expect(rail.offers.map((offer: { offerRef: string }) => offer.offerRef).sort()).toEqual(
+    latest.offers.map((offer: { offerRef: string }) => offer.offerRef).sort(),
+  );
   expect(rail.outcomes).toContainEqual(
     expect.objectContaining({ componentType: "rail", status: "unsupported" }),
   );
