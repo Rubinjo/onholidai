@@ -41,10 +41,15 @@ export default defineConfig({
       command: ci ? "node tests/e2e/production-server.mjs" : "pnpm dev",
       url: `${baseURL}/api/health`,
       ignoreHTTPSErrors: localCertificate,
-      // Browser suites open many guest planning sessions from one network. The
-      // production default is intentionally lower than this test-only allowance.
+      // Browser suites share one server and IP; keep guest and sign-up test limits above
+      // production defaults without changing deployed rate limits.
       env: {
-        ...(ci ? { NODE_ENV: "production" } : {}),
+        ...(ci
+          ? {
+              NODE_ENV: "production",
+              E2E_AUTH_SIGN_UP_RATE_LIMIT_MAX: "100",
+            }
+          : {}),
         BETTER_AUTH_URL: baseURL,
         AGENT_BASE_URL: agentBaseURL,
         PROVIDER_MODE: "deterministic",

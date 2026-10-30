@@ -13,6 +13,18 @@ export function createAuth(config: ServerConfig, pool: Pool) {
     baseURL: config.BETTER_AUTH_URL,
     secret: config.BETTER_AUTH_SECRET,
     trustedOrigins: [config.BETTER_AUTH_URL],
+    ...(config.E2E_AUTH_SIGN_UP_RATE_LIMIT_MAX === undefined
+      ? {}
+      : {
+          rateLimit: {
+            customRules: {
+              "/sign-up/email": {
+                window: 10,
+                max: config.E2E_AUTH_SIGN_UP_RATE_LIMIT_MAX,
+              },
+            },
+          },
+        }),
     database: {
       // The auth tables use snake_case columns; the plugin must rename the
       // identifiers the adapter sends so its schema check and queries match.

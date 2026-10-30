@@ -94,6 +94,16 @@ describe("deployment configuration validation", () => {
     expect(() => loadServerConfig({ BOOKING_DEMO_ENABLED: "yes" })).toThrow();
   });
 
+  it("keeps the E2E sign-up rate-limit override opt-in and positive", () => {
+    expect(loadServerConfig({}).E2E_AUTH_SIGN_UP_RATE_LIMIT_MAX).toBeUndefined();
+    expect(
+      loadServerConfig({ E2E_AUTH_SIGN_UP_RATE_LIMIT_MAX: "100" }).E2E_AUTH_SIGN_UP_RATE_LIMIT_MAX,
+    ).toBe(100);
+    for (const value of ["0", "-1", "101", "invalid"]) {
+      expect(() => loadServerConfig({ E2E_AUTH_SIGN_UP_RATE_LIMIT_MAX: value })).toThrow();
+    }
+  });
+
   it("derives local web and worker database URLs from their role passwords", () => {
     expect(loadServerConfig({ APP_DB_PASSWORD: "app:local/password" }).DATABASE_URL).toBe(
       "postgresql://onholidai_web:app%3Alocal%2Fpassword@localhost:5432/onholidai",

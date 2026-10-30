@@ -106,6 +106,7 @@ const serverConfigSchema = z.object({
   GUEST_MAX_ACTIVE_RUNS: z.coerce.number().int().min(1).max(20).default(2),
   GUEST_MAX_RUNS_PER_HOUR: z.coerce.number().int().min(1).max(100).default(10),
   GUEST_MAX_SESSIONS_PER_HOUR: z.coerce.number().int().min(1).max(200).default(20),
+  E2E_AUTH_SIGN_UP_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100).optional(),
   GUEST_NETWORK_SECRET: z.string().min(32).optional(),
   GUEST_TRUST_PROXY_IP: z
     .enum(["true", "false"])
